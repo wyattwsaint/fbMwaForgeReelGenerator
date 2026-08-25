@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+.env
+.env.local
+*.log
+
+# Generated media — masters live outside git or in a tracked assets/ dir.
+frames/
+renders/
