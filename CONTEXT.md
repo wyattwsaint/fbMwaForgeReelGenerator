@@ -78,3 +78,21 @@ the CTA is drawn. Anything that needs the client's brand kit is a card.
 
 **Frame 0** is the thumbnail Facebook shows in-feed. It is a constraint, not a
 by-product: hook text is fully drawn on it and may not animate in.
+
+## Config
+
+**Site config** — one TS module per client site, `sites/<slug>.ts`, checked into this
+repo. The human's entire steering wheel: a URL, hook text, 3–5 beat selectors, and a
+CTA. Everything else in the file is an **override**.
+
+**Override** — a config field that exists because a real site broke a default. Move,
+direction, punch factor, brand role, font and video pin are all overrides; a config that
+names none of them still renders. Timings are not overridable — 3.5s per beat is a
+finding, not a preference.
+
+**Check** — the render pipeline stopped after settle: resolves every beat's selector and
+reports missing selectors, sections shorter than the frame, and punch factors that leave
+a pan no room to travel. Catches client drift in seconds rather than a full capture pass.
+
+**Drift** (client drift) — the client editing their own site until a config's selectors
+no longer describe it. Always a loud failure, never a silently shorter reel.
