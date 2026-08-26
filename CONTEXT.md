@@ -20,19 +20,48 @@ the reel is 3–5 beats.
 cuts. A beat is one shot, so every cut falls on a beat boundary.
 
 **Move** — the camera behaviour of a shot. The deck is two: **drift** (slow
-zoom) and **pan** (slow vertical travel). Both are slow, both are **continuous**:
-a move runs for its shot's whole duration and never lands. A move that has to be
-blurred to read is a move that is too fast for this reel.
+zoom) and **pan** (slow travel across the section). Both are slow, both are
+**continuous**: a move runs for its shot's whole duration and never lands. A move
+that has to be blurred to read is a move that is too fast for this reel.
+
+**Direction** — a parameter of pan, not a move of its own: **vertical**,
+**lateral**, **lateral-reversed**, or **diagonal**. Vertical is the default.
+Directions rotate deterministically across a reel's pan beats, so no direction
+repeats back-to-back; per-beat override in config. Every direction travels the
+same path length in the same time, so speed and blur are unaffected by the
+choice — but a diagonal pan needs punch-in headroom on *both* axes, so it costs
+roughly twice the captured pixels of a vertical one.
 
 **Move assignment** — which move each beat gets. Deterministic given the config:
 pan and drift alternate, so no move repeats across a cut. The hook drifts, so
-beat 1 pans. Per-beat override in config.
+beat 1 pans. Each pan then takes the next direction in the rotation.
+Per-beat override in config.
 
 **CTA** — the closing 2.5s. A card, crossfaded in, showing the client's domain in
 large type with logo on brand color.
 
 **Card** — a rendered frame containing no site pixels. Currently the CTA is the
 only card.
+
+## Capture
+
+**Master** — the single static, high-resolution capture a shot's camera move is
+computed over. One master per beat, framed on that beat's section. Camera motion
+is never stepped in the browser; it is synthesised in post from the master.
+
+**Settle** — the routine that puts the page into a deterministic state before a
+master is taken: fonts loaded, every image forced eager and decoded serially,
+videos paused and seeked to a fixed time with the page's own `play()` stubbed
+out, finite animations finished and infinite ones parked. A settled page
+captures bit-identically run to run.
+
+**Punch-in** — cropping into a section so the master is larger than the frame.
+Sections are usually shorter than 1920px, so a pan only has room to travel if the
+beat is punched in. Per-beat punch factor lives in config.
+
+**Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
+belongs to the page, not to a section, so it appears only in the hook. Capturing
+a master without scrolling the page excludes it by construction.
 
 ## Distinctions worth holding
 
