@@ -69,3 +69,76 @@ export function reel(args: string[], cwd: string): Promise<Run> {
     child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr, output: stdout + stderr }))
   })
 }
+
+/**
+ * ffprobe, as a flat record. Tests assert on the mp4 Wyatt would play, never on the
+ * ffmpeg arguments that produced it — an argv assertion makes a refactor look like a
+ * regression.
+ */
+export async function probe(
+  path: string,
+  entries: string,
+  stream?: string,
+): Promise<Record<string, string>> {
+  const out = await capture('ffprobe', [
+    '-v', 'error',
+    ...(stream ? ['-select_streams', stream] : []),
+    '-show_entries', entries,
+    '-of', 'default=noprint_wrappers=1',
+    path,
+  ])
+  const fields: Record<string, string> = {}
+  for (const line of out.toString('utf8').split(/\r?\n/)) {
+    const at = line.indexOf('=')
+    if (at > 0) fields[line.slice(0, at)] = line.slice(at + 1)
+  }
+  return fields
+}
+
+/** One decoded frame as raw RGB — what the pixels actually are, not what was asked for. */
+export async function frame(path: string, index: number): Promise<Buffer> {
+  return capture('ffmpeg', [
+    '-v', 'error',
+    '-i', path,
+    '-vf', `select='eq(n,${index})'`,
+    '-fps_mode', 'passthrough',
+    '-frames:v', '1',
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgb24',
+    '-',
+  ])
+}
+
+/** Mean per-channel difference between two frames, 0..255. */
+export function meanDiff(a: Buffer, b: Buffer): number {
+  assert.equal(a.length, b.length)
+  let total = 0
+  for (let i = 0; i < a.length; i++) total += Math.abs((a[i] as number) - (b[i] as number))
+  return total / a.length
+}
+
+/** How many pixels of a frame sit within `tolerance` of a colour, per channel. */
+export function pixelsNear(frameBytes: Buffer, hex: string, tolerance = 14): number {
+  const want = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))
+  let found = 0
+  for (let i = 0; i + 2 < frameBytes.length; i += 3) {
+    if (want.every((c, k) => Math.abs((frameBytes[i + k] as number) - c) <= tolerance)) found++
+  }
+  return found
+}
+
+function capture(bin: string, args: string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, { windowsHide: true })
+    const chunks: Buffer[] = []
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.on('error', reject)
+    child.on('close', (code) =>
+      code === 0
+        ? resolve(Buffer.concat(chunks))
+        : reject(new Error(`${bin} exited ${code}\n${stderr.trim()}`)),
+    )
+  })
+}

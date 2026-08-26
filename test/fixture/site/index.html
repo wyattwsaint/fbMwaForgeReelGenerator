@@ -17,13 +17,24 @@
   nav#chrome {
     position: sticky; top: 0; z-index: 10;
     height: 120px; display: flex; align-items: center; padding: 0 32px;
-    background: #17365c;
+    background: #ffb300; color: #221500;
   }
 
   section { padding: 40px 32px; }
-  #hero { height: 2200px; background: #253856; }
-  #hero video { width: 100%; max-height: 900px; background: #000; }
-  #services { height: 2400px; background: #1d2b3a; }
+
+  /* The hero carries three of the five hazards at once, at known offsets, so the
+     hook's own frame proves the video was pinned, the lazy image loaded and the
+     infinite animation parked. Absolute, because a beat is framed on the section's
+     rect and these have to land inside the frame it takes out of it. */
+  #hero { position: relative; height: 3000px; background: #253856; }
+  #hero video { position: absolute; top: 700px; left: 0; width: 1080px; height: 600px;
+    object-fit: fill; background: #000; }
+  #hero #lazy { position: absolute; top: 2200px; left: 0; width: 1080px; height: 400px; }
+  #hero #throb { position: absolute; top: 1500px; left: 0; width: 1080px; background: #ff2ea6; }
+  /* Textured on purpose: a drift over a flat field is a move nothing can see, and
+     "every shot moves" has to be observable in the rendered frames. */
+  #services { height: 2400px;
+    background: repeating-linear-gradient(45deg, #1d2b3a 0 40px, #24374b 40px 80px); }
 
   /* Hazard 5b — shorter than the 1920px frame. */
   #short { height: 400px; background: #3a2b1d; }
@@ -37,6 +48,8 @@
      unless it is parked, so a section sized by it is only measurable once settled. */
   @keyframes pulse { from { height: 1200px; } to { height: 2600px; } }
   #pulse { animation: pulse 2200ms linear infinite alternate; background: #2b1d3a; }
+  @keyframes throb { from { height: 200px; } to { height: 700px; } }
+  #throb { animation: throb 1700ms linear infinite alternate; }
 </style>
 </head>
 <body>
@@ -46,6 +59,8 @@
     <h1>Fixture hero</h1>
     <!-- Hazard 1 — preload="none", and the page's own script re-plays it below. -->
     <video src="hero.mp4" preload="none" autoplay muted loop playsinline></video>
+    <div id="throb"></div>
+    <img id="lazy" data-src="img/tile-5.svg" loading="lazy" alt="">
   </section>
 
   <section id="services"><h2>Services</h2></section>
@@ -79,7 +94,7 @@
       observer.unobserve(e.target)
     }
   }, { rootMargin: '200px' })
-  for (const img of document.querySelectorAll('#gallery img')) lazy.observe(img)
+  for (const img of document.querySelectorAll('img[data-src]')) lazy.observe(img)
 </script>
 </body>
 </html>
