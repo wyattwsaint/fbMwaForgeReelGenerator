@@ -1,0 +1,130 @@
+{
+  "durationMs": 22700,
+  "fps": 30,
+  "shots": [
+    {
+      "kind": "hook",
+      "index": 0,
+      "startMs": 0,
+      "durationMs": 3000,
+      "move": "drift",
+      "punchFactor": 1,
+      "source": {
+        "url": "https://example.test"
+      }
+    },
+    {
+      "kind": "beat",
+      "index": 0,
+      "startMs": 3000,
+      "durationMs": 3500,
+      "move": "pan",
+      "direction": "vertical",
+      "punchFactor": 1,
+      "source": {
+        "url": "https://example.test",
+        "selector": "#s0"
+      }
+    },
+    {
+      "kind": "beat",
+      "index": 1,
+      "startMs": 6500,
+      "durationMs": 3500,
+      "move": "drift",
+      "punchFactor": 1.6,
+      "source": {
+        "url": "https://example.test",
+        "selector": "#s1"
+      }
+    },
+    {
+      "kind": "beat",
+      "index": 2,
+      "startMs": 10000,
+      "durationMs": 3500,
+      "move": "pan",
+      "direction": "lateral",
+      "punchFactor": 1.2,
+      "source": {
+        "url": "https://example.test",
+        "selector": "#s2"
+      }
+    },
+    {
+      "kind": "beat",
+      "index": 3,
+      "startMs": 13500,
+      "durationMs": 3500,
+      "move": "drift",
+      "punchFactor": 1,
+      "source": {
+        "url": "https://example.test",
+        "selector": "#s3"
+      }
+    },
+    {
+      "kind": "beat",
+      "index": 4,
+      "startMs": 17000,
+      "durationMs": 3500,
+      "move": "pan",
+      "direction": "diagonal",
+      "punchFactor": 1.2,
+      "source": {
+        "url": "https://example.test",
+        "selector": "#s4"
+      }
+    },
+    {
+      "kind": "cta",
+      "index": 0,
+      "startMs": 20200,
+      "durationMs": 2500,
+      "move": "drift",
+      "punchFactor": 1
+    }
+  ],
+  "cutPoints": [
+    3000,
+    6500,
+    10000,
+    13500,
+    17000,
+    20200
+  ],
+  "text": [
+    {
+      "shot": 0,
+      "content": "Spotless, every time.",
+      "role": "hook",
+      "startMs": 0,
+      "fadeInMs": 0,
+      "holdMs": 2500,
+      "fadeOutMs": 500
+    },
+    {
+      "shot": 2,
+      "content": "Enrolling for Fall",
+      "role": "label",
+      "startMs": 6700,
+      "fadeInMs": 300,
+      "holdMs": 2500,
+      "fadeOutMs": 300
+    },
+    {
+      "shot": 6,
+      "content": "example.test",
+      "role": "cta",
+      "startMs": 20200,
+      "fadeInMs": 0,
+      "holdMs": 2500,
+      "fadeOutMs": 0
+    }
+  ],
+  "audio": {
+    "file": "audio/mwaforge-signature.mp3",
+    "offsetMs": 0,
+    "fadeOutMs": 1000
+  }
+}

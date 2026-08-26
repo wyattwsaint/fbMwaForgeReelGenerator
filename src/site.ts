@@ -2,6 +2,9 @@
 
 export type Direction = 'vertical' | 'lateral' | 'lateral-reversed' | 'diagonal'
 
+/** The whole deck (#12): both continuous, neither ever lands. */
+export type Move = 'drift' | 'pan'
+
 export type Beat = {
   /** Required — resolved on the settled page. */
   selector: string
@@ -11,7 +14,7 @@ export type Beat = {
   /** Default 1.0 — how far into this section the master is punched. */
   punchFactor?: number
   /** Override; otherwise alternates from the hook. */
-  move?: 'drift' | 'pan'
+  move?: Move
   /** Override; otherwise the deterministic rotation. */
   direction?: Direction
   /** Optional on-screen line. */

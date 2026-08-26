@@ -63,7 +63,9 @@ export default defineSite({
       const run = await reel(['check', 'drifted'], ws.root)
       assert.equal(run.code, 1, run.output)
       assert.match(run.stdout, /beats\[1\] selector '#gone' — no element matches/)
-      assert.match(run.stdout, /beats\[2\] '#short' is 400px tall; a punchFactor of 1 needs 1920px/)
+      // Beat 2 is a lateral pan, so the plan punches it to 1.2 — and 400px is short
+      // of a frame even punched.
+      assert.match(run.stdout, /beats\[2\] '#short' is 400px tall; a punchFactor of 1\.2 needs 1600px/)
       assert.match(run.stdout, /music\.file 'audio\/not-a-track\.mp3' — not found/)
       assert.match(run.stdout, /3 problems\./)
     }))
@@ -139,6 +141,81 @@ export default defineSite({
       const run = await reel(['check', 'punchout'], ws.root)
       assert.equal(run.code, 1, run.output)
       assert.match(run.stdout, /beats\[2\]\.punchFactor is 0\.7; 1 is "no punch"/)
+    }))
+
+  test('a hook line over budget fails, naming the field and the budget', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'wordy',
+        `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${fixture.url}',
+  hook: { text: 'Spotless, every single time, without exception, ever.' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+})
+`,
+      )
+      const run = await reel(['check', 'wordy'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /hook\.text is 53 characters; the budget is 42/)
+    }))
+
+  test('a beat label over budget fails, naming the beat', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'labelled',
+        minimal(
+          fixture.url,
+          `[
+            { selector: '#hero' },
+            { selector: '#services', label: 'Enrolling for Fall, apply now' },
+            { selector: '#gallery' },
+          ]`,
+        ),
+      )
+      const run = await reel(['check', 'labelled'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /beats\[1\]\.label is 29 characters; the budget is 28/)
+    }))
+
+  test('a punchFactor that leaves a lateral pan no travel fails', () =>
+    withWorkspace(async (ws) => {
+      // Beat 2 pans laterally, and a section is exactly as wide as the frame, so all
+      // of a lateral pan's travel comes from the punch.
+      await ws.site(
+        'flat',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery', punchFactor: 1.05 }]`,
+        ),
+      )
+      const run = await reel(['check', 'flat'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(
+        run.stdout,
+        /beats\[2\] '#gallery' — a lateral pan needs 210px of travel, a punchFactor of 1\.05 leaves 54px \(needs 1\.2\)/,
+      )
+    }))
+
+  test('a vertical pan with nothing left over past the frame fails', () =>
+    withWorkspace(async (ws) => {
+      // Beat 0 pans vertically at no punch, so its travel is whatever the section has
+      // past one frame — 80px here, which is a stall, not a move.
+      await ws.site(
+        'notall',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero', y: 0, height: 2000 }, { selector: '#services' }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'notall'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(
+        run.stdout,
+        /beats\[0\] '#hero' — a vertical pan needs 210px of travel, a punchFactor of 1 leaves 80px \(needs 1\.07\)/,
+      )
     }))
 
   test('music without a file fails by name', () =>
