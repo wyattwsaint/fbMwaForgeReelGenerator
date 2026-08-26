@@ -12,3 +12,10 @@ then `bash reelA.sh` (~2 min) and `bash reelB.sh` (~1 min).
 Generated media is not committed. Verdict is in the #12 resolution comment.
 
 - `reelC.sh` → `revised-deck-n3.mp4` — the revised deck cut as a real n=3 reel.
+- `sections.mjs` — enumerates the target site's sections (selector, y, height).
+- `capsections.mjs` — captures one master per beat, framed on its own section.
+- `reelD.sh` → `revised-deck-sections.mp4` — one section per beat, drift/reveal/hold.
+- `reelE.sh` → `pan-variants.mp4` — lateral vs vertical, continuous vs settling.
+- `reelG.sh` → `continuous-deck.mp4` — **the accepted cut**: pan/drift, no holds.
+
+Needs `playwright` on the path for the capture scripts (proto11 has an install).
