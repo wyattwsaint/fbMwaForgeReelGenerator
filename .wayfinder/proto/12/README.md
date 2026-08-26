@@ -10,3 +10,5 @@ then `bash reelA.sh` (~2 min) and `bash reelB.sh` (~1 min).
   2 shots per 4.5s. Content constant, only cut rate varies.
 
 Generated media is not committed. Verdict is in the #12 resolution comment.
+
+- `reelC.sh` → `revised-deck-n3.mp4` — the revised deck cut as a real n=3 reel.
