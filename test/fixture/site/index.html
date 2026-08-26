@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site</title>
+<!--
+  The fixture carries #6's five hazards on purpose, so settle is exercised by every
+  run of the suite: a <video> hero the page re-plays, lazy images below the fold, an
+  infinite animation, a sticky nav, and sections both taller and shorter than the
+  frame. The suite never touches a client's live site.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+
+  /* Hazard 4 — sticky page chrome. It belongs to the page, not to a section. */
+  nav#chrome {
+    position: sticky; top: 0; z-index: 10;
+    height: 120px; display: flex; align-items: center; padding: 0 32px;
+    background: #17365c;
+  }
+
+  section { padding: 40px 32px; }
+  #hero { height: 2200px; background: #253856; }
+  #hero video { width: 100%; max-height: 900px; background: #000; }
+  #services { height: 2400px; background: #1d2b3a; }
+
+  /* Hazard 5b — shorter than the 1920px frame. */
+  #short { height: 400px; background: #3a2b1d; }
+
+  /* Hazard 2 — lazy images. The section has no height of its own: it is only tall
+     enough for a beat once the images below the fold have actually loaded. */
+  #gallery { padding: 0; background: #11151c; }
+  #gallery img { display: block; width: 100%; }
+
+  /* Hazard 3 — an infinite animation. It differs frame to frame even at scroll 0
+     unless it is parked, so a section sized by it is only measurable once settled. */
+  @keyframes pulse { from { height: 1200px; } to { height: 2600px; } }
+  #pulse { animation: pulse 2200ms linear infinite alternate; background: #2b1d3a; }
+</style>
+</head>
+<body>
+<nav id="chrome">MWA Forge fixture</nav>
+<main>
+  <section id="hero">
+    <h1>Fixture hero</h1>
+    <!-- Hazard 1 — preload="none", and the page's own script re-plays it below. -->
+    <video src="hero.mp4" preload="none" autoplay muted loop playsinline></video>
+  </section>
+
+  <section id="services"><h2>Services</h2></section>
+
+  <section id="short"><h2>Too short for a frame</h2></section>
+
+  <section id="gallery">
+    <img data-src="img/tile-1.svg" loading="lazy" alt="">
+    <img data-src="img/tile-2.svg" loading="lazy" alt="">
+    <img data-src="img/tile-3.svg" loading="lazy" alt="">
+    <img data-src="img/tile-4.svg" loading="lazy" alt="">
+  </section>
+
+  <section id="pulse"><h2>Pulse</h2></section>
+</main>
+
+<script>
+  // Hazard 1, continued: the site re-plays its own hero whenever it is in view.
+  // `v.pause()` alone loses to this — settle has to stub `play()` first.
+  const hero = document.querySelector('#hero video')
+  setInterval(() => hero.play().catch(() => {}), 200)
+  new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) hero.play().catch(() => {})
+  }).observe(hero)
+
+  // Hazard 2, continued: images swap in only when they are scrolled near.
+  const lazy = new IntersectionObserver((entries, observer) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue
+      e.target.src = e.target.dataset.src
+      observer.unobserve(e.target)
+    }
+  }, { rootMargin: '200px' })
+  for (const img of document.querySelectorAll('#gallery img')) lazy.observe(img)
+</script>
+</body>
+</html>
