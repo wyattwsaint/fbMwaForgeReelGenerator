@@ -56,7 +56,7 @@ a 1080x1920 H.264 mp4 at a constant 30fps with a 48kHz stereo AAC-LC bed.
 
 ```
 $ reel render brobst
-render ok  brobst  41.2s  outrobst-3beat.mp4
+render ok  brobst  41.2s  out/brobst-3beat.mp4
 ```
 
 Masters are **run-scoped**: they are written under `out/masters/`, wiped by the next

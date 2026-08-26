@@ -13,7 +13,7 @@ import { chromium } from 'playwright'
 import type { Browser } from 'playwright'
 import { masterSize } from './camera.ts'
 import type { MasterSize } from './camera.ts'
-import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
+import { FRAME_HEIGHT, FRAME_WIDTH, punchedFrameHeight } from './frame.ts'
 import { hookRect, rectOf } from './page.ts'
 import type { Shot, Timeline } from './plan.ts'
 import { settle } from './settle.ts'
@@ -136,7 +136,7 @@ function shotName(shot: Shot): string {
  * capture pass on it, the window grows down the page and then up.
  */
 function clipFor(shot: Shot, top: number, height: number, pageHeight: number) {
-  const needed = Math.min(pageHeight, Math.ceil(FRAME_HEIGHT / shot.punchFactor))
+  const needed = Math.min(pageHeight, punchedFrameHeight(shot.punchFactor))
   const grown = Math.max(height, needed)
   const y = Math.max(0, Math.min(top, pageHeight - grown))
   return { x: 0, y, width: FRAME_WIDTH, height: grown }

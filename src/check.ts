@@ -7,6 +7,7 @@ import {
   FRAME_WIDTH,
   MAX_BEATS,
   MIN_BEATS,
+  punchedFrameHeight,
 } from './frame.ts'
 import { panTravelProblems, planReel } from './plan.ts'
 import type { Shot, Timeline } from './plan.ts'
@@ -125,7 +126,7 @@ async function checkBeat(
   // The *planned* punch, not the config's: it is what capture will use, and the plan
   // punches a pan the config left flat rather than shooting a move that cannot move.
   const punch = shot?.punchFactor ?? beat.punchFactor ?? DEFAULT_PUNCH_FACTOR
-  const needed = Math.round(FRAME_HEIGHT / punch)
+  const needed = punchedFrameHeight(punch)
   if (height < needed) {
     problems.push(
       `beats[${index}] '${beat.selector}' is ${Math.round(height)}px tall; ` +

@@ -95,10 +95,19 @@ function pan(shot: Shot, master: MasterSize, frames: number, steps: number): Cam
   const axes = shot.direction ? panAxes(shot.direction) : ['y' as const]
   const target = PAN_PX_PER_FRAME * steps * over
 
+  // Every travelling axis moves the same distance, so a diagonal reads as a diagonal.
+  // Clamping each axis on its own instead would let the vertical run at #12's pace
+  // while the lateral crawled across the little room a punch leaves — a "diagonal"
+  // shot that is a vertical pan with a wobble. `check` has already refused the punches
+  // that leave any axis less than a move, so the smaller room is still a move.
   const room = { x: master.width - window.width, y: master.height - window.height }
+  const allowed = Math.max(
+    0,
+    Math.min(target, ...axes.map((axis) => room[axis])),
+  )
   const travel = {
-    x: axes.includes('x') ? Math.max(0, Math.min(room.x, target)) : 0,
-    y: axes.includes('y') ? Math.max(0, Math.min(room.y, target)) : 0,
+    x: axes.includes('x') ? allowed : 0,
+    y: axes.includes('y') ? allowed : 0,
   }
   // Centre the travel in the room it has, so a pan reads as a move across the middle
   // of the section rather than as a slide off one of its edges.
