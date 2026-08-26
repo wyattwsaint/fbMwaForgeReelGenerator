@@ -1,7 +1,15 @@
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { configProblems } from './config.ts'
-import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
+import {
+  DEFAULT_PUNCH_FACTOR,
+  FRAME_HEIGHT,
+  FRAME_WIDTH,
+  MAX_BEATS,
+  MIN_BEATS,
+} from './frame.ts'
+import { panTravelProblems, planReel } from './plan.ts'
+import type { Shot, Timeline } from './plan.ts'
 import { settle } from './settle.ts'
 import type { Beat, SiteConfig } from './site.ts'
 
@@ -18,9 +26,15 @@ export async function check(config: SiteConfig, root: string): Promise<string[]>
     return problems // Nothing left to resolve against.
   }
 
+  // The plan says which beats pan and where, so it is what decides whether a punch
+  // factor leaves one room to travel. A beat count the plan cannot describe is already
+  // named above by `configProblems`, and the page checks still run without a plan.
+  const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
+  const timeline: Timeline | null = plannable ? planReel(config) : null
+
   const browser = await chromium.launch()
   try {
-    problems.push(...(await resolveOnPages(browser, config)))
+    problems.push(...(await resolveOnPages(browser, config, timeline)))
   } finally {
     await browser.close()
   }
@@ -28,7 +42,11 @@ export async function check(config: SiteConfig, root: string): Promise<string[]>
 }
 
 /** One load per distinct URL: beats that share a route share a page. */
-async function resolveOnPages(browser: Browser, config: SiteConfig): Promise<string[]> {
+async function resolveOnPages(
+  browser: Browser,
+  config: SiteConfig,
+  timeline: Timeline | null,
+): Promise<string[]> {
   const problems: string[] = []
   const byUrl = new Map<string, { index: number; beat: Beat }[]>()
   config.beats.forEach((beat, index) => {
@@ -50,7 +68,10 @@ async function resolveOnPages(browser: Browser, config: SiteConfig): Promise<str
       if (url === config.url) problems.push(...(await checkHook(page, config)))
       const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
       for (const { index, beat } of group) {
-        problems.push(...(await checkBeat(page, index, beat, pageHeight)))
+        const shot =
+          timeline?.shots.find((planned) => planned.kind === 'beat' && planned.index === index) ??
+          null
+        problems.push(...(await checkBeat(page, index, beat, pageHeight, shot)))
       }
     } catch (error) {
       // The page is gone, so none of its beats can be resolved. Name them, rather
@@ -83,6 +104,7 @@ async function checkBeat(
   index: number,
   beat: Beat,
   pageHeight: number,
+  shot: Shot | null,
 ): Promise<string[]> {
   const rect = await rectOf(page, beat.selector)
   if (!rect) return [`beats[${index}] selector '${beat.selector}' — no element matches`]
@@ -102,16 +124,24 @@ async function checkBeat(
 
   // A punch captures a *narrower column* of the section — width 1080/punch — and a
   // 9:16 frame out of that column is 1920/punch tall. So this is #18's "no section
-  // shorter than the frame", stated in the section's own pixels. Whether what is
-  // left over gives a *pan* room to travel is the next ticket's check.
-  const punch = beat.punchFactor ?? DEFAULT_PUNCH_FACTOR
+  // shorter than the frame", stated in the section's own pixels.
+  // The *planned* punch, not the config's: it is what capture will use, and the plan
+  // punches a pan the config left flat rather than shooting a move that cannot move.
+  const punch = shot?.punchFactor ?? beat.punchFactor ?? DEFAULT_PUNCH_FACTOR
   const needed = Math.round(FRAME_HEIGHT / punch)
   if (height < needed) {
     problems.push(
       `beats[${index}] '${beat.selector}' is ${Math.round(height)}px tall; ` +
         `a punchFactor of ${punch} needs ${needed}px`,
     )
+    // The section does not fill the frame, so asking what a pan has left over on top
+    // of that is the same defect said twice.
+    return problems
   }
+
+  // A pan only travels across what the punch left over, so #7 wants a punch that
+  // leaves none caught here rather than discovered as a still.
+  if (shot) problems.push(...panTravelProblems(shot, beat.selector, height))
   return problems
 }
 

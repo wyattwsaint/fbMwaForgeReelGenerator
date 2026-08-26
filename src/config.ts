@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS } from './frame.ts'
+import { COPY_BUDGETS, copyProblem } from './plan.ts'
 import type { SiteConfig } from './site.ts'
 
 export function sitePath(slug: string, root: string): string {
@@ -31,6 +32,11 @@ export function configProblems(config: SiteConfig, root: string): string[] {
   if (typeof config.url !== 'string' || config.url === '') problems.push('url is required')
   if (typeof config.hook?.text !== 'string' || config.hook.text === '') {
     problems.push('hook.text is required')
+  } else {
+    // #9: copy over budget fails loudly, like a missing selector. Type never shrinks
+    // to fit, so the only fix is shorter copy.
+    const problem = copyProblem('hook.text', config.hook.text, COPY_BUDGETS.hook)
+    if (problem) problems.push(problem)
   }
   if (typeof config.cta?.credit !== 'string' || config.cta.credit === '') {
     problems.push('cta.credit is required')
@@ -53,6 +59,10 @@ export function configProblems(config: SiteConfig, root: string): string[] {
       // capture a narrower column of it.
       if (beat?.punchFactor !== undefined && beat.punchFactor < DEFAULT_PUNCH_FACTOR) {
         problems.push(`beats[${i}].punchFactor is ${beat.punchFactor}; ${DEFAULT_PUNCH_FACTOR} is "no punch"`)
+      }
+      if (typeof beat?.label === 'string') {
+        const problem = copyProblem(`beats[${i}].label`, beat.label, COPY_BUDGETS.label)
+        if (problem) problems.push(problem)
       }
     })
   }

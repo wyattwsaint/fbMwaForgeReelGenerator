@@ -37,6 +37,15 @@ pan and drift alternate, so no move repeats across a cut. The hook drifts, so
 beat 1 pans. Each pan then takes the next direction in the rotation.
 Per-beat override in config.
 
+**Timeline** — a reel's whole shape, derived from its config before anything is
+captured: its length, its shots and their moves, its cut points and every
+overlay's alpha envelope. Deterministic given the config alone, so it is the
+reel's plan, not a record of one — a kept reel is the record.
+
+**Cut point** — a moment the reel changes shot. All but the last are hard cuts on
+a beat boundary; the last is where the CTA's crossfade starts, which is a
+transition rather than a cut, and it is the only one two shots share.
+
 **CTA** — the closing 2.5s. A card, crossfaded in, carrying **MWA Forge's** call
 to action: the MWA wordmark and `mwaforge.com` in large type, with the client's
 domain credited beneath it. The reel is MWA Forge's marketing, so the viewer's
@@ -66,6 +75,10 @@ top 14%, sides 6%, bottom 35%. The bottom figure is the *boosted* one; reels are
 designed to it because boosting is planned, and a reel that must be re-cut to be
 boosted is a trap.
 
+**Cue** — one overlay's life on screen: when it is drawn, and how it fades in and
+out. Fade only — an overlay never travels, scales or types on — and a cue is
+never lit across a cut point.
+
 **Scrim** — the gradient wash behind overlay text that keeps it legible over an
 arbitrary screenshot. Constant colour, never sampled from the page, and it lives
 and dies with the text it serves: no text on screen, no scrim, because a
@@ -93,7 +106,10 @@ captures bit-identically run to run.
 
 **Punch-in** — cropping into a section so the master is larger than the frame.
 Sections are usually shorter than 1920px, so a pan only has room to travel if the
-beat is punched in. Per-beat punch factor lives in config.
+beat is punched in. Per-beat punch factor lives in config. A section is exactly as
+wide as the frame, so a lateral or diagonal pan has *no* travel unpunched: the plan
+punches those to the minimum that gives them travel when config names no factor. A
+factor the config does name is the human's, and `check` says whether it travels.
 
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
 belongs to the page, not to a section, so it appears only in the hook. Capturing
