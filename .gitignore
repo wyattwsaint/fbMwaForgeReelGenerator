@@ -1,10 +1,15 @@
 node_modules/
 dist/
-out/
 .env
 .env.local
 *.log
 
-# Generated media — masters live outside git or in a tracked assets/ dir.
+# Regenerable intermediates — cleared per run.
 frames/
-renders/
+out/
+
+# NOT ignored, deliberately (ADR-0002): `reels/` and `audio/`.
+# A shipped reel and the Suno signature track cannot be regenerated — the site
+# drifts, the brand kit is sampled at render, and a Suno track is not
+# reproducible from its prompt. This repo is their backup. Do not "tidy" them
+# into the list above.
