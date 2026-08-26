@@ -10,6 +10,10 @@ Checked into *this* repo, never into the client's Astro repo. TS buys autocomple
 inline comments, and a type error instead of a runtime surprise; N is small and the
 files sit beside the code that reads them, so there is **no schema version field**.
 
+> **Amended by [#9](https://github.com/wyattwsaint/fbMwaForgeReelGenerator/issues/9)**
+> — `cta` is now a credit line on an MWA-branded card, and the `brand`/`font`
+> overrides are cut. See [`9-on-screen-text.md`](./9-on-screen-text.md).
+
 ```ts
 type SiteConfig = {
   url: string                    // required — the site
@@ -20,13 +24,13 @@ type SiteConfig = {
   }
   beats: Beat[]                  // required — length is n, validated 3..5
   cta: {
-    domain: string               // required — large type on the card
-    logo: { src: string; raster?: boolean }   // raster: true ⇒ never scale up
+    credit: string               // required — the client's domain, credited on
+                                 // MWA Forge's card (was `domain` + `logo`; see #9)
   }
   music?: { file: string; offset?: number }   // offset slides the track so its first
                                               // downbeat lands on the hook's cut
-  brand?: { bg?: string; fg?: string; accent?: string }  // role overrides only
-  font?: string                  // override when the woff2 scrape picks the wrong face
+  // brand?: ... and font?: ... were CUT by #9 — the overlay and the CTA card use
+  // MWA Forge's own frozen house kit, so nothing consumes a derived client kit.
 }
 
 type Beat = {
@@ -55,9 +59,11 @@ type Beat = {
 - **Rotation seeds on beat index alone.** Hook drifts → beat 1 pans → alternate; each pan
   takes the next of `vertical → lateral → diagonal → lateral-reversed`. A site-derived
   seed gives two clients different reels for no explicable reason.
-- **Brand colours are derived at render** (`brand2.mjs` samples from usage), never frozen
-  into config — frozen hex goes stale the moment the client restyles. Config assigns
-  *roles*, not values.
+- ~~**Brand colours are derived at render**~~ — **reversed by #9.** The CTA card is
+  MWA Forge's, not the client's, and on-screen text is one house style, so the sampled
+  client kit has no consumer: `brand2.mjs`, the `brand` roles, `font` and `cta.logo`
+  are all cut. MWA Forge's own kit is frozen in the repo (this repo controls it; a
+  client's restyle was the only thing config could not see coming).
 - **Output is convention**, `out/<slug>-<n>beat.mp4`. Nothing about the site changes it.
 
 ## `check <site>`
@@ -80,8 +86,7 @@ export default defineSite({
     { selector: '#contact',  punchFactor: 1.6 },
   ],
   cta: {
-    domain: 'brobstcleaning.com',
-    logo: { src: 'assets/brobst-mark.png', raster: true },  // PNG only — never scale up
+    credit: 'brobstcleaning.com',   // credited on MWA Forge's card (#9)
   },
   music: { file: 'audio/meta/steady-hands.mp3', offset: 0.42 },
 })
@@ -111,16 +116,29 @@ export default defineSite({
       label: 'Enrolling for Fall' },
   ],
   cta: {
-    domain: 'pharosacademy.net',
-    logo: { src: 'https://pharosacademy.net/mark.svg' },   // scalable — no raster flag
+    credit: 'pharosacademy.net',    // credited on MWA Forge's card (#9)
   },
   music: { file: 'audio/meta/first-light.mp3', offset: 1.10 },
-  brand: { accent: '#E4D9C4' },   // sampler ranks the cream as background; on the card
-                                  // it works better as the accent behind the domain
 })
 ```
 
 Renders 19.2s (`5.5 + 3.5·4 − 0.3`).
 
 The pair is the proof that the defaults are defaults: Brobst names nothing but sections,
-punch and a logo; Pharos touches every hatch, and each touch traces to a finding in #6.
+punch and a credit line; Pharos touches every hatch, and each touch traces to a finding in #6.
+
+---
+
+## Amendments
+
+- **#14 — output convention.** `out/<slug>-<n>beat.mp4` remains the **scratch** name and
+  nothing reads it. A reel that actually ships is promoted by hand to
+  `reels/<slug>-<YYYY-MM-DD>.mp4`, which is checked in. The date replaces `-<n>beat`:
+  `n` is recoverable from this config, the date is not. See ADR-0002.
+- **#14 — no licence metadata in config.** `music` stays `{ file, offset }`. Suno rights
+  are perpetual and survive cancellation (#15), so there is no expiry to encode, and the
+  renderer cannot verify a claimed tier, so a refusal check would be theatre. Track
+  provenance lives in `audio/PROVENANCE.md` (#17).
+- **#8 — the `audio/meta/…` paths in the examples above are stale.** They date from when
+  Meta Sound Collection was the default, which #8 ruled out. Read them as
+  `audio/<track>.mp3`, pointing at the Suno signature track.
