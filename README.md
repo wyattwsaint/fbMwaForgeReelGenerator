@@ -12,7 +12,7 @@ Three commands, one positional argument each, no flags
 
 ```
 reel check  <site>          # settle + resolve; seconds, no capture pass
-reel render <site>          # not built yet
+reel render <site>          # check, capture, composite; writes out/<slug>-<n>beat.mp4
 reel keep   out/<file>.mp4  # not built yet
 ```
 
@@ -40,6 +40,32 @@ check brobst  6.0s
 
 2 problems.
 ```
+
+### `reel render <site>`
+
+Runs `check` first and refuses on failure — it is the settle the render was going to
+do anyway, and the report is the same one, whichever command printed it. Then one
+**master** per shot: a full-page screenshot clipped to the section's rect, at the
+resolution that beat's punch factor asks for. Nothing is ever scrolled to and no
+motion is stepped in the browser, so a beat can never bake in the page's sticky
+chrome and capture costs one screenshot per shot rather than one per frame.
+
+Every camera move is then synthesised from those stills by ffmpeg, with sub-frames
+averaged into each output frame for motion blur, and the shots are cut together into
+a 1080x1920 H.264 mp4 at a constant 30fps with a 48kHz stereo AAC-LC bed.
+
+```
+$ reel render brobst
+render ok  brobst  41.2s  out/brobst-3beat.mp4
+```
+
+Masters are **run-scoped**: they are written under `out/masters/`, wiped by the next
+render, and never reused across runs — a kept master is a photograph of a page that
+may no longer exist. A failed render leaves its debris there to diagnose from.
+
+The overlay text, the CTA card, the music bed, `out/` hygiene and the review stills
+are each their own ticket; the audio stream is present but silent until then, so that
+the container satisfies the Reels API from the first render.
 
 Site configs live in [`sites/`](sites/README.md); the vocabulary they are written in
 is [`CONTEXT.md`](CONTEXT.md).

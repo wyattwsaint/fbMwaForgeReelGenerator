@@ -7,13 +7,16 @@ import {
   FRAME_WIDTH,
   MAX_BEATS,
   MIN_BEATS,
+  punchedFrameHeight,
 } from './frame.ts'
 import { panTravelProblems, planReel } from './plan.ts'
 import type { Shot, Timeline } from './plan.ts'
+import { hookRect, rectOf } from './page.ts'
+import type { Rect } from './page.ts'
 import { settle } from './settle.ts'
 import type { Beat, SiteConfig } from './site.ts'
 
-export type Rect = { x: number; y: number; width: number; height: number }
+export type { Rect } from './page.ts'
 
 /**
  * The render path stopped after settle. Reports *every* problem it finds — a
@@ -88,15 +91,10 @@ async function resolveOnPages(
 
 async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {
   const selector = config.hook?.selector
-  if (selector) {
-    const rect = await rectOf(page, selector)
-    return rect ? [] : [`hook.selector '${selector}' — no element matches`]
-  }
-  const found = await page.evaluate(() => {
-    const main = document.querySelector('main')
-    return Boolean((main ?? document).querySelector('section') ?? main?.firstElementChild)
-  })
-  return found ? [] : ['hook — no hero found; name one with hook.selector']
+  if (await hookRect(page, selector)) return []
+  return selector
+    ? [`hook.selector '${selector}' — no element matches`]
+    : ['hook — no hero found; name one with hook.selector']
 }
 
 async function checkBeat(
@@ -128,7 +126,7 @@ async function checkBeat(
   // The *planned* punch, not the config's: it is what capture will use, and the plan
   // punches a pan the config left flat rather than shooting a move that cannot move.
   const punch = shot?.punchFactor ?? beat.punchFactor ?? DEFAULT_PUNCH_FACTOR
-  const needed = Math.round(FRAME_HEIGHT / punch)
+  const needed = punchedFrameHeight(punch)
   if (height < needed) {
     problems.push(
       `beats[${index}] '${beat.selector}' is ${Math.round(height)}px tall; ` +
@@ -145,17 +143,3 @@ async function checkBeat(
   return problems
 }
 
-/** Page coordinates — the master is clipped out of the full page, never scrolled to. */
-async function rectOf(page: Page, selector: string): Promise<Rect | null> {
-  return page.evaluate((sel) => {
-    const element = document.querySelector(sel)
-    if (!element) return null
-    const box = element.getBoundingClientRect()
-    return {
-      x: box.x + window.scrollX,
-      y: box.y + window.scrollY,
-      width: box.width,
-      height: box.height,
-    }
-  }, selector)
-}

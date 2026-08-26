@@ -1,0 +1,12 @@
+# This is a Windows-first repo with `core.autocrlf=true`, which checks text files
+# out with CRLF. The timeline snapshots are written by the test suite with LF, so
+# without this every snapshot assertion fails on a fresh clone — the record and the
+# thing it records disagree about invisible bytes. Pinning LF in the working tree
+# costs nothing: git already stores it that way.
+* text=auto eol=lf
+
+*.mp4 -text
+*.mp3 -text
+*.jpg -text
+*.jpeg -text
+*.png -text

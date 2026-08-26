@@ -288,7 +288,7 @@ export default defineSite({
 
   test('a command it does not have prints usage and exits 2', () =>
     withWorkspace(async (ws) => {
-      const run = await reel(['render', 'fixture'], ws.root)
+      const run = await reel(['publish', 'fixture'], ws.root)
       assert.equal(run.code, 2)
       assert.match(run.output, /usage: reel check <site>/)
     }))
