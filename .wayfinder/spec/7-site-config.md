@@ -142,3 +142,12 @@ punch and a credit line; Pharos touches every hatch, and each touch traces to a 
 - **#8 — the `audio/meta/…` paths in the examples above are stale.** They date from when
   Meta Sound Collection was the default, which #8 ruled out. Read them as
   `audio/<track>.mp3`, pointing at the Suno signature track.
+- **#29 — both examples are illustrative, and `sites/` is the record.** Their selectors
+  were written from a reading of the sites, not measured against them, and when #29
+  measured them none resolved: Brobst has no `#contact`, Pharos has no
+  `section.programs`, `section.gallery`, `section.faculty` or `section.admissions`, and
+  no gallery at all. The punch factors moved with them, because every section on both
+  sites is shorter than the 1920px frame. Read the examples for the *shape* of a config
+  and for which of them names overrides; read [`sites/brobst.ts`](../../sites/brobst.ts)
+  and [`sites/pharos.ts`](../../sites/pharos.ts) for what the sites actually are. #29's
+  findings comment carries what the real pages cost that the fixture did not.
