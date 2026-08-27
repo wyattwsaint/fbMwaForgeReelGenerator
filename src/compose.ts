@@ -10,15 +10,14 @@
 
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { cameraFor, frameCount } from './camera.ts'
+import { cameraFor } from './camera.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
+import { GROUND, ffmpegColor } from './house.ts'
+import { overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
-import { CROSSFADE_MS, FPS } from './plan.ts'
-import type { Shot, Timeline } from './plan.ts'
-
-/** House style's ground. The card is drawn on it; the overlay is its own ticket. */
-const GROUND = '0x0a0c10'
+import { CROSSFADE_MS, FPS, frameCount } from './plan.ts'
+import type { Shot, TextCue, Timeline } from './plan.ts'
 
 /** #1's container, and #11 found no mud at this bitrate. */
 const VIDEO_BITRATE = '3M'
@@ -51,20 +50,34 @@ function run(bin: string, args: string[]): Promise<string> {
   })
 }
 
-/** Render one shot to its own file and return the path. */
-export async function renderShot(master: Master | null, shot: Shot, dir: string): Promise<string> {
+/**
+ * Render one shot to its own file and return the path.
+ *
+ * The overlay is drawn *after* the move, because it does not move: the camera travels
+ * under a line that is nailed to the frame (#9's fade-only rule), so the text meets a
+ * shot that has already been cropped, blurred and scaled to frame size.
+ */
+export async function renderShot(
+  master: Master | null,
+  shot: Shot,
+  dir: string,
+  cues: TextCue[] = [],
+): Promise<string> {
   const output = join(dir, `shot-${String(shot.startMs).padStart(6, '0')}-${shot.kind}.mp4`)
   const frames = frameCount(shot.durationMs)
   const input = master
     ? ['-i', master.path]
     : // The card carries no site pixels, so there is nothing to move: it is a flat
       // field of house ground until the CTA ticket draws on it.
-      ['-f', 'lavfi', '-i', `color=c=${GROUND}:s=${FRAME_WIDTH}x${FRAME_HEIGHT}:r=${FPS}`]
+      [
+        '-f', 'lavfi',
+        '-i', `color=c=${ffmpegColor(GROUND)}:s=${FRAME_WIDTH}x${FRAME_HEIGHT}:r=${FPS}`,
+      ]
   const filter = master ? moveFilter(cameraFor(shot, master.size)) : null
 
   await ffmpeg([
     ...input,
-    ...(filter ? ['-vf', filter] : []),
+    ...shotFilter(filter, shot, cues),
     '-frames:v',
     String(frames),
     '-an',
@@ -72,6 +85,20 @@ export async function renderShot(master: Master | null, shot: Shot, dir: string)
     output,
   ])
   return output
+}
+
+/**
+ * The shot's whole filtergraph — the move, then the overlay over it.
+ *
+ * A shot with no overlay stays a plain `-vf` chain, which is most of them: the scrim
+ * needs a second source to blend, and a filtergraph that names its inputs for a shot
+ * that has only one is a graph to read for no reason.
+ */
+function shotFilter(move: string | null, shot: Shot, cues: TextCue[]): string[] {
+  const chains = overlayChains(cues, shot, move ? 'moved' : '0:v', 'overlaid')
+  if (chains.length === 0) return move ? ['-vf', move] : []
+  const graph = [...(move ? [`[0:v]${move}[moved]`] : []), ...chains].join(';')
+  return ['-filter_complex', graph, '-map', '[overlaid]']
 }
 
 function intermediateEncode(): string[] {

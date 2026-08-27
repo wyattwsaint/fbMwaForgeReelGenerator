@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { captureMasters, mastersDir } from './capture.ts'
 import { check } from './check.ts'
 import { assemble, renderShot } from './compose.ts'
+import { overlayCues } from './overlay.ts'
 import { planReel } from './plan.ts'
 import type { SiteConfig } from './site.ts'
 
@@ -37,8 +38,9 @@ export async function render(config: SiteConfig, root: string, slug: string): Pr
   const byShot = new Map(masters.map((master) => [master.shot, master]))
 
   const shots: string[] = []
-  for (const shot of timeline.shots) {
-    shots.push(await renderShot(byShot.get(shot) ?? null, shot, mastersDir(dir)))
+  for (const [index, shot] of timeline.shots.entries()) {
+    const cues = overlayCues(timeline.text, index)
+    shots.push(await renderShot(byShot.get(shot) ?? null, shot, mastersDir(dir), cues))
   }
 
   const path = join(dir, `${slug}-${config.beats.length}beat.mp4`)

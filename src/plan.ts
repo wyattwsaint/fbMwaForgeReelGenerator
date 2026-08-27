@@ -56,6 +56,17 @@ export type Timeline = {
 /** #1: constant frame rate, and 30 is the middle of Meta's 24-60. */
 export const FPS = 30
 
+/**
+ * A duration in milliseconds as a whole number of frames.
+ *
+ * Beside `FPS` because every caller has to round the same way: the camera counts a
+ * shot's frames, the overlay counts a cue's, and a scrim that rounds down where its
+ * text rounded up is a wash that lets go a frame early. One rounding, one place.
+ */
+export function frameCount(durationMs: number): number {
+  return Math.round((durationMs * FPS) / 1000)
+}
+
 /** #12, as corrected by its own addendum. Not overridable — a finding, not a preference. */
 export const HOOK_MS = 3000
 export const BEAT_MS = 3500
@@ -88,6 +99,9 @@ export type CopyBudget = { lines: number; chars: number }
 /**
  * #9's table, carried as data so `check` and the compositor cannot disagree about
  * what overflows. Type never shrinks to fit, so over budget is a loud failure.
+ *
+ * A count, and counts are a proxy — `measure.ts` checks the width the line actually
+ * draws, which is the constraint this table stands in for.
  */
 export const COPY_BUDGETS: { hook: CopyBudget; label: CopyBudget } = {
   hook: { lines: 2, chars: 42 },

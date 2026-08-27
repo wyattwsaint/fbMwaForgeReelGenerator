@@ -10,3 +10,4 @@
 *.jpg -text
 *.jpeg -text
 *.png -text
+*.ttf -text

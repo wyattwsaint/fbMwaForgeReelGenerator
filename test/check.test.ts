@@ -162,6 +162,28 @@ export default defineSite({
       assert.match(run.stdout, /hook\.text is 53 characters; the budget is 42/)
     }))
 
+  test('a hook inside the character budget still fails when it draws too wide', () =>
+    withWorkspace(async (ws) => {
+      // 23 characters against a 42-character budget — the count says yes and the
+      // slot says no, which is the whole reason the width is measured at all.
+      await ws.site(
+        'shouty',
+        `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${fixture.url}',
+  hook: { text: 'CURB APPEAL, GUARANTEED' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+})
+`,
+      )
+      const run = await reel(['check', 'shouty'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /hook\.text draws 1007px wide at 76px; the text slot is 950px/)
+      assert.doesNotMatch(run.stdout, /characters/)
+    }))
+
   test('a beat label over budget fails, naming the beat', () =>
     withWorkspace(async (ws) => {
       await ws.site(
