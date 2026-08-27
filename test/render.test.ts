@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
 import { SAFE_ZONE, TYPE } from '../src/house.ts'
 import { AUDIO_FADE_OUT_MS } from '../src/plan.ts'
+import { SHEET_TILE, sheetSize } from '../src/review.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
 import {
@@ -19,7 +20,7 @@ import {
   reel,
   workspace,
 } from './helpers.ts'
-import type { Workspace } from './helpers.ts'
+import type { Run, Workspace } from './helpers.ts'
 
 /**
  * The fixture's three hazards, as colours a rendered frame either has or does not:
@@ -71,6 +72,8 @@ let fixture: FixtureSite
 let ws: Workspace
 let reelPath: string
 let masters: string
+let stale: string
+let firstRun: Run
 
 before(async () => {
   fixture = await startFixtureSite()
@@ -79,9 +82,15 @@ before(async () => {
   reelPath = join(ws.root, 'out', 'fixture-3beat.mp4')
   masters = join(ws.root, 'out', 'masters')
 
-  const run = await reel(['render', 'fixture'], ws.root)
-  assert.equal(run.code, 0, run.output)
-  assert.match(run.stdout, /render ok {2}fixture/)
+  // Yesterday's cut, left lying around. The render below has to make it impossible to
+  // promote this by mistake, and the only way it can is by not being here afterwards.
+  stale = join(ws.root, 'out', 'yesterday.mp4')
+  await mkdir(join(ws.root, 'out'), { recursive: true })
+  await writeFile(stale, 'yesterday')
+
+  firstRun = await reel(['render', 'fixture'], ws.root)
+  assert.equal(firstRun.code, 0, firstRun.output)
+  assert.match(firstRun.stdout, /^done {2}out[\\/]fixture-3beat\.mp4/m)
 })
 
 after(async () => {
@@ -90,6 +99,33 @@ after(async () => {
 })
 
 describe('reel render', () => {
+  test('wipes out/ before it does anything else', () => {
+    // One render at a time, one thing in out/ (#18): scratch that accumulates is how
+    // yesterday's cut gets promoted because it was still lying around.
+    assert.ok(!existsSync(stale), 'a stale render survived into this one')
+  })
+
+  test('reports one checkpointed line per phase, with timings', () => {
+    // Plain appended lines, never a redrawing bar: the reason to look is almost always
+    // "which beat is slow", and the reason to scroll back is that something failed.
+    for (const line of [
+      /^check {6}ok {9}\d+\.\d+s$/m,
+      /^master 1\/4 hook {7}\d+\.\d+s$/m,
+      /^master 2\/4 hero {7}\d+\.\d+s$/m,
+      /^shot {3}1\/5 drift {6}\d+\.\d+s$/m,
+      /^shot {3}5\/5 drift {6}\d+\.\d+s$/m,
+      /^mux {19}\d+\.\d+s$/m,
+      // The reel's own length, then what it cost to cut — never each other.
+      /^done {2}out[\\/]fixture-3beat\.mp4 {2}15\.7s {3}\[\d+\.\d+s total\]$/m,
+    ]) {
+      assert.match(firstRun.stdout, line)
+    }
+    // n + 2 shots and one master per shot that shows the site, so the counts are the
+    // timeline's rather than a spinner's idea of how far along it is.
+    assert.equal(firstRun.stdout.match(/^master \d\/4 /gm)?.length, 4)
+    assert.equal(firstRun.stdout.match(/^shot {3}\d\/5 /gm)?.length, 5)
+  })
+
   test('writes an mp4 in the container #1 requires', async () => {
     assert.ok(existsSync(reelPath), 'no mp4 at out/fixture-3beat.mp4')
     const video = await probe(reelPath, 'stream=codec_name,width,height,r_frame_rate,avg_frame_rate', 'v:0')
@@ -305,6 +341,39 @@ describe('reel render', () => {
     assert.ok(landing > midway / 2, `the card lands: ${midway.toFixed(3)} -> ${landing.toFixed(3)}`)
   })
 
+  test('emits frame 0 as a still, hook and all, beside the mp4', async () => {
+    // The Facebook in-feed thumbnail, read back off the reel rather than rendered a
+    // second time — a still derived from anything but the mp4 can disagree with it.
+    const path = join(ws.root, 'out', 'fixture-frame0.jpg')
+    assert.ok(existsSync(path), 'no still at out/fixture-frame0.jpg')
+    const still = await frame(path, 0)
+    assert.ok(meanDiff(still, await frame(reelPath, 0)) < 3, 'the still is not frame 0')
+    assert.ok(pixelsNear(still, INK) > 10_000, 'the hook is not drawn on the thumbnail')
+  })
+
+  test('emits a contact sheet with one tile per cut point', async () => {
+    // n + 2 tiles: frame 0, then the frame each cut lands on, in one row.
+    const path = join(ws.root, 'out', 'fixture-sheet.jpg')
+    assert.ok(existsSync(path), 'no sheet at out/fixture-sheet.jpg')
+    assert.deepEqual(await size(path), sheetSize(CUTS.length + 2))
+
+    // Every tile against the reel frame it claims to be: frame 0, then each cut, then
+    // the card once it is alone on screen — its own cut point being where the
+    // crossfade starts, which shows neither the beat it leaves nor the card.
+    const sheet = await frame(path, 0)
+    for (const [index, at] of [0, ...CUTS, CARD_ALONE].entries()) {
+      const drawn = tile(sheet, index)
+      const want = await frame(reelPath, at, [SHEET_TILE.width, SHEET_TILE.height])
+      assert.ok(meanDiff(drawn, want) < 6, `tile ${index} is not the reel at frame ${at}`)
+    }
+  })
+
+  test('the review stills stay in out/ and nothing is written to reels/', () => {
+    // Scratch, like the render they describe (#14): the mp4 is the record, frame 0 is
+    // recoverable from it, and the sheet has no life after the judgment.
+    assert.ok(!existsSync(join(ws.root, 'reels')), 'render wrote into reels/')
+  })
+
   test('a second render re-takes its masters and reproduces frame 0 bit-identically', async () => {
     const before = await frame(reelPath, 0)
     const wasCaptured = (await stat(join(masters, 'hook.jpg'))).mtimeMs
@@ -346,6 +415,60 @@ export default defineSite({
     }
   })
 })
+
+describe('reel render, died mid-pass', () => {
+  test('leaves its debris — no cleanup, partial masters intact', async () => {
+    // A bed that is on disk and is not audio: `check` asks whether the file exists
+    // (#8), so this passes the preflight and dies in the mux, having captured and cut
+    // everything. Which is a real mid-pass death, and the debris is what it is
+    // diagnosed from.
+    const dying = await workspace()
+    try {
+      await writeFile(join(dying.root, 'not-music.mp3'), 'not audio')
+      await dying.site(
+        'dying',
+        `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${fixture.url}',
+  hook: { text: 'Spotless, every time.' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+  music: { file: 'not-music.mp3' },
+})
+`,
+      )
+      const run = await reel(['render', 'dying'], dying.root)
+      assert.equal(run.code, 1, run.output)
+
+      const out = join(dying.root, 'out')
+      assert.ok(existsSync(join(out, 'masters', 'hook.jpg')), 'the masters were cleaned up')
+      assert.ok(
+        existsSync(join(out, 'masters', 'shot-000000-hook.mp4')),
+        'the shots were cleaned up',
+      )
+      // And promotion takes an explicit `.mp4` path that this run never produced, so
+      // none of that debris can be promoted by accident.
+      assert.ok(!existsSync(join(out, 'dying-3beat.mp4')), 'a dead render left an mp4')
+      assert.ok(!existsSync(join(out, 'dying-frame0.jpg')), 'a dead render left a still')
+    } finally {
+      await dying.dispose()
+    }
+  })
+})
+
+/** One tile out of a contact sheet, as raw RGB — the same shape `frame` returns. */
+function tile(sheet: Buffer, index: number): Buffer {
+  const { width, height, gap } = SHEET_TILE
+  const stride = (sheetSize(CUTS.length + 2)[0] as number) * 3
+  const left = (gap + index * (width + gap)) * 3
+  const rows: Buffer[] = []
+  for (let row = 0; row < height; row++) {
+    const start = (gap + row) * stride + left
+    rows.push(sheet.subarray(start, start + width * 3))
+  }
+  return Buffer.concat(rows)
+}
 
 async function size(path: string): Promise<[number, number]> {
   const { width, height } = await probe(path, 'stream=width,height', 'v:0')

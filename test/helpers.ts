@@ -95,12 +95,17 @@ export async function probe(
   return fields
 }
 
-/** One decoded frame as raw RGB — what the pixels actually are, not what was asked for. */
-export async function frame(path: string, index: number): Promise<Buffer> {
+/**
+ * One decoded frame as raw RGB — what the pixels actually are, not what was asked for.
+ *
+ * `size` scales it on the way out, which is how a frame is compared against something
+ * that carries it at another size — a contact sheet's tile, say.
+ */
+export async function frame(path: string, index: number, size?: [number, number]): Promise<Buffer> {
   return capture('ffmpeg', [
     '-v', 'error',
     '-i', path,
-    '-vf', `select='eq(n,${index})'`,
+    '-vf', `select='eq(n,${index})'${size ? `,scale=${size[0]}:${size[1]}` : ''}`,
     '-fps_mode', 'passthrough',
     '-frames:v', '1',
     '-f', 'rawvideo',

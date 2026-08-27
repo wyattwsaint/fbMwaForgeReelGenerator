@@ -12,7 +12,7 @@ Three commands, one positional argument each, no flags
 
 ```
 reel check  <site>          # settle + resolve; seconds, no capture pass
-reel render <site>          # check, capture, composite; writes out/<slug>-<n>beat.mp4
+reel render <site>          # check, capture, composite; wipes and fills out/
 reel keep   out/<file>.mp4  # not built yet
 ```
 
@@ -54,21 +54,49 @@ Every camera move is then synthesised from those stills by ffmpeg, with sub-fram
 averaged into each output frame for motion blur, and the shots are cut together into
 a 1080x1920 H.264 mp4 at a constant 30fps with a 48kHz stereo AAC-LC bed.
 
+Progress is one checkpointed line per phase, with what that phase cost — plain
+appended lines rather than a redrawing bar, so the output still reads correctly when
+it is scrolled back through after a failure.
+
 ```
 $ reel render brobst
-render ok  brobst  41.2s  out/brobst-3beat.mp4
+check      ok         6.0s
+master 1/4 hook       4.1s
+master 2/4 hero       0.9s
+...
+mux                   3.2s
+done  out\brobst-3beat.mp4  15.7s   [41.2s total]
 ```
 
-Masters are **run-scoped**: they are written under `out/masters/`, wiped by the next
-render, and never reused across runs — a kept master is a photograph of a page that
-may no longer exist. A failed render leaves its debris there to diagnose from.
+`render` **wipes `out/` at start**, before anything else: one render at a time, one
+thing in `out/`, so nothing can be promoted by mistake because it was still lying
+around. Masters are **run-scoped**: they are written under `out/masters/` and never
+reused across runs — a kept master is a photograph of a page that may no longer
+exist.
+
+A render that dies mid-pass **leaves its debris**. Nothing is cleaned up on failure:
+the partial masters and shots are what the failure is diagnosed from, `out/` is
+gitignored, and promotion takes an explicit `.mp4` path a failed run never produced.
+
+### Judging a cut
+
+A 15.7s 9:16 mp4 is awkward to judge on a desktop, and the two things that actually go
+wrong are both stills. So `render` also writes, beside the reel:
+
+- `out/<slug>-frame0.jpg` — frame 0, which is the thumbnail Facebook shows in-feed,
+  hook text and all.
+- `out/<slug>-sheet.jpg` — a contact sheet: one tile per shot, in reel order, which is
+  frame 0 and then the frame each cut lands on.
+
+All three `start` on completion — the mp4 included, because the judgment is "does it
+play right *and* is the thumbnail right". Both stills are **scratch**: they stay in
+`out/` and are never promoted, since the reel is the record and both are recoverable
+from it.
 
 Under all of it is the **bed** — the signature track, trimmed to the reel's length
 and faded out at the end. It is the default on every reel; `music.file` in a site's
 config swaps it and `music.offset` slides it. Nothing is timed to the music: a reel is
 exactly as long with a bed as it is without one.
-
-`out/` hygiene and the review stills are each still their own ticket.
 
 Site configs live in [`sites/`](sites/README.md); the vocabulary they are written in
 is [`CONTEXT.md`](CONTEXT.md).

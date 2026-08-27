@@ -137,8 +137,14 @@ recoverable from its own history.
 
 **Review stills** — the two images emitted beside every scratch render so a cut can be
 judged without squinting at a tall sliver of video: **frame 0**, and a **contact
-sheet** carrying one tile per cut point. Scratch, like the render they describe — never
-promoted, since the reel itself is the record and both are recoverable from it.
+sheet**. Scratch, like the render they describe — never promoted, since the reel itself
+is the record and both are recoverable from it.
+
+**Contact sheet** — one tile per shot, in reel order: n+2 of them, which is frame 0 and
+then the frame each cut point lands on, every shot but the hook beginning on one. The
+card is the exception, because its cut point is where its crossfade *starts* — a tile
+taken there shows neither the beat being left nor the card, so the card's tile is the
+first frame it is alone on screen.
 
 **Signature track** — the one commissioned piece of music reused across MWA Forge's
 reels. Not reproducible from the prompt that made it, so the file itself is the asset.
