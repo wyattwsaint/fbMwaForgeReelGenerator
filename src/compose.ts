@@ -11,10 +11,11 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { cameraFor } from './camera.ts'
+import { cardChains, wordmarkInput, writeWordmark } from './card.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 import { GROUND, ffmpegColor } from './house.ts'
-import { overlayChains } from './overlay.ts'
+import { drawnOverlays, overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
 import { CROSSFADE_MS, FPS, frameCount } from './plan.ts'
 import type { Shot, TextCue, Timeline } from './plan.ts'
@@ -63,21 +64,14 @@ export async function renderShot(
   dir: string,
   cues: TextCue[] = [],
 ): Promise<string> {
-  const output = join(dir, `shot-${String(shot.startMs).padStart(6, '0')}-${shot.kind}.mp4`)
+  const output = shotPath(shot, dir)
   const frames = frameCount(shot.durationMs)
-  const input = master
-    ? ['-i', master.path]
-    : // The card carries no site pixels, so there is nothing to move: it is a flat
-      // field of house ground until the CTA ticket draws on it.
-      [
-        '-f', 'lavfi',
-        '-i', `color=c=${ffmpegColor(GROUND)}:s=${FRAME_WIDTH}x${FRAME_HEIGHT}:r=${FPS}`,
-      ]
-  const filter = master ? moveFilter(cameraFor(shot, master.size)) : null
+  if (shot.kind === 'cta') return renderCard(shot, dir, cues, output, frames)
 
+  const filter = master ? moveFilter(cameraFor(shot, master.size)) : null
   await ffmpeg([
-    ...input,
-    ...shotFilter(filter, shot, cues),
+    ...(master ? ['-i', master.path] : ['-f', 'lavfi', '-i', groundSource()]),
+    ...shotFilter(filter, shot, drawnOverlays(cues)),
     '-frames:v',
     String(frames),
     '-an',
@@ -85,6 +79,48 @@ export async function renderShot(
     output,
   ])
   return output
+}
+
+/**
+ * The card (#9 §5, #25) — the one shot with no site pixels and no master.
+ *
+ * It is built rather than filmed: house ground, MWA Forge's mark, its headline, the
+ * accent rule and the client's credit, all of it drifting. The client's domain
+ * reaches it as `cta.credit` and nothing else does, which is the difference between
+ * a credit and a card.
+ */
+async function renderCard(
+  shot: Shot,
+  dir: string,
+  cues: TextCue[],
+  output: string,
+  frames: number,
+): Promise<string> {
+  const mark = await writeWordmark(dir)
+  const credit = cues.find((cue) => cue.role === 'cta')?.content ?? ''
+  const graph = cardChains(credit, frames, '0:v', '1:v', 'card').join(';')
+
+  await ffmpeg([
+    '-f', 'lavfi',
+    '-i', groundSource(),
+    ...wordmarkInput(mark),
+    '-filter_complex', graph,
+    '-map', '[card]',
+    '-frames:v', String(frames),
+    '-an',
+    ...intermediateEncode(),
+    output,
+  ])
+  return output
+}
+
+function shotPath(shot: Shot, dir: string): string {
+  return join(dir, `shot-${String(shot.startMs).padStart(6, '0')}-${shot.kind}.mp4`)
+}
+
+/** House ground, full frame — the card's ground and every shot's fallback. */
+function groundSource(): string {
+  return `color=c=${ffmpegColor(GROUND)}:s=${FRAME_WIDTH}x${FRAME_HEIGHT}:r=${FPS}`
 }
 
 /**

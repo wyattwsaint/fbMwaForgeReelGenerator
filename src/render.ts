@@ -12,7 +12,6 @@ import { join } from 'node:path'
 import { captureMasters, mastersDir } from './capture.ts'
 import { check } from './check.ts'
 import { assemble, renderShot } from './compose.ts'
-import { overlayCues } from './overlay.ts'
 import { planReel } from './plan.ts'
 import type { SiteConfig } from './site.ts'
 
@@ -39,7 +38,9 @@ export async function render(config: SiteConfig, root: string, slug: string): Pr
 
   const shots: string[] = []
   for (const [index, shot] of timeline.shots.entries()) {
-    const cues = overlayCues(timeline.text, index)
+    // Every cue of this shot, whatever its role: `compose` hands the overlay roles
+    // to `overlay` and the card's own to `card`, and neither has to know the other's.
+    const cues = timeline.text.filter((cue) => cue.shot === index)
     shots.push(await renderShot(byShot.get(shot) ?? null, shot, mastersDir(dir), cues))
   }
 

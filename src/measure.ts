@@ -143,22 +143,33 @@ export function lineWidth(line: string, fontSize: number): number {
   return Math.round((units * fontSize) / unitsPerEm)
 }
 
+/** The box a line has to fit inside, named the way the report names it. */
+export type Box = { name: string; width: number }
+
+/** The one every overlay is drawn into. The card names its own (#9 §5). */
+const SLOT: Box = { name: 'text slot', width: TEXT_SLOT.width }
+
 /**
- * Every line of `content` that draws wider than the slot, named with what it costs.
+ * Every line of `content` that draws wider than its box, named with what it costs.
  *
  * A list, not a first failure, for the reason `check` reports everything at once: a
  * hook whose two lines are both long is one rewrite, and finding that out one line
  * per run is two.
  */
-export function overflowProblems(field: string, content: string, role: TypeRole): string[] {
+export function overflowProblems(
+  field: string,
+  content: string,
+  role: TypeRole,
+  box: Box = SLOT,
+): string[] {
   const { size } = TYPE[role]
   const lines = content.split('\n')
   const problems: string[] = []
   lines.forEach((line, index) => {
     const width = lineWidth(line, size)
-    if (width <= TEXT_SLOT.width) return
+    if (width <= box.width) return
     const where = lines.length > 1 ? `${field} line ${index + 1}` : field
-    problems.push(`${where} draws ${width}px wide at ${size}px; the text slot is ${TEXT_SLOT.width}px`)
+    problems.push(`${where} draws ${width}px wide at ${size}px; the ${box.name} is ${box.width}px`)
   })
   return problems
 }

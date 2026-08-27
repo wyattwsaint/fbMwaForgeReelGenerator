@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { creditProblems } from './card.ts'
 import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { overflowProblems } from './measure.ts'
 import type { TypeRole } from './measure.ts'
@@ -42,6 +43,9 @@ export function configProblems(config: SiteConfig, root: string): string[] {
   }
   if (typeof config.cta?.credit !== 'string' || config.cta.credit === '') {
     problems.push('cta.credit is required')
+  } else {
+    // The card's one line of config-owned copy, against the card's own width.
+    problems.push(...creditProblems(config.cta.credit))
   }
 
   const beats = config.beats

@@ -22,6 +22,15 @@ export const FONT_FILE = fileURLToPath(
   // backslash is an escape before it is ever a separator.
 ).replaceAll('\\', '/')
 
+/**
+ * The MWA Forge mark, drawn for this repo and checked in beside the face — see
+ * `assets/brand/PROVENANCE.md`. It is the card's one image, and it is never the
+ * client's: the client reaches the viewer as site pixels and as a credit line.
+ */
+export const WORDMARK_FILE = fileURLToPath(
+  new URL('../assets/brand/mwaforge-wordmark.svg', import.meta.url),
+)
+
 /** #9's table. `SCRIM` is `GROUND`: the wash behind text is the card's ground. */
 export const INK = '#eef1f6'
 export const GROUND = '#0a0c10'
@@ -69,6 +78,12 @@ export const TEXT_SLOT = {
 export const TYPE = {
   hook: { size: 76, lineHeight: 92 },
   label: { size: 44, lineHeight: 56 },
+  /** The card's own two roles (#9 §5). The headline is the largest type on a reel:
+   * it is the only line the whole reel is asking the viewer to act on, and it sits on
+   * a flat ground with nothing to compete with. The credit is set small on purpose —
+   * it is attribution, not the subject of the card. */
+  headline: { size: 96, lineHeight: 116 },
+  credit: { size: 34, lineHeight: 44 },
 }
 
 /**
