@@ -148,6 +148,29 @@ export function meanLuma(frameBytes: Buffer, top: number, bottom: number): numbe
   return total / ((bottom - top) * stride)
 }
 
+/**
+ * How abruptly a frame changes across its columns, 0..255 — how sharp it is.
+ *
+ * Not the plain column-to-column difference: motion blur turns a hard edge into a
+ * ramp, and a ramp climbing the same distance more slowly has exactly the same total
+ * difference, so that number cannot tell a smear from an edge. The second difference
+ * can — it is large where a pattern *turns* and near zero along a ramp — which is how
+ * "softer" is asked as a number rather than looked at.
+ */
+export function acutance(frameBytes: Buffer): number {
+  const stride = 1080 * 3
+  const rows = frameBytes.length / stride
+  let total = 0
+  for (let row = 0; row < rows; row++) {
+    const start = row * stride
+    for (let i = start + 3; i < start + stride - 3; i++) {
+      const here = frameBytes[i] as number
+      total += Math.abs((frameBytes[i - 3] as number) + (frameBytes[i + 3] as number) - 2 * here)
+    }
+  }
+  return total / (rows * (stride - 6))
+}
+
 function capture(bin: string, args: string[]): Promise<Buffer> {
   return run(bin, args, (stdout) => stdout)
 }
