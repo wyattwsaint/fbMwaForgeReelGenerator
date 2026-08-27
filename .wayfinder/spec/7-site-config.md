@@ -40,6 +40,8 @@ type Beat = {
                                  // renderer doubles the pixel cost for a diagonal pan
   move?: 'drift' | 'pan'         // override; otherwise alternates from the hook
   direction?: Direction          // override; otherwise the deterministic rotation
+  pushPull?: 'push' | 'pull'     // override; otherwise the deterministic rotation.
+                                 // Read only on a drift (#52)
   label?: string                 // optional on-screen line (#9 owns styling)
   url?: string                   // override — a beat that lives on another route
 }

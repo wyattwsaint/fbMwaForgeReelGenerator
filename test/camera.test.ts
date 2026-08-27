@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { MAX_BLUR_SAMPLES, PAN_PX_PER_FRAME, cameraFor, masterSize } from '../src/camera.ts'
+import {
+  DRIFT_ZOOM,
+  MAX_BLUR_SAMPLES,
+  PAN_PX_PER_FRAME,
+  cameraFor,
+  masterSize,
+} from '../src/camera.ts'
 import { moveFilter } from '../src/compose.ts'
 import { BEAT_MS, DIRECTIONS, MIN_PAN_PX_PER_FRAME, panTravelNeeded } from '../src/plan.ts'
 import type { Shot } from '../src/plan.ts'
@@ -21,13 +27,14 @@ function panShot(direction: Shot['direction'], punchFactor = 1.2): Shot {
 }
 
 /** A drift of `durationMs`, over a section tall enough to hold one frame. */
-function driftShot(durationMs: number): Shot {
+function driftShot(durationMs: number, pushPull: Shot['pushPull'] = 'push'): Shot {
   return {
     kind: 'beat',
     index: 0,
     startMs: 0,
     durationMs,
     move: 'drift',
+    pushPull,
     punchFactor: 1,
     source: { url: 'https://example.test/', selector: '#gallery' },
   }
@@ -156,6 +163,22 @@ describe('camera', () => {
     // to: half the frame's diagonal (1102px) times the zoom (0.1) over the shot's 104
     // steps is 1.06px a frame, which rounds up to 2.
     assert.equal(cameraOver(driftShot(3500), 2800).samples, 2)
+  })
+
+  test('a push ramps up to the zoom and a pull back down from it', () => {
+    // #52: the deck is still two moves. A pull is the same 10% over the same window,
+    // read the other way round, so it crops no more of the master and blurs the same.
+    const push = cameraOver(driftShot(3500), 2800)
+    const pull = cameraOver(driftShot(3500, 'pull'), 2800)
+    assert.deepEqual(push.zoom, { from: 1, to: DRIFT_ZOOM })
+    assert.deepEqual(pull.zoom, { from: DRIFT_ZOOM, to: 1 })
+    assert.deepEqual(pull.window, push.window)
+    assert.equal(pull.samples, push.samples)
+
+    // And the ramp ffmpeg is handed counts down rather than being a push run backwards
+    // by some other stage — the zoom is the only thing that reverses.
+    assert.match(moveFilter(pull), /z='1\.1-0\.1\*\(on-/)
+    assert.match(moveFilter(push), /z='1\+0\.1\*\(on-/)
   })
 
   test('the derivation is capped, so no move can ask for an unbounded render', () => {

@@ -112,6 +112,52 @@ describe('planReel', () => {
     }
   })
 
+  test('drifts alternate push and pull, and the hook always pushes', () => {
+    // #52: every zoom used to be a push, so a reel read as one repeated gesture.
+    for (const n of [3, 4, 5]) {
+      const drifts = planReel(config(n))
+        .shots.filter((shot) => shot.move === 'drift')
+        .map((shot) => shot.pushPull)
+      // Frame 0 is the thumbnail, and a pull's first frame is its most upscaled one.
+      assert.equal(drifts[0], 'push', `n=${n} opens on a pull`)
+      drifts.forEach((drift, i) => {
+        if (i > 0) assert.notEqual(drift, drifts[i - 1], `n=${n} repeats ${drift}`)
+      })
+    }
+    // The card is in the rotation, which for n=4 is what makes the alternation visible.
+    assert.deepEqual(
+      planReel(config(4))
+        .shots.filter((shot) => shot.move === 'drift')
+        .map((shot) => shot.pushPull),
+      ['push', 'pull', 'push', 'pull'],
+    )
+  })
+
+  test('each move carries only its own parameter', () => {
+    for (const shot of planReel(config(5)).shots) {
+      if (shot.move === 'pan') {
+        assert.equal(shot.pushPull, undefined, `beat ${shot.index} is a pan that zooms`)
+      } else {
+        assert.ok(shot.pushPull, `${shot.kind} ${shot.index} drifts without pushing or pulling`)
+      }
+    }
+  })
+
+  test('a push/pull override wins without disturbing the beats around it', () => {
+    const plain = planReel(config(5))
+    const overridden = planReel(
+      config(5, {
+        beats: config(5).beats.map((beat, i) => (i === 1 ? { ...beat, pushPull: 'push' as const } : beat)),
+      }),
+    )
+    assert.equal(beatShots(overridden)[1]!.pushPull, 'push')
+    for (const i of [0, 2, 3, 4]) {
+      assert.equal(beatShots(overridden)[i]!.pushPull, beatShots(plain)[i]!.pushPull, `beat ${i} moved`)
+    }
+    // The card is seeded on n, so it does not move either.
+    assert.equal(overridden.shots.at(-1)!.pushPull, plain.shots.at(-1)!.pushPull)
+  })
+
   test('the rotation is seeded on beat index alone', () => {
     const plain = planReel(config(4))
     const elaborate = planReel({
@@ -127,8 +173,8 @@ describe('planReel', () => {
       music: { file: 'audio/other.mp3', offset: 1.1 },
     })
     assert.deepEqual(
-      beatShots(plain).map((shot) => [shot.move, shot.direction]),
-      beatShots(elaborate).map((shot) => [shot.move, shot.direction]),
+      beatShots(plain).map((shot) => [shot.move, shot.direction, shot.pushPull]),
+      beatShots(elaborate).map((shot) => [shot.move, shot.direction, shot.pushPull]),
     )
   })
 
@@ -144,8 +190,8 @@ describe('planReel', () => {
     assert.equal(overridden[1]!.move, 'pan')
     for (const i of [0, 2, 3, 4]) {
       assert.deepEqual(
-        [overridden[i]!.move, overridden[i]!.direction],
-        [beats[i]!.move, beats[i]!.direction],
+        [overridden[i]!.move, overridden[i]!.direction, overridden[i]!.pushPull],
+        [beats[i]!.move, beats[i]!.direction, beats[i]!.pushPull],
         `beat ${i} moved because beat 1 was overridden`,
       )
     }

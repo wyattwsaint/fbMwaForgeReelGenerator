@@ -88,6 +88,13 @@ export function pad(label: StreamLabel): string {
 type Ramp = { offset: number; span: number }
 
 /**
+ * The two ends of a zoom. Structural rather than `camera.ts`'s `Zoom`, for the same
+ * reason `Ramp` is — this file knows how a ramp is *written* and has no opinion about
+ * which end of one a move starts at.
+ */
+type Zoom = { from: number; to: number }
+
+/**
  * A ramp as an expression: 0 on the move's first output frame and 1 on its last,
  * counted in whatever frame variable the filter it lands in offers.
  */
@@ -97,7 +104,12 @@ export function rampFraction(ramp: Ramp, variable: string): string {
 }
 
 /**
- * `zoompan`, ramping 1.00 → `zoom` across `ramp` and held on centre.
+ * `zoompan`, ramping `zoom.from` → `zoom.to` across `ramp` and held on centre.
+ *
+ * Both ends rather than a depth off 1.0 (#52): a pull starts at the zoom and comes
+ * back down, so which end is 1.0 is the caller's to say. The two ends also carry the
+ * sign, and the sign is written into the operator rather than left on the delta —
+ * `1.1+-0.1*x` is arithmetic ffmpeg would accept and nobody would want to read.
  *
  * Plain numbers rather than a `Camera`, because both callers reach it with numbers of
  * their own: a shot's zoom is counted in sub-frames at `samples` times the frame rate,
@@ -106,15 +118,16 @@ export function rampFraction(ramp: Ramp, variable: string): string {
  * onto the output frames a viewer sees.
  */
 export function zoomStage(
-  zoom: number,
+  zoom: Zoom,
   ramp: Ramp,
   size: { width: number; height: number },
   fps: number,
 ): string {
   // Trimmed rather than padded: `toFixed` alone spells a 3% ramp `0.030000`.
-  const depth = Number((zoom - 1).toFixed(6))
+  const delta = Number((zoom.to - zoom.from).toFixed(6))
+  const ramped = `${zoom.from}${delta < 0 ? '-' : '+'}${Math.abs(delta)}*${rampFraction(ramp, 'on')}`
   return (
-    `zoompan=z='1+${depth}*${rampFraction(ramp, 'on')}':x='iw/2-(iw/zoom/2)':` +
+    `zoompan=z='${ramped}':x='iw/2-(iw/zoom/2)':` +
     `y='ih/2-(ih/zoom/2)':d=1:s=${size.width}x${size.height}:fps=${fps}`
   )
 }

@@ -180,8 +180,10 @@ function moveStages(camera: Camera, ramp: Ramp): string[] {
   const crop = (x: string, y: string) =>
     `crop=w=${window.width}:h=${window.height}:x=${x}:y=${y}`
 
-  if (zoom === 1) {
-    // A pan slides a fixed window, so the whole move is one crop expression.
+  if (zoom.from === zoom.to) {
+    // A pan slides a fixed window, so the whole move is one crop expression. It is the
+    // move with no zoom to it, which is what this asks — a drift ramps in one
+    // direction or the other and never stands still (#52).
     const at = (a: number, b: number) =>
       a === b ? String(a) : `${a}+(${b - a})*${rampFraction(ramp, 'n')}`
     return [crop(at(from.x, to.x), at(from.y, to.y)), scaleToFrame()]

@@ -31,13 +31,13 @@ const REEL = planReel({
 /** The card's own shot, taken from the plan rather than hand-built to match it. */
 const CARD_SHOT = REEL.shots.at(-1) as Shot
 
-function graph(credit = 'fixture.test'): string {
+function graph(credit = 'fixture.test', shot: Shot = CARD_SHOT): string {
   const cues: TextCue[] = [
     { shot: 0, content: credit, role: 'cta', startMs: 0, fadeInMs: 0, holdMs: CTA_MS, fadeOutMs: 0 },
   ]
   return cardChains(
     cues,
-    cardCamera(CARD_SHOT),
+    cardCamera(shot),
     stream('ground'),
     stream('mark'),
     stream('out'),
@@ -148,6 +148,15 @@ describe('the card\u2019s filtergraph', () => {
     // is still moving when the reel stops.
     assert.ok(graph().includes(`z='1+0.03*on/${FRAMES - 1}'`))
     assert.ok(!graph().includes('tmix'), 'the card is blurred, at half a pixel a frame')
+  })
+
+  test('the card takes its turn in the drift rotation, pulling as readily as pushing', () => {
+    // #52: the card is drawn rather than filmed, so a pull costs it no sharpness — it
+    // is rendered at `PRECISION` either way — and it is where an alternation is most
+    // visible, being the last thing on screen. Same 3%, read the other way round.
+    const pulled = graph('fixture.test', { ...CARD_SHOT, pushPull: 'pull' })
+    assert.ok(pulled.includes(`z='1.03-0.03*on/${FRAMES - 1}'`))
+    assert.ok(pulled.includes('flags=neighbor'), 'a pull skips the precision round trip')
   })
 
   test('no site pixels and no client asset reach the card', () => {

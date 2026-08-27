@@ -20,8 +20,8 @@ the reel is 3–5 beats.
 cuts. A beat is one shot, so every cut falls on a beat boundary.
 
 **Move** — the camera behaviour of a shot. The deck is two: **drift** (slow
-zoom) and **pan** (slow travel across the section). Both are slow, both are
-**continuous**: a move runs for its shot's whole duration and never lands. A move
+zoom, in or out) and **pan** (slow travel across the section). Both are slow, both
+are **continuous**: a move runs for its shot's whole duration and never lands. A move
 that has to be blurred to read is a move that is too fast for this reel.
 
 **Direction** — a parameter of pan, not a move of its own: **vertical**,
@@ -34,9 +34,20 @@ costs roughly twice the captured pixels of a vertical one. Those pixels are also
 the one way direction bears on speed, because a bigger master gives up less
 travel to the grain a move is cut at (see **Punch-in**).
 
+**Push / pull** — a parameter of drift, not a move of its own: a **push** zooms in
+across its shot and a **pull** zooms back out. Same depth either way, so the two are
+one move read in either direction — a pull ramps inside the window a drift already
+crops, so it costs no extra captured pixels and asks nothing of the punch. Drifts
+rotate deterministically across a reel, so no reel is one repeated gesture; per-beat
+override in config. The hook is the one exemption: it always pushes, because of
+**Frame 0**. A pull is not the snap pull #12 cut: what #12 objected to there was
+speed, and a drift is slow in both directions.
+
 **Move assignment** — which move each beat gets. Deterministic given the config:
 pan and drift alternate, so no move repeats across a cut. The hook drifts, so
-beat 1 pans. Each pan then takes the next direction in the rotation.
+beat 1 pans. Each pan then takes the next direction in the rotation, and each drift
+the next of push and pull — both seeded on the beat index alone, so overriding one
+beat never moves another's. The card is in the drift rotation and the hook is not.
 Per-beat override in config.
 
 **Timeline** — a reel's whole shape, derived from its config before anything is
@@ -52,7 +63,9 @@ transition rather than a cut, and it is the only one two shots share.
 to action: the MWA wordmark and `mwaforge.com` in large type, with the client's
 domain credited beneath it. The reel is MWA Forge's marketing, so the viewer's
 next step is hiring MWA Forge; the client site is the proof, and the credit line
-attributes it. The card drifts like everything else.
+attributes it. The card drifts like everything else, and takes its turn at pushing
+and pulling: it is drawn rather than filmed, so a pull costs it no sharpness, and it
+is the last thing on screen, which is where an alternation is most visible.
 
 **Card** — a rendered frame containing no site pixels. Currently the CTA is the
 only card, and it is drawn in the house style — a card is never the client's.
@@ -203,7 +216,10 @@ page state always gives one reel. It is not reproducible: the page state is the 
 to change, so a reel can never be reconstructed, only re-cut into a new one.
 
 **Frame 0** is the thumbnail Facebook shows in-feed. It is a constraint, not a
-by-product: hook text is fully drawn on it and may not animate in.
+by-product: hook text is fully drawn on it and may not animate in, and the hook
+always pushes rather than pulling — a pull starts at the zoom, so its first frame is
+its most upscaled one, and that is the frame the whole feed is shown. A push spends
+that softest frame last, where nobody is looking.
 
 ## Config
 
@@ -212,7 +228,7 @@ repo. The human's entire steering wheel: a URL, hook text, 3–5 beat selectors,
 CTA. Everything else in the file is an **override**.
 
 **Override** — a config field that exists because a real site broke a default. Move,
-direction, punch factor, beat label and video pin are all overrides; a config that
+pan direction, push / pull, punch factor, beat label and video pin are all overrides; a config that
 names none of them still renders. Timings are not overridable — 3.5s per beat is a
 finding, not a preference.
 
