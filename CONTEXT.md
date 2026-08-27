@@ -27,10 +27,12 @@ that has to be blurred to read is a move that is too fast for this reel.
 **Direction** — a parameter of pan, not a move of its own: **vertical**,
 **lateral**, **lateral-reversed**, or **diagonal**. Vertical is the default.
 Directions rotate deterministically across a reel's pan beats, so no direction
-repeats back-to-back; per-beat override in config. Every direction travels the
-same path length in the same time, so speed and blur are unaffected by the
-choice — but a diagonal pan needs punch-in headroom on *both* axes, so it costs
-roughly twice the captured pixels of a vertical one.
+repeats back-to-back; per-beat override in config. A pan's two axes always travel
+the same distance, so a diagonal reads as a diagonal rather than as a vertical
+with a wobble — but a diagonal needs punch-in headroom on *both* axes, so it
+costs roughly twice the captured pixels of a vertical one. Those pixels are also
+the one way direction bears on speed, because a bigger master gives up less
+travel to the grain a move is cut at (see **Punch-in**).
 
 **Move assignment** — which move each beat gets. Deterministic given the config:
 pan and drift alternate, so no move repeats across a cut. The hook drifts, so
@@ -116,6 +118,12 @@ beat is punched in. Per-beat punch factor lives in config. A section is exactly 
 wide as the frame, so a lateral or diagonal pan has *no* travel unpunched: the plan
 punches those to the minimum that gives them travel when config names no factor. A
 factor the config does name is the human's, and `check` says whether it travels.
+
+A punch buys travel, and it also buys the *grain* that travel is cut at: the move
+is a crop, and a crop lands on whole master pixels, so a pan is only smooth if it
+covers a whole number of them a frame. A punched pan therefore travels slightly
+less far than its room allows, and the bigger the master the less it gives up
+(#51).
 
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
 belongs to the page, not to a section. Capturing a master without scrolling the page
