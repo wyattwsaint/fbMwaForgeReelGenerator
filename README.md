@@ -13,7 +13,7 @@ Three commands, one positional argument each, no flags
 ```
 reel check  <site>          # settle + resolve; seconds, no capture pass
 reel render <site>          # check, capture, composite; wipes and fills out/
-reel keep   out/<file>.mp4  # not built yet
+reel keep   out/<file>.mp4  # mv to reels/ + solo commit
 ```
 
 Install it once on the machine that cuts reels:
@@ -97,6 +97,33 @@ Under all of it is the **bed** — the signature track, trimmed to the reel's le
 and faded out at the end. It is the default on every reel; `music.file` in a site's
 config swaps it and `music.offset` slides it. Nothing is timed to the music: a reel is
 exactly as long with a bed as it is without one.
+
+### `reel keep out/<file>.mp4`
+
+Promotion — what happens *after* you have watched a cut and decided it ships. It moves
+the file to `reels/<slug>-<YYYY-MM-DD>.mp4` and commits it on its own. That is all it
+does; judging a cut shippable stays the pipeline's one human step, which is why there
+is no `--keep` flag on `render` and no flag on `keep`.
+
+```
+$ reel keep out/brobst-3beat.mp4
+a1b2c3d Keep brobst reel, 2026-08-27
+ reels/brobst-2026-08-27.mp4 | Bin 0 -> 4633129 bytes
+ 1 file changed, 0 insertions(+), 0 deletions(-)
+```
+
+The mechanics are automated because the solo-commit rule is the discipline that erodes
+by hand. A rendered reel is not reproducible — the client's live site underneath it is
+theirs to change — so the mp4 is the only record of what a reel was, and the commit
+that adds it is its manifest: `git log --follow` on a kept reel recovers the config
+that made it. One `git add .` that sweeps a config edit into that commit destroys
+that, permanently.
+
+So both git calls are **pathspec-scoped to the one file**, and a **dirty tree is
+fine**: uncommitted config edits are the normal case, since you tune, render, judge
+and keep in one sitting. `keep` prints the resulting commit's one-line stat, so it is
+visible that nothing rode along. The date in the name replaces the scratch name's
+`-<n>beat` — `n` is recoverable from the config, the day it was cut is not.
 
 Site configs live in [`sites/`](sites/README.md); the vocabulary they are written in
 is [`CONTEXT.md`](CONTEXT.md).

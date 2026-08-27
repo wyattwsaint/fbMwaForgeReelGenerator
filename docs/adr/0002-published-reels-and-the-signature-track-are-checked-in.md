@@ -41,9 +41,12 @@ edits.
   decision to revisit first — and by then the history cannot be trimmed cheaply.
 - The one thing git does not capture is the brand colours sampled at render. They are
   derived from the live site, so the reel's own pixels are the record.
-- Promotion from `out/` to `reels/` is a manual `mv`, deliberately not a CLI command:
+- ~~Promotion from `out/` to `reels/` is a manual `mv`, deliberately not a CLI command:
   judging a cut good enough to ship is the pipeline's one human step, and a `--keep`
-  flag would make keeping the default path of a render.
+  flag would make keeping the default path of a render.~~ Superseded by
+  [ADR-0004](0004-promotion-is-a-command-the-judgment-is-not.md): the judgment stays
+  human and there is still no `--keep` flag, but the mechanics — which this ADR is what
+  loads — are `reel keep`.
 - Because the renderer cannot verify a claimed licence tier, no licence metadata lives
   in site config and no re-render refusal is implemented. Provenance is a document, not
   a check.
