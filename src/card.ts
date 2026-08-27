@@ -214,6 +214,18 @@ function drawLine(content: string, role: 'headline' | 'credit', y: number, colou
  *
  * Which is why the precision lives here and the zoom does not: the multiple is about
  * how the card is drawn, and how far it drifts is `camera.ts`'s to say.
+ *
+ * What the round trip costs the pixels that are *not* moving is #48's measurement,
+ * read off rendered cards through the reel's own final encode. Against the card #38
+ * proposed instead — laid out whole at `PRECISION` and brought down once — this one
+ * is about a fifth less acute at 1080 wide, and under a twentieth less at the ~430px
+ * a reel is watched at, which is not a difference to see. And against a third card,
+ * drawn once at frame size and never resampled at all, the round trip is the smaller
+ * of the two departures: laying out at `PRECISION` lands glyphs on different
+ * subpixels, so that card sits about twice as far from the unresampled one as this
+ * card does. The alternative is a restyle of the card's type rather than the same
+ * card cheaper — which is why the round trip stays, and why `cardLayout` still
+ * returns frame pixels.
  */
 function driftFilter(camera: Camera): string {
   const { window, samples } = camera
