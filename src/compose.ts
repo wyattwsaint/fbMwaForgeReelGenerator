@@ -14,7 +14,8 @@ import { cameraFor } from './camera.ts'
 import { cardChains, wordmarkInput, writeWordmark } from './card.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { GROUND, ffmpegColor } from './house.ts'
+import { ffmpegColor, pad, stream } from './filtergraph.ts'
+import { GROUND } from './house.ts'
 import { drawnOverlays, overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
 import { CROSSFADE_MS, FPS, frameCount } from './plan.ts'
@@ -98,14 +99,15 @@ async function renderCard(
 ): Promise<string> {
   const mark = await writeWordmark(dir)
   const credit = cues.find((cue) => cue.role === 'cta')?.content ?? ''
-  const graph = cardChains(credit, frames, '0:v', '1:v', 'card').join(';')
+  const card = stream('card')
+  const graph = cardChains(credit, frames, stream('0:v'), stream('1:v'), card).join(';')
 
   await ffmpeg([
     '-f', 'lavfi',
     '-i', groundSource(),
     ...wordmarkInput(mark),
     '-filter_complex', graph,
-    '-map', '[card]',
+    '-map', pad(card),
     '-frames:v', String(frames),
     '-an',
     ...intermediateEncode(),
@@ -131,10 +133,12 @@ function groundSource(): string {
  * that has only one is a graph to read for no reason.
  */
 function shotFilter(move: string | null, shot: Shot, cues: TextCue[]): string[] {
-  const chains = overlayChains(cues, shot, move ? 'moved' : '0:v', 'overlaid')
+  const moved = stream('moved')
+  const overlaid = stream('overlaid')
+  const chains = overlayChains(cues, shot, move ? moved : stream('0:v'), overlaid)
   if (chains.length === 0) return move ? ['-vf', move] : []
-  const graph = [...(move ? [`[0:v]${move}[moved]`] : []), ...chains].join(';')
-  return ['-filter_complex', graph, '-map', '[overlaid]']
+  const graph = [...(move ? [`${pad(stream('0:v'))}${move}${pad(moved)}`] : []), ...chains].join(';')
+  return ['-filter_complex', graph, '-map', pad(overlaid)]
 }
 
 function intermediateEncode(): string[] {

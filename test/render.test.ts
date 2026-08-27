@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
 import { SAFE_ZONE, TYPE } from '../src/house.ts'
-import { AUDIO_FADE_OUT_MS } from '../src/plan.ts'
+import { AUDIO_FADE_OUT_MS, FRAME_MS, HOOK_FADE_OUT_MS, HOOK_MS, frameCount } from '../src/plan.ts'
 import { SHEET_TILE, sheetSize } from '../src/review.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
@@ -46,6 +46,8 @@ const REEL_SECONDS = 15.7
 /** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
 const CUTS = [90, 195, 300]
 const LAST_FRAME = 470
+/** The hook's last frame at full alpha: its fade starts on the next one and ends on 89. */
+const HOOK_HELD = frameCount(HOOK_MS - HOOK_FADE_OUT_MS - FRAME_MS)
 /** The card's crossfade starts here — 0.3s before the last beat would have ended. */
 const CARD_IN = 396
 /** The first frame the crossfade is over and the card is alone on screen. */
@@ -248,7 +250,7 @@ describe('reel render', () => {
     // rather than a by-product: it is already at full alpha, and it stays there for
     // the whole hold. An animated-in hook would put a fraction of this on frame 0.
     const first = pixelsNear(await frame(reelPath, 0), INK)
-    const held = pixelsNear(await frame(reelPath, 75), INK)
+    const held = pixelsNear(await frame(reelPath, HOOK_HELD), INK)
     assert.ok(first > 10_000, `the hook is not drawn on frame 0 (${first}px of ink)`)
     assert.ok(
       Math.abs(first - held) < first * 0.05,
@@ -257,8 +259,9 @@ describe('reel render', () => {
   })
 
   test('the hook and its scrim let go together, before the cut', async () => {
-    const held = await frame(reelPath, 75)
-    const gone = await frame(reelPath, 89) // The hook's last frame; the cut is at 90.
+    const held = await frame(reelPath, HOOK_HELD)
+    // The hook's last frame — dark on it, and the cut is at 90 (#36).
+    const gone = await frame(reelPath, CUTS[0]! - 1)
     assert.ok(pixelsNear(gone, INK) === 0, 'the hook is still lit when the cut lands')
     // The wash lifts with the words rather than dimming the site for the whole reel.
     const under = meanLuma(held, ...SCRIM_BAND)

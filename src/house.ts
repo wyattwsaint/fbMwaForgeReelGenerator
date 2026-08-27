@@ -116,6 +116,15 @@ export const TYPE = {
  * stretch, where there is nothing to keep legible — a straight ramp is thinnest
  * exactly where a two-line hook's second line sits. It is a wash, not a plate: a hard
  * edge reads as a TV chyron and competes with the card.
+ *
+ * `peak` and `falloff` cite no finding, because there is none to cite: #9 fixes the
+ * scrim's colour and its top-down gradient and stops there. Both numbers were set by
+ * eye, and the only pixels they have ever been read against are the fixture site's
+ * own — `test/render.test.ts` decodes the hook's band off a rendered fixture reel and
+ * asserts the wash rides with its text, which is the shape and not these two values.
+ * No client capture (`sites/`) has been reviewed for them. A hero that reads through
+ * the wash, or copy that goes muddy over one, is a reason to retune them here — and
+ * the retuning is a finding, at which point this comment cites it instead.
  */
 export const SCRIM = {
   /** Alpha at the top of the frame. */
@@ -125,15 +134,4 @@ export const SCRIM = {
   /** Full width, from the top of the frame down to the slot's foot. */
   width: FRAME_WIDTH,
   height: TEXT_SLOT.bottom,
-}
-
-/** `#rrggbb` as the three channel values an ffmpeg expression can be handed. */
-export function channels(hex: string): { r: number; g: number; b: number } {
-  const at = (i: number) => Number.parseInt(hex.slice(i, i + 2), 16)
-  return { r: at(1), g: at(3), b: at(5) }
-}
-
-/** `#rrggbb` as ffmpeg's own colour literal. */
-export function ffmpegColor(hex: string): string {
-  return `0x${hex.slice(1)}`
 }

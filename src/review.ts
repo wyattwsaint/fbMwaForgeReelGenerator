@@ -15,7 +15,8 @@
 import { join } from 'node:path'
 import { ffmpeg } from './compose.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { GROUND, ffmpegColor } from './house.ts'
+import { ffmpegColor } from './filtergraph.ts'
+import { GROUND } from './house.ts'
 import { CROSSFADE_MS, frameCount } from './plan.ts'
 import type { Timeline } from './plan.ts'
 

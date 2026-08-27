@@ -81,6 +81,9 @@ export const LABEL_TAIL_MS = 200
 /** #9: the hook is drawn on frame 0 and fades over the hook's final 0.5s. */
 export const HOOK_FADE_OUT_MS = 500
 
+/** One frame, in milliseconds — the step an envelope spends to land inside its shot. */
+export const FRAME_MS = Math.round(1000 / FPS)
+
 /** #8: one signature track across reels; config overrides the file, never the terms. */
 export const DEFAULT_TRACK = 'audio/mwaforge-signature.mp3'
 /** #8: the bed is trimmed and faded to length, so music ends with the reel. */
@@ -270,7 +273,13 @@ export function planReel(config: SiteConfig): Timeline {
       role: 'hook',
       startMs: 0,
       fadeInMs: 0,
-      holdMs: HOOK_MS - HOOK_FADE_OUT_MS,
+      // A frame short of the hook's own length, because a ramp reaches zero *at* the
+      // frame it ends on and the hook ends on the shot's last frame — spend the whole
+      // 3.0s and that frame is the one past it, leaving the last frame the reel
+      // actually has lit at a fifteenth of full alpha across a hard cut (#36). #24 is
+      // explicit that nothing is lit across a cut point, so the fade finishes on the
+      // last frame rather than on the first frame of the shot after it.
+      holdMs: HOOK_MS - HOOK_FADE_OUT_MS - FRAME_MS,
       fadeOutMs: HOOK_FADE_OUT_MS,
     },
   ]
@@ -315,6 +324,68 @@ export function planReel(config: SiteConfig): Timeline {
       fadeOutMs: AUDIO_FADE_OUT_MS,
     },
   }
+}
+
+/**
+ * A cue's life, in its shot's own frames.
+ *
+ * Frames, not seconds: the text's alpha is drawn as an expression and the scrim's as
+ * a `fade`, and the two only agree to the frame if they are told the same integers. A
+ * scrim that lets go one frame after its text is a wash with nothing under it.
+ */
+export type Envelope = {
+  startFrame: number
+  fadeInFrames: number
+  holdFrames: number
+  fadeOutFrames: number
+}
+
+/**
+ * A cue's envelope in shot time. Cue times are reel times — a label's envelope starts
+ * after its own cut — and a shot is rendered on its own, so the shot's start comes off
+ * before anything is drawn.
+ *
+ * Here rather than with the drawing, because an envelope is a timing and #9's timings
+ * live in one place: nothing in it is about how the alpha reaches a pixel.
+ */
+export function envelopeOf(cue: TextCue, shot: Shot): Envelope {
+  return {
+    startFrame: frameCount(cue.startMs - shot.startMs),
+    fadeInFrames: frameCount(cue.fadeInMs),
+    holdFrames: frameCount(cue.holdMs),
+    fadeOutFrames: frameCount(cue.fadeOutMs),
+  }
+}
+
+/**
+ * The frames an envelope turns on: dark until `start`, ramping to full at `lit`, held
+ * to `held`, and dark again at `dark`.
+ */
+export type EnvelopeFrames = {
+  start: number
+  lit: number
+  held: number
+  dark: number
+}
+
+/**
+ * The one statement of the envelope, in shot frames.
+ *
+ * The text's ramp is an ffmpeg expression and the scrim's is a `fade`, written in
+ * different filters and built in different places — they share an envelope exactly
+ * (#24), so they share these four frames rather than each deriving its own from the
+ * same four durations and being kept in step by hand.
+ */
+export function envelopeFrames(envelope: Envelope): EnvelopeFrames {
+  const { startFrame, fadeInFrames, holdFrames, fadeOutFrames } = envelope
+  const lit = startFrame + fadeInFrames
+  const held = lit + holdFrames
+  return { start: startFrame, lit, held, dark: held + fadeOutFrames }
+}
+
+/** The frame the cue is finally dark on — one past its last lit frame. */
+export function darkFrame(envelope: Envelope): number {
+  return envelopeFrames(envelope).dark
 }
 
 /**

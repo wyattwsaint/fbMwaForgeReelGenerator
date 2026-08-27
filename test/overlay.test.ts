@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict'
-import { describe, test } from 'node:test'
-import { frameCount } from '../src/plan.ts'
-import { GROUND, INK, TEXT_SLOT, TYPE } from '../src/house.ts'
-import {
-  alphaExpr,
-  darkFrame,
-  envelopeOf,
-  escapeValue,
-  drawnOverlays,
-  overlayChains,
-} from '../src/overlay.ts'
-import { planReel } from '../src/plan.ts'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { after, before, describe, test } from 'node:test'
+import { masterSize } from '../src/camera.ts'
+import { ffmpeg, renderShot } from '../src/compose.ts'
+import { channels, ffmpegColor, stream } from '../src/filtergraph.ts'
+import { FRAME_HEIGHT } from '../src/frame.ts'
+import { GROUND, INK, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
+import { alphaExpr, escapeValue, drawnOverlays, overlayChains } from '../src/overlay.ts'
+import { darkFrame, envelopeOf, frameCount, planReel } from '../src/plan.ts'
 import type { Shot, TextCue, Timeline } from '../src/plan.ts'
 import type { SiteConfig } from '../src/site.ts'
+import { frame, meanLuma, pixelsNear, workspace } from './helpers.ts'
+import type { Workspace } from './helpers.ts'
+
+/** A flat master, mid-grey: dark enough to see ink over, light enough to see a wash. */
+const GREY = 128
 
 /** A config with a label on *every* beat — not a shipping reel, but the hard case. */
 function labelled(n: number): SiteConfig {
@@ -34,7 +37,7 @@ function drawnOn(timeline: Timeline, shotIndex: number): TextCue[] {
 
 function graphOf(timeline: Timeline, shotIndex: number): string {
   const shot = timeline.shots[shotIndex] as Shot
-  return overlayChains(drawnOn(timeline, shotIndex), shot, 'in', 'out').join(';')
+  return overlayChains(drawnOn(timeline, shotIndex), shot, stream('in'), stream('out')).join(';')
 }
 
 describe('which cues are drawn', () => {
@@ -69,16 +72,20 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
   test('the hook is drawn on frame 0 and fades out over its final 0.5s', () => {
     const timeline = planReel(labelled(3))
     const cue = timeline.text[0] as TextCue
-    const envelope = envelopeOf(cue, timeline.shots[0] as Shot)
+    const shot = timeline.shots[0] as Shot
+    const envelope = envelopeOf(cue, shot)
     assert.deepEqual(envelope, {
       startFrame: 0,
       fadeInFrames: 0,
-      holdFrames: 75,
+      holdFrames: 74,
       fadeOutFrames: 15,
     })
     // No fade-in branch: at n=0 the expression is the constant 1, which is what keeps
     // frame 0 — the Facebook in-feed thumbnail — bit-identical run to run.
-    assert.equal(alphaExpr(envelope), 'if(lt(n,75),1,if(lt(n,90),(90-n)/15,0))')
+    assert.equal(alphaExpr(envelope), 'if(lt(n,74),1,if(lt(n,89),(89-n)/15,0))')
+    // And the ramp reaches zero *on* the shot's last frame rather than one past it:
+    // frame 89 is the last frame the hook has, and the cut lands at 90.
+    assert.equal(darkFrame(envelope), frameCount(shot.durationMs) - 1)
   })
 
   test('a label starts 0.2s after its cut and is dark 0.2s before the next', () => {
@@ -104,18 +111,16 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
         for (const cue of drawnOn(timeline, index)) {
           const envelope = envelopeOf(cue, shot)
           assert.ok(envelope.startFrame >= 0, `${n} beats: shot ${index} starts before its cut`)
-          // The cut frame is the *next* shot's frame 0, so a cue whose alpha reaches
-          // zero exactly at the boundary is dark for every frame that is drawn after
-          // it. The hook is that case by construction — its fade is the hook's own
-          // final 0.5s — and a label is stricter still, finishing 0.2s early.
+          // A ramp reaches zero *at* the frame it ends on, and the frame it ends on
+          // has to be one the shot actually has: the cut frame is the next shot's
+          // frame 0, so an envelope that only reaches zero there leaves this shot's
+          // last frame lit across a hard cut. The hook is dark on its own last frame
+          // by a frame's margin; a label is stricter still, finishing 0.2s early.
           const last = frameCount(shot.durationMs)
           assert.ok(
-            darkFrame(envelope) <= last,
-            `${n} beats: shot ${index} is still lit past its cut`,
+            darkFrame(envelope) < last,
+            `${n} beats: shot ${index} is still lit on its last frame`,
           )
-          if (cue.role === 'label') {
-            assert.ok(darkFrame(envelope) < last, `${n} beats: label ${index} runs to its cut`)
-          }
         }
       })
     }
@@ -128,34 +133,35 @@ describe('what gets drawn', () => {
   const label = graphOf(timeline, 2)
 
   test('the scrim is a constant house-ground wash, never sampled from the page', () => {
-    // #0a0c10 as the source colour and as the three channels the gradient is built from.
-    assert.equal(GROUND, '#0a0c10')
-    assert.match(hook, /color=c=0x0a0c10:s=1080x620/)
-    assert.match(hook, /geq=r=10:g=12:b=16/)
+    // House ground as the source colour and as the three channels the gradient is
+    // built from, over the band the text slot sits in.
+    const { r, g, b } = channels(GROUND)
+    assert.ok(hook.includes(`color=c=${ffmpegColor(GROUND)}:s=${SCRIM.width}x${SCRIM.height}`))
+    assert.ok(hook.includes(`geq=r=${r}:g=${g}:b=${b}`))
     // The alpha ramp is the only thing about it that varies, and it varies with Y.
-    assert.match(hook, /a=255\*0\.9\*\(1-pow\(Y\/H\\,3\)\)/)
+    assert.ok(hook.includes(`a=255*${SCRIM.peak}*(1-pow(Y/H\\,${SCRIM.falloff}))`))
   })
 
   test('the scrim shares the text\u2019s envelope exactly', () => {
-    // The hook holds to frame 75 and is dark at 90, so its wash does the same.
-    assert.match(hook, /fade=t=out:alpha=1:start_frame=75:nb_frames=15/)
+    // The hook holds to frame 74 and is dark at 89, so its wash does the same.
+    assert.match(hook, /fade=t=out:alpha=1:start_frame=74:nb_frames=15/)
     assert.doesNotMatch(hook, /fade=t=in/) // Drawn on frame 0, so there is no ramp in.
     assert.match(label, /fade=t=in:alpha=1:start_frame=6:nb_frames=9/)
     assert.match(label, /fade=t=out:alpha=1:start_frame=90:nb_frames=9/)
   })
 
   test('text sits in one fixed slot, left-aligned, with no per-beat placement', () => {
+    const at = (x: number, y: number) => [String(x), String(y)]
     const hookPlacements = [...hook.matchAll(/:x=(\d+):y=(\d+)/g)].map((m) => [m[1], m[2]])
     assert.deepEqual(hookPlacements, [
-      ['65', '270'],
-      ['65', String(270 + TYPE.hook.lineHeight)],
+      at(TEXT_SLOT.x, TEXT_SLOT.top),
+      at(TEXT_SLOT.x, TEXT_SLOT.top + TYPE.hook.lineHeight),
     ])
     // A label is a different role in the same slot: same x, same first line.
     assert.deepEqual(
       [...label.matchAll(/:x=(\d+):y=(\d+)/g)].map((m) => [m[1], m[2]]),
-      [['65', '270']],
+      [at(TEXT_SLOT.x, TEXT_SLOT.top)],
     )
-    assert.equal(TEXT_SLOT.x, 65)
   })
 
   test('every line stays inside the slot\u2019s band', () => {
@@ -174,10 +180,9 @@ describe('what gets drawn', () => {
   })
 
   test('a line each, in the house ink, at the role\u2019s own size', () => {
-    assert.equal(INK, '#eef1f6')
     assert.equal((hook.match(/drawtext=/g) ?? []).length, 2) // A two-line hook.
-    assert.match(hook, /fontcolor=0xeef1f6:fontsize=76/)
-    assert.match(label, /fontcolor=0xeef1f6:fontsize=44/)
+    assert.ok(hook.includes(`fontcolor=${ffmpegColor(INK)}:fontsize=${TYPE.hook.size}`))
+    assert.ok(label.includes(`fontcolor=${ffmpegColor(INK)}:fontsize=${TYPE.label.size}`))
     assert.match(hook, /fontfile=\S*SpaceGrotesk-Bold\.ttf/)
   })
 
@@ -202,5 +207,66 @@ describe('copy survives the filtergraph', () => {
     const graph = graphOf(timeline, 0)
     assert.equal((graph.match(/drawtext=/g) ?? []).length, 1)
     assert.match(graph, /text=It\\\\\\'s spotless\./)
+  })
+})
+
+/**
+ * The hook's fade, on the pixels — the envelope is arithmetic, and the frame is what
+ * a viewer sees (#36).
+ *
+ * A flat mid-grey master, so both of the things drawn over it are measurable against
+ * a known number: the scrim darkens the band and the ink is far lighter than it. The
+ * last frame the hook shot has must carry neither. Everything about the shot but the
+ * pixels underneath it is the real one — the real plan, the real chains, the real
+ * encode — because the bug this catches was a single frame's worth of arithmetic.
+ */
+describe('the hook is dark on its last frame, on the decoded pixels', () => {
+  const timeline = planReel(labelled(3))
+  const shot = timeline.shots[0] as Shot
+  const last = frameCount(shot.durationMs) - 1
+
+  let ws: Workspace
+  let rendered: string
+
+  before(async () => {
+    ws = await workspace()
+    const size = masterSize(shot, FRAME_HEIGHT)
+    const raw = join(ws.root, 'grey.rgb')
+    await writeFile(raw, Buffer.alloc(size.width * size.height * 3, GREY))
+
+    const master = join(ws.root, 'grey.png')
+    await ffmpeg([
+      '-f', 'rawvideo',
+      '-pix_fmt', 'rgb24',
+      '-s', `${size.width}x${size.height}`,
+      '-i', raw,
+      '-frames:v', '1',
+      master,
+    ])
+    rendered = await renderShot({ shot, path: master, size }, shot, ws.root, drawnOn(timeline, 0))
+  })
+
+  after(() => ws.dispose())
+
+  test('the wash is gone and the words with it, with the cut one frame away', async () => {
+    const dark = await frame(rendered, last)
+    assert.equal(pixelsNear(dark, INK), 0, 'the hook is still lit on its last frame')
+    // Not "nearly gone": the band is the master's own grey, so nothing was drawn over
+    // it at all. 7% of the wash — a ramp that reaches zero one frame past the shot —
+    // shows up here as about four levels of dimming.
+    assert.ok(
+      Math.abs(meanLuma(dark, 0, SCRIM.height) - GREY) < 1,
+      `something is still drawn on the hook's last frame: ${meanLuma(dark, 0, SCRIM.height)}`,
+    )
+  })
+
+  test('and the frame before it is still fading, so the assertion has teeth', async () => {
+    // One frame of ramp left: the same measurement that passes at `last` fails here,
+    // which is what makes the one above a test rather than a tolerance.
+    const fading = await frame(rendered, last - 1)
+    assert.ok(
+      GREY - meanLuma(fading, 0, SCRIM.height) > 1,
+      'the fade is already over a frame before it ends',
+    )
   })
 })

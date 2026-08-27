@@ -15,7 +15,8 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { INK, WORDMARK_FILE, channels } from './house.ts'
+import { channels } from './filtergraph.ts'
+import { INK, WORDMARK_FILE } from './house.ts'
 
 /** A coverage mask: one byte of alpha a pixel, and no colour anywhere. */
 export type Mask = { width: number; height: number; alpha: Uint8Array }
