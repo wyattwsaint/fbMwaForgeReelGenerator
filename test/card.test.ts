@@ -1,25 +1,47 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import { CARD_ZOOM, cardCamera } from '../src/camera.ts'
 import {
-  CARD_ZOOM,
+  CARD_CENTRE_Y,
   HEADLINE,
   MARK_WIDTH,
   cardChains,
+  cardCredit,
   cardLayout,
   creditProblems,
 } from '../src/card.ts'
-import { stream } from '../src/filtergraph.ts'
+import { escapeValue, stream } from '../src/filtergraph.ts'
 import { ACCENT, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
 import { lineWidth } from '../src/measure.ts'
-import { escapeValue } from '../src/overlay.ts'
+import { drawnOverlays } from '../src/overlay.ts'
 import { CTA_MS, frameCount, planReel } from '../src/plan.ts'
+import type { Shot, TextCue } from '../src/plan.ts'
 import { wordmarkMask, wordmarkRgba } from '../src/wordmark.ts'
 
-const CARD_CENTRE_Y = 760
 const FRAMES = frameCount(CTA_MS)
 
+/** A reel, so the card's shot and cue are the ones `plan` really writes. */
+const REEL = planReel({
+  url: 'https://example.test',
+  hook: { text: 'Spotless.' },
+  beats: [{ selector: '#a' }, { selector: '#b' }, { selector: '#c' }],
+  cta: { credit: 'example.test' },
+})
+
+/** The card's own shot, taken from the plan rather than hand-built to match it. */
+const CARD_SHOT = REEL.shots.at(-1) as Shot
+
 function graph(credit = 'fixture.test'): string {
-  return cardChains(credit, FRAMES, stream('ground'), stream('mark'), stream('out')).join(';')
+  const cues: TextCue[] = [
+    { shot: 0, content: credit, role: 'cta', startMs: 0, fadeInMs: 0, holdMs: CTA_MS, fadeOutMs: 0 },
+  ]
+  return cardChains(
+    cues,
+    cardCamera(CARD_SHOT),
+    stream('ground'),
+    stream('mark'),
+    stream('out'),
+  ).join(';')
 }
 
 describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', () => {
@@ -136,6 +158,30 @@ describe('the card\u2019s filtergraph', () => {
   })
 })
 
+describe('each drawer takes the roles that are its own', () => {
+  const cue = (role: TextCue['role'], content: string): TextCue => ({
+    shot: 0,
+    content,
+    role,
+    startMs: 0,
+    fadeInMs: 0,
+    holdMs: CTA_MS,
+    fadeOutMs: 0,
+  })
+
+  test('the card takes the cta line out of a shot’s cues and leaves the rest', () => {
+    const cues = [cue('hook', 'Spotless.'), cue('cta', 'example.test'), cue('label', 'A label')]
+    assert.equal(cardCredit(cues), 'example.test')
+    // The ones drawn over site pixels are `overlay`'s, and neither drawer sees the
+    // other's — so nothing upstream of them has to know what a role is.
+    assert.deepEqual(drawnOverlays(cues).map((c) => c.content), ['Spotless.', 'A label'])
+  })
+
+  test('a config with no credit gets a card with no credit line, not an error', () => {
+    assert.equal(cardCredit([cue('hook', 'Spotless.')]), '')
+  })
+})
+
 describe('the credit is checked like every other line of copy', () => {
   test('a credit that fits the card draws no problem', () => {
     assert.deepEqual(creditProblems('pharosacademy.net'), [])
@@ -150,13 +196,7 @@ describe('the credit is checked like every other line of copy', () => {
 
 describe('the plan already carries the card', () => {
   test('the credit is the card shot\u2019s own cue, brought in by the crossfade', () => {
-    const timeline = planReel({
-      url: 'https://example.test',
-      hook: { text: 'Spotless.' },
-      beats: [{ selector: '#a' }, { selector: '#b' }, { selector: '#c' }],
-      cta: { credit: 'example.test' },
-    })
-    const cue = timeline.text.find((c) => c.role === 'cta')
+    const cue = REEL.text.find((c) => c.role === 'cta')
     assert.equal(cue?.content, 'example.test')
     assert.equal(cue?.fadeInMs, 0)
   })

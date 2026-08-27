@@ -1,9 +1,16 @@
 /**
- * ffmpeg plumbing — how a colour and a stream name reach a filtergraph.
+ * ffmpeg plumbing — how a value reaches a filtergraph.
  *
  * Split from `house.ts` (#36): the house style is what a reel looks like and this is
- * how any of it is spelled to ffmpeg. A restyle touches the table and never this
- * file; a change of encoder touches this file and never the table.
+ * how any of it is spelled to ffmpeg — a colour, a stream name, a line of type, a
+ * zoom. A restyle touches the table and never this file; a change of encoder touches
+ * this file and never the table.
+ *
+ * Nothing here reads the table, which is why `drawText` takes a face and a size rather
+ * than a role: this file knows how a `drawtext` is spelled and has no opinion about
+ * what is in one. It is also why the two drawers can share it — `overlay.ts` draws
+ * over site pixels and `card.ts` draws over house ground (`CONTEXT.md`), and neither
+ * is the other's place to keep the spelling.
  */
 
 /** `#rrggbb` as the three channel values an ffmpeg expression can be handed. */
@@ -70,4 +77,81 @@ export function stream(name: StreamName, index?: number): StreamLabel {
 /** A label as it is written in a graph: `[washed0]`. */
 export function pad(label: StreamLabel): string {
   return `[${label}]`
+}
+
+/**
+ * `zoompan`, ramping 1.00 → `zoom` across `steps` frame gaps and held on centre.
+ *
+ * Plain numbers rather than a `Camera`, because both callers reach it with numbers of
+ * their own: a shot's zoom is counted in sub-frames at `samples` times the frame rate,
+ * and the card's is counted at frame size times the precision it is drawn at. `on`, so
+ * the ramp is counted in output frames and reaches its end on the last one.
+ */
+export function zoomStage(
+  zoom: number,
+  steps: number,
+  size: { width: number; height: number },
+  fps: number,
+): string {
+  // Trimmed rather than padded: `toFixed` alone spells a 3% ramp `0.030000`.
+  const ramp = Number((zoom - 1).toFixed(6))
+  return (
+    `zoompan=z='1+${ramp}*on/${steps}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
+    `d=1:s=${size.width}x${size.height}:fps=${fps}`
+  )
+}
+
+/**
+ * One value, escaped for the two parsers it has to survive.
+ *
+ * A filtergraph is unescaped twice: once when the graph is split into filters, and
+ * again when a filter's own arguments are split into options. So every special
+ * character is escaped once for each pass, innermost first — a Windows drive letter's
+ * colon ends up as `\\:` and an apostrophe in a hook line as `\\\'`. Quoting is not
+ * an alternative: a quote is consumed by the *graph* pass, so the colons it looked
+ * like it was protecting arrive at the option pass bare.
+ *
+ * Copy is whatever a human typed into a config, so it goes through here rather than
+ * through a list of characters we remembered to worry about.
+ */
+export function escapeValue(value: string): string {
+  const forOptions = value.replace(/[\\':]/g, (char) => `\\${char}`)
+  return forOptions.replace(/[\\'[\],;]/g, (char) => `\\${char}`)
+}
+
+/**
+ * One line of house type, as a `drawtext` filter.
+ *
+ * Every line drawn anywhere in a reel comes through here — the hook and its labels
+ * over site pixels, and the card's own headline and credit over house ground — so the
+ * escaping and the refusal to treat copy as a format string are settled once rather
+ * than once per drawer. What differs between them is what they pass: `alpha`, because
+ * only a line that fades has an envelope, and `x`, because overlay type is
+ * left-aligned in its slot while the card's is centred on the card's own axis.
+ */
+export function drawText(draw: {
+  content: string
+  /** The face, as a path ffmpeg can open. */
+  fontFile: string
+  size: number
+  /** An ffmpeg colour literal, with an `@alpha` on it when the line is set muted. */
+  colour: string
+  /** Written as ffmpeg reads it — a number, or an expression like `(w-text_w)/2`. */
+  x: string
+  y: number
+  /** An alpha expression per frame. Absent on a line lit for the whole of its shot. */
+  alpha?: string
+}): string {
+  return [
+    'drawtext',
+    `=fontfile=${escapeValue(draw.fontFile)}`,
+    `:text=${escapeValue(draw.content)}`,
+    // Copy is a human's, not a format string: `%{...}` and backslashes are letters.
+    ':expansion=none',
+    `:fontcolor=${draw.colour}`,
+    `:fontsize=${draw.size}`,
+    ...(draw.alpha === undefined ? [] : [`:alpha=${escapeValue(draw.alpha)}`]),
+    `:x=${draw.x}`,
+    `:y=${draw.y}`,
+  ].join('')
 }

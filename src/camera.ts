@@ -29,6 +29,13 @@ export const PAN_PX_PER_FRAME = 7
  */
 export const DRIFT_ZOOM = 1.1
 
+/**
+ * How far the card drifts, and the reason it drifts at all: #12 found there is no rest
+ * anywhere in this reel, and a static final 2.5s reads as the video having ended early.
+ * 3% over 2.5s is a move a viewer registers without being able to point at it.
+ */
+export const CARD_ZOOM = 1.03
+
 /** #11: sub-frames averaged per output frame, derived and never a knob. */
 export const MAX_BLUR_SAMPLES = 32
 
@@ -46,6 +53,14 @@ export type Camera = {
   frames: number
   /** #11: `ceil(peak per-frame px displacement)`, capped. No knob. */
   samples: number
+}
+
+/**
+ * The gaps a move is spread across — one fewer than the frames it is drawn on, and
+ * never zero, because a one-frame shot still has to divide by something.
+ */
+export function moveSteps(frames: number): number {
+  return Math.max(1, frames - 1)
 }
 
 /** The oversample a shot's master is captured at. */
@@ -76,7 +91,7 @@ function blurSamples(peakPxPerFrame: number): number {
 /** Where the camera starts and ends, given the master it actually got. */
 export function cameraFor(shot: Shot, master: MasterSize): Camera {
   const frames = frameCount(shot.durationMs)
-  const steps = Math.max(1, frames - 1)
+  const steps = moveSteps(frames)
   return shot.move === 'pan' ? pan(shot, master, frames, steps) : drift(master, frames, steps)
 }
 
@@ -138,4 +153,30 @@ function drift(master: MasterSize, frames: number, steps: number): Camera {
   // A zoom's fastest pixel is a frame corner, so that is what the blur is derived from.
   const peak = (Math.hypot(FRAME_WIDTH, FRAME_HEIGHT) / 2) * (DRIFT_ZOOM - 1) / steps
   return { window, from: centre, to: centre, zoom: DRIFT_ZOOM, frames, samples: blurSamples(peak) }
+}
+
+/**
+ * The card's camera. `plan` gives the card `move: 'drift'` like any other shot, and
+ * this is where that move becomes numbers — the card does not get to declare a zoom of
+ * its own any more than a beat does.
+ *
+ * `plan` gives the card `move: 'drift'` and this is that move. There is no second
+ * branch to write: a pan slides a window across a master, and the card has none — so
+ * a card asking for one would be a bug in the plan rather than a shot to render.
+ *
+ * There is no punch either: the card is built at frame size, so the window is the
+ * frame itself and there is nothing to crop out of anything. Nothing is blurred
+ * either — at 3% over 2.5s the card's fastest pixel travels under half a pixel a
+ * frame, which is not a speed there is anything to blur.
+ */
+export function cardCamera(shot: Shot): Camera {
+  const origin = { x: 0, y: 0 }
+  return {
+    window: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
+    from: origin,
+    to: origin,
+    zoom: CARD_ZOOM,
+    frames: frameCount(shot.durationMs),
+    samples: 1,
+  }
 }
