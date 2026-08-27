@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { frameCount } from '../src/camera.ts'
+import { frameCount } from '../src/plan.ts'
 import { GROUND, INK, TEXT_SLOT, TYPE } from '../src/house.ts'
 import {
   alphaExpr,

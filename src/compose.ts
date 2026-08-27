@@ -10,13 +10,13 @@
 
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { cameraFor, frameCount } from './camera.ts'
+import { cameraFor } from './camera.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 import { GROUND, ffmpegColor } from './house.ts'
 import { overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
-import { CROSSFADE_MS, FPS } from './plan.ts'
+import { CROSSFADE_MS, FPS, frameCount } from './plan.ts'
 import type { Shot, TextCue, Timeline } from './plan.ts'
 
 /** #1's container, and #11 found no mud at this bitrate. */

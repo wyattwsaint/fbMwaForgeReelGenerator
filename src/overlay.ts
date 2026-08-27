@@ -12,7 +12,7 @@
  */
 
 import { FONT_FILE, GROUND, INK, SCRIM, TEXT_SLOT, TYPE, channels, ffmpegColor } from './house.ts'
-import { FPS } from './plan.ts'
+import { FPS, frameCount } from './plan.ts'
 import type { Shot, TextCue } from './plan.ts'
 
 /** The roles drawn over site pixels. The card's own text belongs to the card (#9 §5). */
@@ -32,10 +32,6 @@ export type Envelope = {
   fadeOutFrames: number
 }
 
-function frames(ms: number): number {
-  return Math.round((ms * FPS) / 1000)
-}
-
 /** The cues of one shot, in the order they are drawn. */
 export function overlayCues(cues: TextCue[], shotIndex: number): TextCue[] {
   return cues.filter((cue) => cue.shot === shotIndex && OVERLAY_ROLES.has(cue.role) && cue.content !== '')
@@ -48,10 +44,10 @@ export function overlayCues(cues: TextCue[], shotIndex: number): TextCue[] {
  */
 export function envelopeOf(cue: TextCue, shot: Shot): Envelope {
   return {
-    startFrame: frames(cue.startMs - shot.startMs),
-    fadeInFrames: frames(cue.fadeInMs),
-    holdFrames: frames(cue.holdMs),
-    fadeOutFrames: frames(cue.fadeOutMs),
+    startFrame: frameCount(cue.startMs - shot.startMs),
+    fadeInFrames: frameCount(cue.fadeInMs),
+    holdFrames: frameCount(cue.holdMs),
+    fadeOutFrames: frameCount(cue.fadeOutMs),
   }
 }
 

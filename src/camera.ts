@@ -9,7 +9,7 @@
  */
 
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { FPS, panAxes } from './plan.ts'
+import { frameCount, panAxes } from './plan.ts'
 import type { Shot } from './plan.ts'
 
 /**
@@ -46,10 +46,6 @@ export type Camera = {
   frames: number
   /** #11: `ceil(peak per-frame px displacement)`, capped. No knob. */
   samples: number
-}
-
-export function frameCount(durationMs: number): number {
-  return Math.round((durationMs * FPS) / 1000)
 }
 
 /** The oversample a shot's master is captured at. */

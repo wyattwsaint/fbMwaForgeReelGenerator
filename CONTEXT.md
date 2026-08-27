@@ -89,6 +89,12 @@ loudly at `check`, like a missing selector. Type never shrinks to fit: a reel
 whose type size depends on how much Wyatt typed is a reel a viewer can feel is
 off without being able to say why.
 
+**Slot overflow** — copy that draws wider than the text slot. The budget counts
+characters, which is a proxy: capitals cost nearly twice what it assumes, so a
+line inside the count can still run off the side of the frame. So `check` also
+measures the line against the checked-in face and fails on the width, which is
+the constraint the viewer actually sees.
+
 ## Capture
 
 **Master** — the single static, high-resolution capture a shot's camera move is
