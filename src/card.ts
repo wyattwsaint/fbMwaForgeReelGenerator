@@ -14,26 +14,19 @@
 
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { ffmpegColor, pad, stream } from './filtergraph.ts'
+import { moveSteps } from './camera.ts'
+import type { Camera } from './camera.ts'
+import { FRAME_WIDTH } from './frame.ts'
+import { drawText, ffmpegColor, pad, stream, zoomStage } from './filtergraph.ts'
 import type { StreamLabel } from './filtergraph.ts'
 import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE } from './house.ts'
 import { overflowProblems } from './measure.ts'
-import { escapeValue } from './overlay.ts'
 import { FPS } from './plan.ts'
+import type { TextCue } from './plan.ts'
 import { wordmarkHeight, wordmarkRgba } from './wordmark.ts'
 
 /** The repo's own call to action. Config never reaches it — #9 §5 is explicit. */
 export const HEADLINE = 'mwaforge.com'
-
-/**
- * The card's drift, and the reason it has one: #12 found there is no rest anywhere in
- * this reel, and a static final 2.5s reads as the video having ended early. 3% over
- * 2.5s is a move a viewer registers without being able to point at it — the card's
- * fastest pixel travels under half a pixel a frame, which is also why nothing here is
- * blurred: at that speed there is nothing to blur.
- */
-export const CARD_ZOOM = 1.03
 
 /** The mark, in frame pixels. Wide enough to read as the mark and no wider. */
 export const MARK_WIDTH = 460
@@ -117,6 +110,18 @@ export function creditProblems(credit: string): string[] {
   return overflowProblems('cta.credit', credit, 'credit')
 }
 
+/**
+ * The card's own line, out of a shot's cues.
+ *
+ * Each drawer takes the roles that are its own — `overlay.ts` picks the ones that go
+ * over site pixels, and this picks the one that goes on the card — so nothing upstream
+ * of either has to know what a role is. Absent is empty rather than an error: a config
+ * with no `cta.credit` gets a card with no credit line, which is a card.
+ */
+export function cardCredit(cues: TextCue[]): string {
+  return cues.find((cue) => cue.role === 'cta')?.content ?? ''
+}
+
 export type Wordmark = { path: string; width: number; height: number }
 
 /**
@@ -151,13 +156,14 @@ export function wordmarkInput(mark: Wordmark): string[] {
  * per element would read as four things sliding apart.
  */
 export function cardChains(
-  credit: string,
-  frames: number,
+  cues: TextCue[],
+  camera: Camera,
   ground: StreamLabel,
   mark: StreamLabel,
   output: StreamLabel,
 ): string[] {
   const layout = cardLayout()
+  const credit = cardCredit(cues)
   const looped = stream('mark')
   const marked = stream('marked')
   const drawn = stream('drawn')
@@ -172,59 +178,60 @@ export function cardChains(
       `drawbox=x=${layout.rule.x}:y=${layout.rule.y}:w=${layout.rule.width}:` +
         `h=${layout.rule.height}:color=${ffmpegColor(ACCENT)}:t=fill`,
     ].join(',')}${pad(drawn)}`,
-    `${pad(drawn)}${driftFilter(frames)}${pad(output)}`,
+    `${pad(drawn)}${driftFilter(camera)}${pad(output)}`,
   ]
 }
 
-/** One line of card copy, centred on the frame — the card's axis, not the slot's. */
+/**
+ * One line of card copy, centred on the frame — the card's axis, not the slot's.
+ *
+ * Centred by freetype's own measurement at draw time. `check` has already refused a
+ * credit too wide for the card, so this centres a line known to fit. No alpha: the
+ * card arrives on the reel's one crossfade and holds, so neither of its lines has an
+ * envelope to ramp.
+ */
 function drawLine(content: string, role: 'headline' | 'credit', y: number, colour: string): string {
-  return [
-    'drawtext',
-    `=fontfile=${escapeValue(FONT_FILE)}`,
-    `:text=${escapeValue(content)}`,
-    // Copy is a human's, not a format string: `%{...}` and backslashes are letters.
-    ':expansion=none',
-    `:fontcolor=${colour}`,
-    `:fontsize=${TYPE[role].size}`,
-    // Centred by freetype's own measurement at draw time. `check` has already refused
-    // a credit too wide for the card, so this centres a line known to fit.
-    ':x=(w-text_w)/2',
-    `:y=${y}`,
-  ].join('')
+  return drawText({
+    content,
+    fontFile: FONT_FILE,
+    size: TYPE[role].size,
+    colour,
+    x: '(w-text_w)/2',
+    y,
+  })
 }
 
 /**
- * The card's own drift: a scale from 1.00 to `CARD_ZOOM` across the card's frames.
- *
- * `on`, so the ramp is counted in output frames and reaches its end on the last one —
- * the card is still moving when the reel stops, which is the whole point of it moving.
+ * The card's move, as filter stages: `camera`'s drift, run over the whole card.
  *
  * The card is enlarged before it is zoomed and brought back down after, because
  * `zoompan` crops in whole pixels: 3% of 1080 is 32 pixels shared between 75 frames,
- * so at frame size the same crop is asked for two or three frames running and the
- * card visibly steps. Enlarging first buys the sub-pixel precision the move needs —
+ * so at frame size the same crop is asked for two or three frames running and the card
+ * visibly steps. Enlarging first buys the sub-pixel precision the move needs —
  * `PRECISION` is set so the crop is a different rect on *every* frame — and the
- * enlargement is nearest-neighbour, which is exact: it invents no detail for the
- * final scale down to have to sort out.
+ * enlargement is nearest-neighbour, which is exact: it invents no detail for the final
+ * scale down to have to sort out.
+ *
+ * Which is why the precision lives here and the zoom does not: the multiple is about
+ * how the card is drawn, and how far it drifts is `camera.ts`'s to say.
  */
-function driftFilter(frames: number): string {
-  const ramp = Number((CARD_ZOOM - 1).toFixed(6))
-  const last = Math.max(1, frames - 1)
-  const width = FRAME_WIDTH * PRECISION
-  const height = FRAME_HEIGHT * PRECISION
+function driftFilter(camera: Camera): string {
+  const { window, samples } = camera
+  const width = window.width * PRECISION
+  const height = window.height * PRECISION
   return [
     `scale=${width}:${height}:flags=neighbor`,
-    `zoompan=z='1+${ramp}*on/${last}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
-      `d=1:s=${width}x${height}:fps=${FPS}`,
-    `scale=${FRAME_WIDTH}:${FRAME_HEIGHT}:flags=lanczos`,
+    zoomStage(camera.zoom, moveSteps(camera.frames), { width, height }, FPS * samples),
+    `scale=${window.width}:${window.height}:flags=lanczos`,
   ].join(',')
 }
 
 /**
  * How much bigger than the frame the zoom is computed in.
  *
- * `FRAME_WIDTH * PRECISION * (1 - 1/CARD_ZOOM)` is the number of whole-pixel steps
- * the crop takes across the shot; at 3 that is 94 steps for 74 frame gaps, so every
- * frame's crop differs from the one before it and nothing in the move repeats.
+ * `FRAME_WIDTH * PRECISION * (1 - 1/CARD_ZOOM)` — `camera.ts`'s zoom, which is what
+ * makes this a number about drawing rather than about the move — is the count of
+ * whole-pixel steps the crop takes across the shot; at 3 that is 94 steps for 74 frame
+ * gaps, so every frame's crop differs from the one before it and nothing repeats.
  */
 const PRECISION = 3

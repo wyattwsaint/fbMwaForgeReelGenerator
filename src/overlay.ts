@@ -11,7 +11,7 @@
  * engine into a pipeline that is otherwise raw ffmpeg.
  */
 
-import { channels, ffmpegColor, pad, stream } from './filtergraph.ts'
+import { channels, drawText, escapeValue, ffmpegColor, pad, stream } from './filtergraph.ts'
 import type { StreamLabel } from './filtergraph.ts'
 import { FONT_FILE, GROUND, INK, SCRIM, TEXT_SLOT, TYPE } from './house.ts'
 import { FPS, envelopeFrames, envelopeOf } from './plan.ts'
@@ -45,24 +45,6 @@ export function alphaExpr(envelope: Envelope): string {
   if (lit > start) expr = `if(lt(n,${lit}),(n-${start})/${lit - start},${expr})`
   if (start > 0) expr = `if(lt(n,${start}),0,${expr})`
   return expr
-}
-
-/**
- * One value, escaped for the two parsers it has to survive.
- *
- * A filtergraph is unescaped twice: once when the graph is split into filters, and
- * again when a filter's own arguments are split into options. So every special
- * character is escaped once for each pass, innermost first — a Windows drive letter's
- * colon ends up as `\\:` and an apostrophe in a hook line as `\\\'`. Quoting is not
- * an alternative: a quote is consumed by the *graph* pass, so the colons it looked
- * like it was protecting arrive at the option pass bare.
- *
- * Copy is whatever a human typed into a config, so it goes through here rather than
- * through a list of characters we remembered to worry about.
- */
-export function escapeValue(value: string): string {
-  const forOptions = value.replace(/[\\':]/g, (char) => `\\${char}`)
-  return forOptions.replace(/[\\'[\],;]/g, (char) => `\\${char}`)
 }
 
 /**
@@ -116,18 +98,15 @@ function textChain(
   const type = cue.role === 'hook' ? TYPE.hook : TYPE.label
   const alpha = alphaExpr(envelope)
   const draws = cue.content.split('\n').map((line, index) =>
-    [
-      'drawtext',
-      `=fontfile=${escapeValue(FONT_FILE)}`,
-      `:text=${escapeValue(line)}`,
-      // Copy is a human's, not a format string: `%{...}` and backslashes are letters.
-      ':expansion=none',
-      `:fontcolor=${ffmpegColor(INK)}`,
-      `:fontsize=${type.size}`,
-      `:alpha=${escapeValue(alpha)}`,
-      `:x=${TEXT_SLOT.x}`,
-      `:y=${TEXT_SLOT.top + index * type.lineHeight}`,
-    ].join(''),
+    drawText({
+      content: line,
+      fontFile: FONT_FILE,
+      size: type.size,
+      colour: ffmpegColor(INK),
+      x: String(TEXT_SLOT.x),
+      y: TEXT_SLOT.top + index * type.lineHeight,
+      alpha,
+    }),
   )
   return `${pad(input)}${draws.join(',')}${pad(output)}`
 }

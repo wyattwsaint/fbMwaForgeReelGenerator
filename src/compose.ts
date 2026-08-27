@@ -10,11 +10,11 @@
 
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { cameraFor } from './camera.ts'
+import { cameraFor, cardCamera, moveSteps } from './camera.ts'
 import { cardChains, wordmarkInput, writeWordmark } from './card.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { ffmpegColor, pad, stream } from './filtergraph.ts'
+import { ffmpegColor, pad, stream, zoomStage } from './filtergraph.ts'
 import { GROUND } from './house.ts'
 import { drawnOverlays, overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
@@ -65,9 +65,9 @@ export async function renderShot(
   dir: string,
   cues: TextCue[] = [],
 ): Promise<string> {
+  if (shot.kind === 'cta') return renderCard(shot, dir, cues)
   const output = shotPath(shot, dir)
   const frames = frameCount(shot.durationMs)
-  if (shot.kind === 'cta') return renderCard(shot, dir, cues, output, frames)
 
   const filter = master ? moveFilter(cameraFor(shot, master.size)) : null
   await ffmpeg([
@@ -90,17 +90,12 @@ export async function renderShot(
  * reaches it as `cta.credit` and nothing else does, which is the difference between
  * a credit and a card.
  */
-async function renderCard(
-  shot: Shot,
-  dir: string,
-  cues: TextCue[],
-  output: string,
-  frames: number,
-): Promise<string> {
+async function renderCard(shot: Shot, dir: string, cues: TextCue[]): Promise<string> {
+  const output = shotPath(shot, dir)
+  const camera = cardCamera(shot)
   const mark = await writeWordmark(dir)
-  const credit = cues.find((cue) => cue.role === 'cta')?.content ?? ''
   const card = stream('card')
-  const graph = cardChains(credit, frames, stream('0:v'), stream('1:v'), card).join(';')
+  const graph = cardChains(cues, camera, stream('0:v'), stream('1:v'), card).join(';')
 
   await ffmpeg([
     '-f', 'lavfi',
@@ -108,7 +103,7 @@ async function renderCard(
     ...wordmarkInput(mark),
     '-filter_complex', graph,
     '-map', pad(card),
-    '-frames:v', String(frames),
+    '-frames:v', String(camera.frames),
     '-an',
     ...intermediateEncode(),
     output,
@@ -164,7 +159,7 @@ function moveFilter(camera: Camera): string {
   const { samples, frames } = camera
   const subFrames = frames * samples
   const subFps = FPS * samples
-  const last = Math.max(1, subFrames - 1)
+  const last = moveSteps(subFrames)
 
   const stages = [
     `loop=loop=-1:size=1:start=0`,
@@ -193,8 +188,7 @@ function moveStages(camera: Camera, last: number): string[] {
   // the frame's own aspect, so nothing is stretched on the way out.
   return [
     crop(String(from.x), String(from.y)),
-    `zoompan=z='1+${(zoom - 1).toFixed(6)}*on/${last}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
-      `d=1:s=${FRAME_WIDTH}x${FRAME_HEIGHT}:fps=${FPS * camera.samples}`,
+    zoomStage(zoom, last, { width: FRAME_WIDTH, height: FRAME_HEIGHT }, FPS * camera.samples),
   ]
 }
 
