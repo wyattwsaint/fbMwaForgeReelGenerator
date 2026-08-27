@@ -71,6 +71,14 @@ export function reel(args: string[], cwd: string): Promise<Run> {
 }
 
 /**
+ * git, in a workspace — never in this repo. Promotion's whole assertion is what a
+ * commit *touched*, and that has to be asked of a repo the test owns and throws away.
+ */
+export function git(args: string[], cwd: string): Promise<string> {
+  return run('git', args, (stdout) => stdout.toString('utf8'), cwd)
+}
+
+/**
  * ffprobe, as a flat record. Tests assert on the mp4 Wyatt would play, never on the
  * ffmpeg arguments that produced it — an argv assertion makes a refactor look like a
  * regression.
@@ -149,9 +157,14 @@ function captureStderr(bin: string, args: string[]): Promise<string> {
   return run(bin, args, (_stdout, stderr) => stderr)
 }
 
-function run<T>(bin: string, args: string[], pick: (stdout: Buffer, stderr: string) => T): Promise<T> {
+function run<T>(
+  bin: string,
+  args: string[],
+  pick: (stdout: Buffer, stderr: string) => T,
+  cwd?: string,
+): Promise<T> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, { windowsHide: true })
+    const child = spawn(bin, args, { cwd, windowsHide: true })
     const chunks: Buffer[] = []
     let stderr = ''
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))

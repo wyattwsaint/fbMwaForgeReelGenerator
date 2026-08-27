@@ -2,18 +2,30 @@ import { spawn } from 'node:child_process'
 import { relative } from 'node:path'
 import { check } from './check.ts'
 import { loadSite } from './config.ts'
+import { keep } from './keep.ts'
 import { render } from './render.ts'
 import type { Phase, Render } from './render.ts'
 
-const USAGE = 'usage: reel check <site>\n       reel render <site>'
+const USAGE = [
+  'usage: reel check <site>',
+  '       reel render <site>',
+  '       reel keep   out/<file>.mp4',
+].join('\n')
 
 export async function main(argv: string[], root = process.cwd()): Promise<number> {
-  const [command, slug, ...rest] = argv
-  if ((command !== 'check' && command !== 'render') || !slug || rest.length > 0) {
+  const [command, argument, ...rest] = argv
+  const known = command === 'check' || command === 'render' || command === 'keep'
+  // One positional argument each and no flags anywhere (#18): a flag that changed a
+  // reel's shape would make a kept reel's config no longer describe the reel.
+  if (!known || !argument || argument.startsWith('-') || rest.length > 0) {
     console.error(USAGE)
     return 2
   }
 
+  if (command === 'keep') return await promote(argument, root)
+
+  // What is left takes a site, not a path: `check` and `render` are one path's halves.
+  const slug = argument
   const started = Date.now()
   let problems: string[]
   let cut: Render | null = null
@@ -52,6 +64,20 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   console.log(`done  ${relative(root, cut.path)}  ${seconds(cut.durationMs)}   [${elapsed} total]`)
   start([cut.path, ...cut.stills])
   return 0
+}
+
+/**
+ * Promotion, as the CLI sees it: the commit's own stat is the whole report, because
+ * what is worth reading is which paths the commit touched (#28).
+ */
+async function promote(path: string, root: string): Promise<number> {
+  try {
+    console.log(await keep(path, root))
+    return 0
+  } catch (error) {
+    console.error(`keep ${path} — ${error instanceof Error ? error.message : error}`)
+    return 1
+  }
 }
 
 /**
