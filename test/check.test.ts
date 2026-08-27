@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
@@ -258,6 +260,29 @@ export default defineSite({
       const run = await reel(['check', 'nofile'], ws.root)
       assert.equal(run.code, 1, run.output)
       assert.match(run.stdout, /music\.file is required when music is set/)
+    }))
+
+  test('an offset that runs backwards out of the track fails by name', () =>
+    withWorkspace(async (ws) => {
+      // A real file, so the only thing wrong with this config is the offset.
+      await writeFile(join(ws.root, 'bed.mp3'), '')
+      await ws.site(
+        'backwards',
+        `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${fixture.url}',
+  hook: { text: 'Spotless, every time.' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+  music: { file: 'bed.mp3', offset: -2 },
+})
+`,
+      )
+      const run = await reel(['check', 'backwards'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /music\.offset is -2; an offset slides forward into the track/)
+      assert.match(run.stdout, /1 problem\./)
     }))
 
   test('a beat with its own url gets its own load; beats sharing a url share one', () =>

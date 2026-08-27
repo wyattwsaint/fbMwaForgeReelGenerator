@@ -3,9 +3,9 @@
  * sub-frames are rendered at a multiple of the frame rate and averaged back down,
  * which is the whole of the motion blur — no `frei0r`, no compositing engine.
  *
- * Each shot is rendered on its own, then the shots are concatenated on hard cuts and
- * the card is crossfaded in. Shot files are debris on purpose: a render that fails
- * leaves the shots that did work behind to be looked at.
+ * Each shot is rendered on its own, then the shots are concatenated on hard cuts, the
+ * card is crossfaded in and the bed is laid under the lot. Shot files are debris on
+ * purpose: a render that fails leaves the shots that did work behind to be looked at.
  */
 
 import { spawn } from 'node:child_process'
@@ -202,14 +202,15 @@ function scaleToFrame(): string {
  * Cut the shots together and encode #1's container.
  *
  * Hard cuts everywhere, and the card arrives on the one crossfade — which overlaps
- * the last beat, so it costs the reel 0.3s of runtime rather than adding any. The
- * audio bed is silent in this ticket but real: #1 wants an AAC-LC 48kHz stereo stream
- * whether or not there is music, so the music ticket is a swap, not a new stream.
+ * the last beat, so it costs the reel 0.3s of runtime rather than adding any. `track`
+ * is the bed the plan named, already resolved to a real file — the encode neither
+ * looks it up nor asks anything about it (#8: no licence check anywhere in here).
  */
 export async function assemble(
   shots: string[],
   timeline: Timeline,
   output: string,
+  track: string,
 ): Promise<void> {
   const body = shots.slice(0, -1)
   const card = shots.length - 1
@@ -229,11 +230,15 @@ export async function assemble(
 
   await ffmpeg([
     ...shots.flatMap((path) => ['-i', path]),
-    '-f', 'lavfi',
-    '-i', `anullsrc=r=${AUDIO_SAMPLE_RATE}:cl=stereo`,
-    '-filter_complex', graph,
+    // Input seeking, so the decoder skips to the offset rather than decoding five
+    // minutes of track to throw it away. Frame-granular on an mp3, so the bed lands
+    // within a few tens of milliseconds — which is exact enough for something nothing
+    // is timed to, and would not be if anything were.
+    ...(timeline.audio.offsetMs > 0 ? ['-ss', seconds(timeline.audio.offsetMs)] : []),
+    '-i', track,
+    '-filter_complex', `${graph};${bedChain(timeline, `${audio}:a`)}`,
     '-map', '[v]',
-    '-map', `${audio}:a`,
+    '-map', '[a]',
     '-t', seconds(timeline.durationMs),
     '-c:v', 'libx264',
     '-profile:v', 'high',
@@ -251,6 +256,27 @@ export async function assemble(
     '-movflags', '+faststart',
     output,
   ])
+}
+
+/**
+ * The bed, trimmed and faded to the reel's own length (#8), as the chain that lands
+ * on `[a]`.
+ *
+ * `apad` before `atrim` is what keeps the length the reel's rather than the track's:
+ * a bed that runs out — a short file, or an offset near its end — is padded instead
+ * of leaving the container short, so #8's "total duration is unchanged by the
+ * presence of music" holds whatever file is handed in. The fade is the last thing, so
+ * music ends *with* the reel rather than being cut off. None of it is timing: no
+ * length here is derived from the track.
+ */
+function bedChain(timeline: Timeline, input: string): string {
+  const durationMs = timeline.durationMs
+  const fadeMs = Math.min(timeline.audio.fadeOutMs, durationMs)
+  return (
+    `[${input}]aresample=${AUDIO_SAMPLE_RATE},aformat=channel_layouts=stereo,apad,` +
+    `atrim=duration=${seconds(durationMs)},asetpts=N/SR/TB,` +
+    `afade=t=out:st=${seconds(durationMs - fadeMs)}:d=${seconds(fadeMs)}[a]`
+  )
 }
 
 function seconds(ms: number): string {

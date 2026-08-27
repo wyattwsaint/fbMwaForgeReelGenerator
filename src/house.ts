@@ -8,6 +8,7 @@
  * voice on top of the first.
  */
 
+import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 
@@ -30,6 +31,28 @@ export const FONT_FILE = fileURLToPath(
 export const WORDMARK_FILE = fileURLToPath(
   new URL('../assets/brand/mwaforge-wordmark.svg', import.meta.url),
 )
+
+/**
+ * The signature track, checked in beside the face and the mark and for the same
+ * reason (ADR-0002): it is MWA Forge's, reused across the body of work, so it
+ * travels with the renderer rather than with any site's config.
+ */
+export const SIGNATURE_TRACK_FILE = fileURLToPath(
+  new URL('../audio/mwaforge-signature.mp3', import.meta.url),
+)
+
+/**
+ * Where a reel's bed actually lives.
+ *
+ * No file named is the signature track, found beside the face and the mark wherever
+ * the renderer is run from. A file the config *does* name is the human's, so it is
+ * resolved from their cwd like every other path they write — including one that
+ * spells out the signature track's own path, which from this repo is the same file.
+ */
+export function trackPath(file: string | undefined, root: string): string {
+  if (file === undefined) return SIGNATURE_TRACK_FILE
+  return isAbsolute(file) ? file : resolve(root, file)
+}
 
 /** #9's table. `SCRIM` is `GROUND`: the wash behind text is the card's ground. */
 export const INK = '#eef1f6'

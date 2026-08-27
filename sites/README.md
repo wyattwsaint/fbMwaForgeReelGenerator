@@ -23,6 +23,13 @@ export default defineSite({
 })
 ```
 
+`music` is one of those overrides. Leave it out and the reel gets the signature track,
+which is the point of a signature track. Write it out, as above, and you get the same
+file — configs live in this repo, so `audio/…` resolves to the same place — which is
+how you hang an `offset` off the default bed, since the schema wants a `file` whenever
+you write a `music` block at all. `offset` is seconds into the track, sliding the bed
+against the hook. Every path here is resolved from the directory you run `reel` in.
+
 The annotated examples in `7-site-config.md` are illustrative: their selectors were
 written from a reading of the sites, not measured against them, and `reel check`
 reports several as drifted today. Write a config, run `check`, fix what it names.

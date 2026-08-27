@@ -5,9 +5,20 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
 import { SAFE_ZONE, TYPE } from '../src/house.ts'
+import { AUDIO_FADE_OUT_MS } from '../src/plan.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
-import { frame, meanDiff, meanLuma, pixelsNear, probe, reel, workspace } from './helpers.ts'
+import {
+  assertFadesOut,
+  frame,
+  meanDiff,
+  meanLuma,
+  meanVolume,
+  pixelsNear,
+  probe,
+  reel,
+  workspace,
+} from './helpers.ts'
 import type { Workspace } from './helpers.ts'
 
 /**
@@ -29,6 +40,8 @@ const SCRIM_BAND = [0, 620] as const
 /** The house accent — on a rendered reel it appears on the CTA card's rule and nowhere else. */
 const ACCENT = '#8b5cf6'
 
+/** #12's arithmetic for three beats: 3.0 + 3 x 3.5 + 2.5, less the 0.3 crossfade. */
+const REEL_SECONDS = 15.7
 /** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
 const CUTS = [90, 195, 300]
 const LAST_FRAME = 470
@@ -87,8 +100,6 @@ describe('reel render', () => {
     assert.equal(video.r_frame_rate, '30/1')
     assert.equal(video.avg_frame_rate, '30/1')
 
-    // Silent in this ticket, but present — #1 wants the stream either way, so the
-    // music ticket is a swap rather than a new stream.
     const audio = await probe(reelPath, 'stream=codec_name,profile,sample_rate,channels', 'a:0')
     assert.match(audio.codec_name ?? '', /aac/)
     assert.equal(audio.profile, 'LC')
@@ -102,9 +113,20 @@ describe('reel render', () => {
     assert.ok(moov > 0 && (mdat < 0 || moov < mdat), 'the moov atom is not at the front')
   })
 
+  test('carries the signature track, with no word from the config about music', async () => {
+    // The fixture config says nothing about music, so this bed is the default one
+    // (#8) — one commissioned track under the body of work, found beside the face and
+    // the mark rather than beside the site config.
+    const opening = await meanVolume(reelPath, { start: 0.5, duration: 2 })
+    assert.ok(opening > -40, `the reel is silent (${opening} dB)`)
+  })
+
+  test('the bed ends with the reel — faded, never hard-cut', () =>
+    assertFadesOut(reelPath, REEL_SECONDS, AUDIO_FADE_OUT_MS / 1000))
+
   test('is exactly as long as the timeline says', async () => {
     const { duration } = await probe(reelPath, 'format=duration')
-    assert.equal(Number(duration).toFixed(3), '15.700')
+    assert.equal(Number(duration).toFixed(3), REEL_SECONDS.toFixed(3))
     const { nb_frames } = await probe(reelPath, 'stream=nb_frames', 'v:0')
     assert.equal(nb_frames, String(LAST_FRAME + 1))
   })

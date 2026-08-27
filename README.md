@@ -63,9 +63,12 @@ Masters are **run-scoped**: they are written under `out/masters/`, wiped by the 
 render, and never reused across runs — a kept master is a photograph of a page that
 may no longer exist. A failed render leaves its debris there to diagnose from.
 
-The overlay text, the CTA card, the music bed, `out/` hygiene and the review stills
-are each their own ticket; the audio stream is present but silent until then, so that
-the container satisfies the Reels API from the first render.
+Under all of it is the **bed** — the signature track, trimmed to the reel's length
+and faded out at the end. It is the default on every reel; `music.file` in a site's
+config swaps it and `music.offset` slides it. Nothing is timed to the music: a reel is
+exactly as long with a bed as it is without one.
+
+`out/` hygiene and the review stills are each still their own ticket.
 
 Site configs live in [`sites/`](sites/README.md); the vocabulary they are written in
 is [`CONTEXT.md`](CONTEXT.md).
