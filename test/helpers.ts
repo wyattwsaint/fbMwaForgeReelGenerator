@@ -135,7 +135,16 @@ export function meanLuma(frameBytes: Buffer, top: number, bottom: number): numbe
   return total / ((bottom - top) * stride)
 }
 
-function capture(bin: string, args: string[], wantStderr = false): Promise<Buffer> {
+function capture(bin: string, args: string[]): Promise<Buffer> {
+  return run(bin, args, (stdout) => stdout)
+}
+
+/** ffmpeg says everything worth reading on stderr — `volumedetect`'s tally included. */
+function captureStderr(bin: string, args: string[]): Promise<string> {
+  return run(bin, args, (_stdout, stderr) => stderr)
+}
+
+function run<T>(bin: string, args: string[], pick: (stdout: Buffer, stderr: string) => T): Promise<T> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { windowsHide: true })
     const chunks: Buffer[] = []
@@ -145,7 +154,7 @@ function capture(bin: string, args: string[], wantStderr = false): Promise<Buffe
     child.on('error', reject)
     child.on('close', (code) =>
       code === 0
-        ? resolve(wantStderr ? Buffer.from(stderr) : Buffer.concat(chunks))
+        ? resolve(pick(Buffer.concat(chunks), stderr))
         : reject(new Error(`${bin} exited ${code}\n${stderr.trim()}`)),
     )
   })
@@ -161,7 +170,7 @@ export async function meanVolume(
   path: string,
   window: { start: number; duration: number },
 ): Promise<number> {
-  const out = await capture('ffmpeg', [
+  const out = await captureStderr('ffmpeg', [
     '-v', 'info',
     '-ss', window.start.toFixed(3),
     '-t', window.duration.toFixed(3),
@@ -169,8 +178,25 @@ export async function meanVolume(
     '-af', 'volumedetect',
     '-f', 'null',
     '-',
-  ], true)
-  const found = /mean_volume:\s*(-?[\d.]+|-inf) dB/.exec(out.toString('utf8'))
-  if (!found) throw new Error(`no mean_volume in volumedetect output:\n${out.toString('utf8')}`)
+  ])
+  const found = /mean_volume:\s*(-?[\d.]+|-inf) dB/.exec(out)
+  if (!found) throw new Error(`no mean_volume in volumedetect output:\n${out}`)
   return found[1] === '-inf' ? Number.NEGATIVE_INFINITY : Number(found[1])
+}
+
+/**
+ * The bed ends *with* the reel rather than being cut off (#8): the reel's last fifth
+ * of a second is far quieter than the same slice was before the fade began.
+ *
+ * A hard cut leaves the two readings level, which is the whole difference between a
+ * bed trimmed to length and a bed faded to it.
+ */
+export async function assertFadesOut(
+  path: string,
+  endSeconds: number,
+  fadeSeconds: number,
+): Promise<void> {
+  const before = await meanVolume(path, { start: endSeconds - fadeSeconds - 0.4, duration: 0.3 })
+  const last = await meanVolume(path, { start: endSeconds - 0.2, duration: 0.2 })
+  assert.ok(last < before - 12, `the bed is cut off rather than faded: ${before} -> ${last} dB`)
 }

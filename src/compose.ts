@@ -231,10 +231,12 @@ export async function assemble(
   await ffmpeg([
     ...shots.flatMap((path) => ['-i', path]),
     // Input seeking, so the decoder skips to the offset rather than decoding five
-    // minutes of track to throw it away.
+    // minutes of track to throw it away. Frame-granular on an mp3, so the bed lands
+    // within a few tens of milliseconds — which is exact enough for something nothing
+    // is timed to, and would not be if anything were.
     ...(timeline.audio.offsetMs > 0 ? ['-ss', seconds(timeline.audio.offsetMs)] : []),
     '-i', track,
-    '-filter_complex', `${graph};${bedChain(timeline, `${audio}:a`, 'a')}`,
+    '-filter_complex', `${graph};${bedChain(timeline, `${audio}:a`)}`,
     '-map', '[v]',
     '-map', '[a]',
     '-t', seconds(timeline.durationMs),
@@ -257,21 +259,23 @@ export async function assemble(
 }
 
 /**
- * The bed, trimmed and faded to the reel's own length (#8).
+ * The bed, trimmed and faded to the reel's own length (#8), as the chain that lands
+ * on `[a]`.
  *
- * `apad` before `atrim` is what makes the length the reel's rather than the track's:
- * a bed that runs out — a short file, or an offset near its end — is padded to length
- * instead of leaving the tail of the reel silent and the container short. The fade is
- * the last thing, so music ends *with* the reel rather than being cut off, and none
- * of it is timing: no length here is derived from the track.
+ * `apad` before `atrim` is what keeps the length the reel's rather than the track's:
+ * a bed that runs out — a short file, or an offset near its end — is padded instead
+ * of leaving the container short, so #8's "total duration is unchanged by the
+ * presence of music" holds whatever file is handed in. The fade is the last thing, so
+ * music ends *with* the reel rather than being cut off. None of it is timing: no
+ * length here is derived from the track.
  */
-function bedChain(timeline: Timeline, input: string, label: string): string {
+function bedChain(timeline: Timeline, input: string): string {
   const durationMs = timeline.durationMs
   const fadeMs = Math.min(timeline.audio.fadeOutMs, durationMs)
   return (
     `[${input}]aresample=${AUDIO_SAMPLE_RATE},aformat=channel_layouts=stereo,apad,` +
     `atrim=duration=${seconds(durationMs)},asetpts=N/SR/TB,` +
-    `afade=t=out:st=${seconds(durationMs - fadeMs)}:d=${seconds(fadeMs)}[${label}]`
+    `afade=t=out:st=${seconds(durationMs - fadeMs)}:d=${seconds(fadeMs)}[a]`
   )
 }
 

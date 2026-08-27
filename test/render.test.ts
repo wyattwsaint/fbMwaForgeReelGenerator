@@ -9,6 +9,7 @@ import { AUDIO_FADE_OUT_MS } from '../src/plan.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
 import {
+  assertFadesOut,
   frame,
   meanDiff,
   meanLuma,
@@ -39,6 +40,8 @@ const SCRIM_BAND = [0, 620] as const
 /** The house accent — on a rendered reel it appears on the CTA card's rule and nowhere else. */
 const ACCENT = '#8b5cf6'
 
+/** #12's arithmetic for three beats: 3.0 + 3 x 3.5 + 2.5, less the 0.3 crossfade. */
+const REEL_SECONDS = 15.7
 /** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
 const CUTS = [90, 195, 300]
 const LAST_FRAME = 470
@@ -118,16 +121,12 @@ describe('reel render', () => {
     assert.ok(opening > -40, `the reel is silent (${opening} dB)`)
   })
 
-  test('the bed ends with the reel — faded, never hard-cut', async () => {
-    const fade = AUDIO_FADE_OUT_MS / 1000
-    const before = await meanVolume(reelPath, { start: 15.7 - fade - 0.5, duration: 0.4 })
-    const last = await meanVolume(reelPath, { start: 15.7 - 0.2, duration: 0.2 })
-    assert.ok(last < before - 12, `the bed is cut off rather than faded: ${before} -> ${last} dB`)
-  })
+  test('the bed ends with the reel — faded, never hard-cut', () =>
+    assertFadesOut(reelPath, REEL_SECONDS, AUDIO_FADE_OUT_MS / 1000))
 
   test('is exactly as long as the timeline says', async () => {
     const { duration } = await probe(reelPath, 'format=duration')
-    assert.equal(Number(duration).toFixed(3), '15.700')
+    assert.equal(Number(duration).toFixed(3), REEL_SECONDS.toFixed(3))
     const { nb_frames } = await probe(reelPath, 'stream=nb_frames', 'v:0')
     assert.equal(nb_frames, String(LAST_FRAME + 1))
   })

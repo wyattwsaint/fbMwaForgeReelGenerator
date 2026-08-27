@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { assemble, ffmpeg } from '../src/compose.ts'
+import { SIGNATURE_TRACK_FILE, trackPath } from '../src/house.ts'
 import { AUDIO_FADE_OUT_MS, FPS } from '../src/plan.ts'
 import type { Shot, Timeline } from '../src/plan.ts'
-import { meanVolume, probe, workspace } from './helpers.ts'
+import { assertFadesOut, meanVolume, probe, workspace } from './helpers.ts'
 import type { Workspace } from './helpers.ts'
 
 /**
@@ -111,9 +112,30 @@ describe('the signature bed', () => {
 
   test('fades out with the reel rather than being cut off', async () => {
     const output = await assembled(TONE_STARTS_AT * 1000, 'faded')
-    const fade = AUDIO_FADE_OUT_MS / 1000
-    const before = await meanVolume(output, { start: REEL_MS / 1000 - fade - 0.4, duration: 0.3 })
-    const last = await meanVolume(output, { start: REEL_MS / 1000 - 0.2, duration: 0.2 })
-    assert.ok(last < before - 12, `the bed is hard-cut, not faded: ${before} -> ${last} dB`)
+    await assertFadesOut(output, REEL_MS / 1000, AUDIO_FADE_OUT_MS / 1000)
+  })
+
+  test('runs to the reel’s end even when the track runs out first', async () => {
+    // An offset near the end of the track leaves less music than reel. The bed is
+    // padded rather than the container cut short, so #8's "total duration is
+    // unchanged by the presence of music" holds for a bed that ran out.
+    const output = await assembled(31_500, 'ranout')
+    const { duration } = await probe(output, 'format=duration')
+    assert.equal(Number(duration).toFixed(1), (REEL_MS / 1000).toFixed(1))
+  })
+})
+
+describe('where a bed comes from', () => {
+  test('is the signature track when the config says nothing about music', () => {
+    // Beside the face and the mark, so it is found wherever `reel` is run from —
+    // which is not necessarily beside the site config being rendered.
+    assert.equal(trackPath(undefined, 'C:/somewhere/else'), SIGNATURE_TRACK_FILE)
+  })
+
+  test('is the human’s own file, from the directory they ran in', () => {
+    // Including one that spells out the signature track's path: there is no name the
+    // resolver treats as special, so what you write is what you get.
+    assert.equal(trackPath('audio/other.mp3', ws.root), join(ws.root, 'audio', 'other.mp3'))
+    assert.equal(trackPath(track, ws.root), track)
   })
 })

@@ -145,11 +145,12 @@ reels. Not reproducible from the prompt that made it, so the file itself is the 
 It is MWA Forge's, like the face and the mark, so it is found beside them in this repo
 rather than beside any site's config.
 
-**Bed** — the signature track as it appears under one reel: slid by an offset,
+**Bed** — the signature track as it appears under one reel: slid by an **offset**,
 trimmed to the reel's length and faded out at the end, so the music ends *with* the
 reel rather than being cut off. It sits underneath and nothing is timed to it — no
-beat-locking, no BPM — so a reel is exactly as long with a bed as without. Only the
-opening of a track is ever heard.
+beat-locking, no BPM — so a reel is exactly as long with a bed as without. A track is
+minutes long and a reel is seconds, so only the stretch the offset lands on is ever
+heard.
 
 **Provenance** — the record of where a track came from and under what terms it may be
 used. It belongs to the track, not to any site that uses it, and it is a document to be
