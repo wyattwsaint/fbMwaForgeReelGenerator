@@ -8,6 +8,7 @@
       "startMs": 0,
       "durationMs": 3000,
       "move": "drift",
+      "pushPull": "push",
       "punchFactor": 1,
       "source": {
         "url": "https://example.test"
@@ -32,6 +33,7 @@
       "startMs": 6500,
       "durationMs": 3500,
       "move": "drift",
+      "pushPull": "pull",
       "punchFactor": 1.6,
       "source": {
         "url": "https://example.test",
@@ -57,6 +59,7 @@
       "startMs": 13500,
       "durationMs": 3500,
       "move": "drift",
+      "pushPull": "push",
       "punchFactor": 1,
       "source": {
         "url": "https://example.test",
@@ -82,6 +85,7 @@
       "startMs": 20200,
       "durationMs": 2500,
       "move": "drift",
+      "pushPull": "pull",
       "punchFactor": 1
     }
   ],

@@ -2,6 +2,20 @@
 
 export type Direction = 'vertical' | 'lateral' | 'lateral-reversed' | 'diagonal'
 
+/**
+ * Which way a drift zooms (#52) — drift's own parameter, as `Direction` is pan's.
+ *
+ * Its own union rather than a value bolted onto `Direction`: the two moves share no
+ * value, so one union across both would let a config ask for a `diagonal` drift and
+ * a `pull` pan and have the type say nothing.
+ *
+ * Named for its values rather than for the move, because `Drift` is already spoken
+ * for twice — the move a shot gets, and `CONTEXT.md`'s client drift — and a `drift`
+ * field on a shot whose `move` is `'drift'` says nothing about which of the three it
+ * means. `CONTEXT.md` glossarises this one as **Push / pull**.
+ */
+export type PushPull = 'push' | 'pull'
+
 /** The whole deck (#12): both continuous, neither ever lands. */
 export type Move = 'drift' | 'pan'
 
@@ -17,6 +31,8 @@ export type Beat = {
   move?: Move
   /** Override; otherwise the deterministic rotation. */
   direction?: Direction
+  /** Override; otherwise the deterministic rotation. Read only on a drift. */
+  pushPull?: PushPull
   /** Optional on-screen line. */
   label?: string
   /** Override — a beat that lives on another route. */

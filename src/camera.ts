@@ -11,6 +11,7 @@
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 import { frameCount, panAxes } from './plan.ts'
 import type { Shot } from './plan.ts'
+import type { PushPull } from './site.ts'
 
 /**
  * A diagonal pan needs punch-in headroom on both axes, so its master is doubled on
@@ -26,6 +27,10 @@ export const PAN_PX_PER_FRAME = 7
  * How far a drift zooms across its shot. Set so a drift's fastest pixel — a frame
  * corner — moves a bit over 1px a frame, which is a move that reads without ever
  * competing with the cut.
+ *
+ * One depth for both directions (#52): a push ramps up to it and a pull ramps back
+ * down from it, so the two are the same move read either way round — same window,
+ * same pixels, same blur. Direction is what alternates, never distance.
  */
 export const DRIFT_ZOOM = 1.1
 
@@ -33,6 +38,10 @@ export const DRIFT_ZOOM = 1.1
  * How far the card drifts, and the reason it drifts at all: #12 found there is no rest
  * anywhere in this reel, and a static final 2.5s reads as the video having ended early.
  * 3% over 2.5s is a move a viewer registers without being able to point at it.
+ *
+ * The depth stays 3% whichever way the card goes (#52). It is drawn rather than filmed
+ * — the round trip renders it at `card.ts`'s own precision either way — so a pull costs
+ * it no sharpness, which is why the card is in the rotation at all.
  */
 export const CARD_ZOOM = 1.03
 
@@ -51,6 +60,13 @@ export const MAX_BLUR_SAMPLES = 32
  */
 export type Ramp = { offset: number; span: number }
 
+/**
+ * The two ends of a zoom, as the ramp a filter is handed rather than a depth off 1.0:
+ * a pull starts at the zoom and comes back down, so which end is 1.0 is the move's to
+ * say (#52).
+ */
+export type Zoom = { from: number; to: number }
+
 /** The master a shot's move is computed over, in its own pixels. */
 export type MasterSize = { width: number; height: number; over: number }
 
@@ -60,8 +76,11 @@ export type Camera = {
   /** Top-left of the window at the first and last output frame, in master pixels. */
   from: { x: number; y: number }
   to: { x: number; y: number }
-  /** 1.0 for a pan; a drift zooms from 1.0 to this across the shot. */
-  zoom: number
+  /**
+   * The zoom at the first and last output frame. 1.0 to 1.0 for a pan; a drift ramps
+   * between 1.0 and `DRIFT_ZOOM` in whichever order its push or pull asks for (#52).
+   */
+  zoom: Zoom
   frames: number
   /** #11: `ceil(peak per-frame px displacement)`, capped. No knob. */
   samples: number
@@ -113,7 +132,9 @@ function blurSamples(peakPxPerFrame: number): number {
 export function cameraFor(shot: Shot, master: MasterSize): Camera {
   const frames = frameCount(shot.durationMs)
   const steps = moveSteps(frames)
-  return shot.move === 'pan' ? pan(shot, master, frames, steps) : drift(master, frames, steps)
+  return shot.move === 'pan'
+    ? pan(shot, master, frames, steps)
+    : drift(shot, master, frames, steps)
 }
 
 /**
@@ -168,23 +189,48 @@ function pan(shot: Shot, master: MasterSize, frames: number, steps: number): Cam
   // Every direction covers the same path length in the same time, so the peak is the
   // whole diagonal of the travel, in output pixels.
   const peak = Math.hypot(travel.x, travel.y) / over / steps
-  return { window, from, to, zoom: 1, frames, samples: blurSamples(peak) }
+  return { window, from, to, zoom: { from: 1, to: 1 }, frames, samples: blurSamples(peak) }
 }
 
 /**
  * A drift holds the window and zooms into it. The window is one frame of master
  * pixels — 1:1 at the shot's punch — centred on the section, so a drift never
  * shows more of the page than a pan of the same beat would.
+ *
+ * Which is also why a pull is free (#52): both directions ramp inside the window
+ * `drift` already crops, so pulling costs no extra captured pixels and asks nothing
+ * of the punch — unlike a lateral pan, which needs room the punch has to buy.
  */
-function drift(master: MasterSize, frames: number, steps: number): Camera {
+function drift(shot: Shot, master: MasterSize, frames: number, steps: number): Camera {
   const window = { width: FRAME_WIDTH, height: FRAME_HEIGHT }
   const centre = {
     x: Math.round((master.width - window.width) / 2),
     y: Math.round((master.height - window.height) / 2),
   }
   // A zoom's fastest pixel is a frame corner, so that is what the blur is derived from.
+  // The corner covers the same distance either way round, so direction never enters.
   const peak = (Math.hypot(FRAME_WIDTH, FRAME_HEIGHT) / 2) * (DRIFT_ZOOM - 1) / steps
-  return { window, from: centre, to: centre, zoom: DRIFT_ZOOM, frames, samples: blurSamples(peak) }
+  return {
+    window,
+    from: centre,
+    to: centre,
+    zoom: zoomRamp(DRIFT_ZOOM, shot.pushPull),
+    frames,
+    samples: blurSamples(peak),
+  }
+}
+
+/**
+ * A drift's zoom, as the two ends of its ramp: a push climbs to `depth` and a pull
+ * comes back down from it.
+ *
+ * `undefined` is a value it takes rather than a default it supplies, because `Shot`
+ * makes the field optional for pans and a drift that reaches here without one came
+ * from something other than `planReel` — a hand-built shot in a test. It pushes,
+ * which is what every drift in the repo was before #52.
+ */
+function zoomRamp(depth: number, pushPull: PushPull | undefined): Zoom {
+  return pushPull === 'pull' ? { from: depth, to: 1 } : { from: 1, to: depth }
 }
 
 /**
@@ -197,9 +243,10 @@ function drift(master: MasterSize, frames: number, steps: number): Camera {
  * a card asking for one would be a bug in the plan rather than a shot to render.
  *
  * There is no punch either: the card is built at frame size, so the window is the
- * frame itself and there is nothing to crop out of anything. Nothing is blurred
- * either — at 3% over 2.5s the card's fastest pixel travels under half a pixel a
- * frame, which is not a speed there is anything to blur.
+ * frame itself and there is nothing to crop out of anything. Which way it zooms is
+ * the plan's, like a beat's — the card no more picks that than how far it zooms.
+ * Nothing is blurred either — at 3% over 2.5s the card's fastest pixel travels under
+ * half a pixel a frame, which is not a speed there is anything to blur.
  */
 export function cardCamera(shot: Shot): Camera {
   const origin = { x: 0, y: 0 }
@@ -207,7 +254,7 @@ export function cardCamera(shot: Shot): Camera {
     window: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
     from: origin,
     to: origin,
-    zoom: CARD_ZOOM,
+    zoom: zoomRamp(CARD_ZOOM, shot.pushPull),
     frames: frameCount(shot.durationMs),
     samples: 1,
   }

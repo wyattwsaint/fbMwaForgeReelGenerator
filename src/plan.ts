@@ -10,9 +10,9 @@
  */
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
-import type { Direction, Move, SiteConfig } from './site.ts'
+import type { Direction, Move, PushPull, SiteConfig } from './site.ts'
 
-export type { Move } from './site.ts'
+export type { Move, PushPull } from './site.ts'
 
 export type Shot = {
   kind: 'hook' | 'beat' | 'cta'
@@ -22,6 +22,8 @@ export type Shot = {
   durationMs: number
   move: Move
   direction?: Direction
+  /** Which way a drift zooms. Absent on a pan, which has no zoom to point. */
+  pushPull?: PushPull
   punchFactor: number
   /** Absent on the card — it is the one shot with no site pixels in it. */
   source?: { url: string; selector?: string; y?: number; height?: number }
@@ -202,6 +204,30 @@ function defaultMove(index: number): Move {
 }
 
 /**
+ * Which way the drift at beat `index` zooms — or at `n`, for the card that follows the
+ * last beat (#52).
+ *
+ * Seeded on the index alone, like the pan rotation, so overriding one beat never moves
+ * another's zoom — which is the guarantee #7 asks of every planned move.
+ *
+ * The rotation is two steps and the hook takes the first: it is ordinal 0 and beats
+ * count from 1, because the hook is *exempt* rather than absent. Frame 0 is the
+ * thumbnail Facebook shows in-feed and a pull's first frame is its most upscaled one,
+ * so the hook pushes whatever the rotation would have said — and starting the sequence
+ * on the push it takes anyway costs the reel no alternation, which is what makes the
+ * exemption affordable.
+ *
+ * `defaultMove` drifts the odd beats, so their ordinals run 1, 2, ... — exactly "the
+ * next drift". An even beat overridden to drift lands on the same ordinal as the odd
+ * beat before it and so repeats it; with two steps there is no step that avoids both
+ * neighbours, and the index seeding is worth more than the near miss.
+ */
+function rotatedPushPull(index: number): PushPull {
+  const ordinal = 1 + Math.floor(index / 2)
+  return ordinal % 2 === 0 ? 'push' : 'pull'
+}
+
+/**
  * The reel's whole shape. Throws when the config cannot describe a reel at all —
  * `check` reports those by name before it ever gets here.
  */
@@ -221,6 +247,10 @@ export function planReel(config: SiteConfig): Timeline {
       durationMs: HOOK_MS,
       // The hook drifts, which is why beat 1 pans.
       move: 'drift',
+      // And it pushes, out of the rotation: frame 0 is the thumbnail (#5), and a pull
+      // starts at the zoom, so a pulling hook spends its softest frame where every
+      // in-feed viewer looks. A push spends it on the last frame, where nobody does.
+      pushPull: 'push',
       punchFactor: DEFAULT_PUNCH_FACTOR,
       source: { url: config.url, ...(hookSelector ? { selector: hookSelector } : {}) },
     },
@@ -230,6 +260,7 @@ export function planReel(config: SiteConfig): Timeline {
     const move = beat.move ?? defaultMove(index)
     const rotated = DIRECTIONS[rotationOrdinal(index) % DIRECTIONS.length] as Direction
     const direction = move === 'pan' ? (beat.direction ?? rotated) : undefined
+    const pushPull = move === 'drift' ? (beat.pushPull ?? rotatedPushPull(index)) : undefined
     const lateral = direction !== undefined && panAxes(direction).includes('x')
     const punchFactor =
       beat.punchFactor ?? (lateral ? DEFAULT_LATERAL_PUNCH_FACTOR : DEFAULT_PUNCH_FACTOR)
@@ -240,6 +271,7 @@ export function planReel(config: SiteConfig): Timeline {
       durationMs: BEAT_MS,
       move,
       ...(direction ? { direction } : {}),
+      ...(pushPull ? { pushPull } : {}),
       punchFactor,
       source: {
         url: beat.url ?? config.url,
@@ -259,6 +291,11 @@ export function planReel(config: SiteConfig): Timeline {
     // Nothing in this reel rests, the card least of all: a static final 2.5s reads
     // as the video having ended early.
     move: 'drift',
+    // In the rotation, at the ordinal a beat after the last one would have had: the
+    // card is drawn rather than filmed, so a pull costs it no sharpness, and it is
+    // where an alternation is most visible — for n = 4 it is the only place a reel's
+    // two beat drifts leave one. Seeded on n, so no override moves it either.
+    pushPull: rotatedPushPull(n),
     punchFactor: DEFAULT_PUNCH_FACTOR,
   })
 
