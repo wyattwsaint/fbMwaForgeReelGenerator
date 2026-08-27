@@ -14,22 +14,24 @@ export default defineSite({
   url: 'https://brobstcleaning.com',
   hook: { text: 'Spotless, every time.' },
   beats: [
-    { selector: '#services', punchFactor: 1.6 },
-    { selector: '#about' },
-    { selector: '#contact' },
+    { selector: '#services', punchFactor: 1.8 },
+    { selector: '#about', punchFactor: 2.3 },
+    { selector: '#reviews', punchFactor: 2.1 },
   ],
   cta: { credit: 'brobstcleaning.com' },
-  music: { file: 'audio/mwaforge-signature.mp3', offset: 0.42 },
 })
 ```
 
-`music` is one of those overrides. Leave it out and the reel gets the signature track,
-which is the point of a signature track. Write it out, as above, and you get the same
-file — configs live in this repo, so `audio/…` resolves to the same place — which is
-how you hang an `offset` off the default bed, since the schema wants a `file` whenever
-you write a `music` block at all. `offset` is seconds into the track, sliding the bed
-against the hook. Every path here is resolved from the directory you run `reel` in.
+That is `brobst.ts`, whole — no `music`, because `music` is one of those overrides.
+Leave it out and the reel gets the signature track, which is the point of a signature
+track. Write it out, as `pharos.ts` does, and you get the same file — configs live in
+this repo, so `audio/…` resolves to the same place — which is how you hang an `offset`
+off the default bed, since the schema wants a `file` whenever you write a `music` block
+at all. `offset` is seconds into the track, sliding the bed against the hook. Every
+path here is resolved from the directory you run `reel` in.
 
 The annotated examples in `7-site-config.md` are illustrative: their selectors were
-written from a reading of the sites, not measured against them, and `reel check`
-reports several as drifted today. Write a config, run `check`, fix what it names.
+written from a reading of the sites, not measured against them, and none of them
+resolve today. The two configs beside this file were measured — `brobst.ts` is the
+minimum above and `pharos.ts` reaches for most of the hatches, each one commented with
+the page behaviour that forced it. Write a config, run `check`, fix what it names.

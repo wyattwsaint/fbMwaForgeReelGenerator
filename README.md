@@ -16,13 +16,17 @@ reel render <site>          # check, capture, composite; wipes and fills out/
 reel keep   out/<file>.mp4  # mv to reels/ + solo commit
 ```
 
-Install it once on the machine that cuts reels:
+Install it once, on the one machine that cuts reels:
 
 ```
 npm install
 npx playwright install chromium
 npm link                    # puts `reel` on PATH
 ```
+
+`npm link` is what makes the examples below literal: every command in this README is
+`reel <command> <site>`, never a runner prefix, because the prefix is the part that
+dates. `ffmpeg` and `ffprobe` have to be on PATH too — `render` shells out to both.
 
 ### `reel check <site>`
 
@@ -125,8 +129,37 @@ and keep in one sitting. `keep` prints the resulting commit's one-line stat, so 
 visible that nothing rode along. The date in the name replaces the scratch name's
 `-<n>beat` — `n` is recoverable from the config, the day it was cut is not.
 
-Site configs live in [`sites/`](sites/README.md); the vocabulary they are written in
-is [`CONTEXT.md`](CONTEXT.md).
+## Writing a site config
+
+One TS module per site, `sites/<slug>.ts`, checked into *this* repo (ADR-0001). The
+whole of it is a URL, one line of hook copy, three to five beat selectors and the
+client's domain:
+
+```ts
+import { defineSite } from 'reel'
+
+export default defineSite({
+  url: 'https://brobstcleaning.com',
+  hook: { text: 'Spotless, every time.' },
+  beats: [{ selector: '#services' }, { selector: '#about' }, { selector: '#reviews' }],
+  cta: { credit: 'brobstcleaning.com' },
+})
+```
+
+Everything else — which beat pans and which drifts, which way each pan travels, where
+the cuts land, the bed under it — is derived from that. `beats.length` is the reel's
+length: three beats is 15.7s, five is 22.7s. There are no duration knobs and no flags.
+
+Everything else in the schema is an **override**, and each one is there because a real
+page broke a default — [`sites/README.md`](sites/README.md) is the field-by-field
+reference. The two checked-in configs are the pair that shows the difference:
+[`sites/brobst.ts`](sites/brobst.ts) names sections, punch and a credit line and
+nothing else; [`sites/pharos.ts`](sites/pharos.ts) reaches for most of the hatches,
+each with the page behaviour that forced it written beside it.
+
+Then run `reel check <site>` and fix what it names — a selector that no longer matches
+is the whole reason the file is checked in. The vocabulary all of it is written in is
+[`CONTEXT.md`](CONTEXT.md).
 
 ## Tests
 
