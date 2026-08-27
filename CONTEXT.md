@@ -239,6 +239,18 @@ A **preflight**, never a monitor: it is run when a new reel is about to be cut, 
 nothing schedules it or reacts to it on its own. A render runs it first and refuses on
 failure — it is the settle the render was going to do anyway.
 
+**Sections report** — the page measured before a config exists: every **candidate
+section** with a selector that resolves, its height, and the punch factor that height
+needs. The other half of `check` — `check` can only say what is wrong with the
+selectors already guessed, and this says what is on the page. A report and never a
+proposal: it ranks nothing and writes nothing, because which sections become beats, in
+what order, is the human's whole job.
+
+**Candidate section** — a direct child of the page's `main` that draws something. The
+level a beat is written at. Named by its own `id` where it has one, since an id is the
+selector that survives the client's next edit; one without an id is addressed through
+`main` by `y` and `height`.
+
 **Drift** (client drift) — the client editing their own site until a config's selectors
 no longer describe it. Always a loud failure, never a silently shorter reel. Drift says
 nothing about reels already kept: a kept reel does not become wrong when the site

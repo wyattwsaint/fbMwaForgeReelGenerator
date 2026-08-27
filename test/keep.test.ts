@@ -124,7 +124,7 @@ describe('keep', () => {
       for (const args of [['keep', scratch, '--force'], ['render', 'brobst', '--keep']]) {
         const run = await reel(args, ws.root)
         assert.equal(run.code, 2, run.output)
-        assert.match(run.output, /usage: reel check <site>/)
+        assert.match(run.output, /usage: reel sections <url>/)
       }
     }))
 

@@ -7,14 +7,19 @@ beat-aligned clip with ffmpeg, and emit a 9:16 Facebook Reel.
 
 ## The CLI
 
-Three commands, one positional argument each, no flags
+Four commands, one positional argument each, no flags
 ([`18-cli-and-review.md`](.wayfinder/spec/18-cli-and-review.md)):
 
 ```
-reel check  <site>          # settle + resolve; seconds, no capture pass
-reel render <site>          # check, capture, composite; wipes and fills out/
-reel keep   out/<file>.mp4  # mv to reels/ + solo commit
+reel sections <url>           # settle + measure the page; what a config is written from
+reel check    <site>          # settle + resolve; seconds, no capture pass
+reel render   <site>          # check, capture, composite; wipes and fills out/
+reel keep     out/<file>.mp4  # mv to reels/ + solo commit
 ```
+
+`sections` is the one that takes a **URL** rather than a site, and it takes one
+because it is what you run *before* `sites/<slug>.ts` exists — a slug is the one thing
+it cannot ask for. The other three take a site because a site *is* its config file.
 
 Install it once, on the one machine that cuts reels:
 
@@ -27,6 +32,46 @@ npm link                    # puts `reel` on PATH
 `npm link` is what makes the examples below literal: every command in this README is
 `reel <command> <site>`, never a runner prefix, because the prefix is the part that
 dates. `ffmpeg` and `ffprobe` have to be on PATH too — `render` shells out to both.
+
+### `reel sections <url>`
+
+Loads the page, settles it, and prints its candidate sections: a selector that
+resolves, where the section sits, how tall it is, and the punch factor that height
+needs. Enough to paste a first config out of, which `check` then corrects.
+
+```
+$ reel sections https://brobstcleaning.com
+sections https://brobstcleaning.com  7.1s
+
+  hook  main           y 80      942px
+        #services      y 1022   1231px   punchFactor 1.74
+        #how-it-works  y 2253    267px   punchFactor 7.98
+        #about         y 2520    873px   punchFactor 2.44
+        #reviews       y 3392    965px   punchFactor 2.21
+        #quote-cta     y 4357    730px   punchFactor 2.92
+
+6 sections.
+```
+
+A candidate is a direct child of `main` that draws something. It is named by its own
+`id` where it has one, because an id is what makes a selector that survives the
+client's next edit; a section without one is printed as `main` and addressed by its
+`y` and `height`, which is the escape hatch that exists for exactly that page.
+
+The measurements are taken against the **settled** page, so they are the heights a
+master is actually clipped at — a section reported at its pre-lazy-load height would
+disagree with `check`, which is worse than not reporting it.
+
+The hero is marked `hook` and given no punch factor. It is the hook, not a beat, and a
+config that lists it in `beats` is a reel that opens twice on the same section. Every
+other punch factor is the one that height needs whatever move the beat draws: the
+largest of what any pan direction would ask for, which also covers the drift it might
+have been. That is deliberately generous — `check` says whether a smaller one still
+travels.
+
+This **reports**, it does not decide. Which sections become beats, in what order, with
+what hook line, is the human's, and there is no ranking, scoring or suggesting in it —
+nor a `--write-config`, because a generated config is a config nobody read.
 
 ### `reel check <site>`
 
@@ -157,9 +202,9 @@ reference. The two checked-in configs are the pair that shows the difference:
 nothing else; [`sites/pharos.ts`](sites/pharos.ts) reaches for most of the hatches,
 each with the page behaviour that forced it written beside it.
 
-Then run `reel check <site>` and fix what it names — a selector that no longer matches
-is the whole reason the file is checked in. The vocabulary all of it is written in is
-[`CONTEXT.md`](CONTEXT.md).
+The loop is `reel sections <url>` → paste → `reel check <slug>` → fix what it names.
+A selector that no longer matches is the whole reason the file is checked in. The
+vocabulary all of it is written in is [`CONTEXT.md`](CONTEXT.md).
 
 ## Tests
 

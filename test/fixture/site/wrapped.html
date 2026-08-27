@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — a wrapped hero</title>
+<!--
+  The hero is a `section` nested inside a div, so the element `hookRect` resolves and
+  the candidate section that contains it are two different elements. The report has to
+  mark the candidate the hero sits *inside*, or the row a human pastes as `beats[0]`
+  is the hook, and the reel opens twice on it.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  #banner { padding: 200px 32px; background: #253856; }
+  #banner section { height: 1400px; background: #17365c; }
+  #services { height: 2400px; background: #1d2b3a; }
+</style>
+</head>
+<body>
+<main>
+  <div id="banner"><section><h1>Wrapped hero</h1></section></div>
+  <section id="services"><h2>Services</h2></section>
+</main>
+</body>
+</html>

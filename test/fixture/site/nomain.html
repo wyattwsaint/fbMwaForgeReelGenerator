@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — no main</title>
+<!-- A page with no `main` at all: the sections are children of `body`, so `main` is
+     the one selector the report must not print — it would not resolve. -->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  body > section { height: 2000px; padding: 40px 32px; }
+</style>
+</head>
+<body>
+<section><h1>Hero</h1></section>
+<section><h2>Services</h2></section>
+</body>
+</html>

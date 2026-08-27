@@ -30,6 +30,27 @@ off the default bed, since the schema wants a `file` whenever you write a `music
 at all. `offset` is seconds into the track, sliding the bed against the hook. Every
 path here is resolved from the directory you run `reel` in.
 
+## The loop
+
+```
+reel sections <url>     # what is on the page: selectors, heights, the punch each needs
+                        # paste the sections you want, in the order you want them
+reel check <slug>       # what is wrong with the file you just wrote
+                        # fix what it names, and run it again
+```
+
+`sections` is the half that reports the page and `check` is the half that argues with
+your config; neither replaces the other. `sections` takes the **URL**, because it is
+what you run before the config beside this file exists — every other command takes a slug,
+since a site *is* its config file.
+
+Paste from it, do not transcribe it. The report prints every candidate section, and a
+reel is 3–5 of them in an order you chose; it marks the hero `hook`, which is the one
+row that must **not** become a beat, since a reel that opens on the hero twice opens
+twice. The punch factors it prints are generous on purpose — they are what a section
+that height needs whatever move the beat draws — so `check` will accept them, and a
+smaller one is yours to try.
+
 The annotated examples in `7-site-config.md` are illustrative: their selectors were
 written from a reading of the sites, not measured against them, and none of them
 resolve today. The two configs beside this file were measured — `brobst.ts` is the
