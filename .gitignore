@@ -9,7 +9,8 @@ frames/
 out/
 test/.tmp/
 
-# NOT ignored, deliberately (ADR-0002): `reels/` and `audio/`.
+# NOT ignored, deliberately (ADR-0002): `reels/` and `audio/`. This repo is public
+# and they stay tracked anyway — a deliberate choice, amended into ADR-0002 (#39).
 # A shipped reel and the Suno signature track cannot be regenerated — the site
 # drifts, the brand kit is sampled at render, and a Suno track is not
 # reproducible from its prompt. This repo is their backup. Do not "tidy" them
