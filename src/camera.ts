@@ -39,6 +39,18 @@ export const CARD_ZOOM = 1.03
 /** #11: sub-frames averaged per output frame, derived and never a knob. */
 export const MAX_BLUR_SAMPLES = 32
 
+/**
+ * Where a move's ramp is read (#51).
+ *
+ * A move is *drawn* on sub-frames and *read* on output frames: `tmix` averages
+ * `samples` sub-frames into each one, so output frame k is centred on sub-frame
+ * `offset + k * samples`. A ramp written over the sub-frames instead — 0 on the
+ * first and 1 on the last — ends `samples - 1` sub-frames past the last output
+ * frame, so the shot never reaches the camera it was given and its output frames
+ * are not evenly spaced along the way.
+ */
+export type Ramp = { offset: number; span: number }
+
 /** The master a shot's move is computed over, in its own pixels. */
 export type MasterSize = { width: number; height: number; over: number }
 
@@ -57,10 +69,19 @@ export type Camera = {
 
 /**
  * The gaps a move is spread across — one fewer than the frames it is drawn on, and
- * never zero, because a one-frame shot still has to divide by something.
+ * never zero, because a one-frame shot still has to divide by something. Callers
+ * reach it through `moveRamp`: where a move's ends land is this file's to say.
  */
-export function moveSteps(frames: number): number {
+function moveSteps(frames: number): number {
   return Math.max(1, frames - 1)
+}
+
+/** The ramp a camera's move is written on, in its own sub-frames. */
+export function moveRamp(camera: Camera): Ramp {
+  return {
+    offset: (camera.samples - 1) / 2,
+    span: camera.samples * moveSteps(camera.frames),
+  }
 }
 
 /** The oversample a shot's master is captured at. */
@@ -112,10 +133,21 @@ function pan(shot: Shot, master: MasterSize, frames: number, steps: number): Cam
   // shot that is a vertical pan with a wobble. `check` has already refused the punches
   // that leave any axis less than a move, so the smaller room is still a move.
   const room = { x: master.width - window.width, y: master.height - window.height }
-  const allowed = Math.max(
-    0,
-    Math.min(target, ...axes.map((axis) => room[axis])),
-  )
+  const space = Math.min(...axes.map((axis) => room[axis]))
+  const reach = Math.max(0, Math.min(target, space))
+  // #51: `crop` rounds to whole master pixels, so travel that is not a whole number
+  // of pixels per output frame lands consecutive frames unequal distances apart — a
+  // staircase, which is a continuous move landing over and over inside its own shot.
+  // Rounding the travel down to a multiple of the gaps makes every output frame the
+  // same integer step from the one before it, at a cost of under a pixel a frame that
+  // the master's own resolution sets. `CONTEXT.md`'s **punch-in** has the finding.
+  const quantised = Math.floor(reach / steps) * steps
+  // The blur reaches half a frame past each end of the move — `tmix` averages the
+  // sub-frames either side of an output frame, and the ones outside the move are what
+  // the ends are averaged from. A move that filled its room to the edge would have
+  // ffmpeg clamp those back onto the edge and bias its first and last frames, so the
+  // room keeps a step in hand rather than the move spending all of it.
+  const allowed = quantised > 0 && quantised === space ? quantised - steps : quantised
   const travel = {
     x: axes.includes('x') ? allowed : 0,
     y: axes.includes('y') ? allowed : 0,

@@ -14,7 +14,7 @@
 
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { moveSteps } from './camera.ts'
+import { moveRamp } from './camera.ts'
 import type { Camera } from './camera.ts'
 import { FRAME_WIDTH } from './frame.ts'
 import { drawText, ffmpegColor, pad, stream, zoomStage } from './filtergraph.ts'
@@ -233,7 +233,7 @@ function driftFilter(camera: Camera): string {
   const height = window.height * PRECISION
   return [
     `scale=${width}:${height}:flags=neighbor`,
-    zoomStage(camera.zoom, moveSteps(camera.frames), { width, height }, FPS * samples),
+    zoomStage(camera.zoom, moveRamp(camera), { width, height }, FPS * samples),
     `scale=${window.width}:${window.height}:flags=lanczos`,
   ].join(',')
 }

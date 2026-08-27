@@ -10,11 +10,11 @@
 
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
-import { cameraFor, cardCamera, moveSteps } from './camera.ts'
+import { cameraFor, cardCamera, moveRamp } from './camera.ts'
 import { cardChains, wordmarkInput, writeWordmark } from './card.ts'
-import type { Camera } from './camera.ts'
+import type { Camera, Ramp } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { ffmpegColor, pad, stream, zoomStage } from './filtergraph.ts'
+import { ffmpegColor, pad, rampFraction, stream, zoomStage } from './filtergraph.ts'
 import { GROUND } from './house.ts'
 import { drawnOverlays, overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
@@ -154,17 +154,18 @@ function intermediateEncode(): string[] {
  * `samples` times the frame rate, cropped (a pan) or cropped and zoomed (a drift) at
  * each sub-frame, and then averaged back down to the frame rate. The average *is* the
  * motion blur, which is why no sample-count knob exists to expose.
+ *
+ * Exported for the tests: the crop offsets a move actually lands on are readable
+ * straight out of the chain, which is how #51's staircase is measured without a render.
  */
-function moveFilter(camera: Camera): string {
-  const { samples, frames } = camera
-  const subFrames = frames * samples
+export function moveFilter(camera: Camera): string {
+  const { samples } = camera
   const subFps = FPS * samples
-  const last = moveSteps(subFrames)
 
   const stages = [
     `loop=loop=-1:size=1:start=0`,
     `setpts=N/${subFps}/TB`,
-    ...moveStages(camera, last),
+    ...moveStages(camera, moveRamp(camera)),
     ...(samples > 1
       ? [`tmix=frames=${samples}`, `select='not(mod(n+1,${samples}))'`]
       : []),
@@ -173,22 +174,23 @@ function moveFilter(camera: Camera): string {
   return stages.join(',')
 }
 
-function moveStages(camera: Camera, last: number): string[] {
+function moveStages(camera: Camera, ramp: Ramp): string[] {
   const { window, from, to, zoom } = camera
-  // `crop`'s x and y are expressions evaluated per frame, which is the whole move.
+  // `crop`'s x and y are expressions evaluated per sub-frame, which is the whole move.
   const crop = (x: string, y: string) =>
     `crop=w=${window.width}:h=${window.height}:x=${x}:y=${y}`
 
   if (zoom === 1) {
     // A pan slides a fixed window, so the whole move is one crop expression.
-    const at = (a: number, b: number) => (a === b ? String(a) : `${a}+(${b - a})*n/${last}`)
+    const at = (a: number, b: number) =>
+      a === b ? String(a) : `${a}+(${b - a})*${rampFraction(ramp, 'n')}`
     return [crop(at(from.x, to.x), at(from.y, to.y)), scaleToFrame()]
   }
   // A drift holds the window and zooms into it. Cropping first makes the zoom's input
   // the frame's own aspect, so nothing is stretched on the way out.
   return [
     crop(String(from.x), String(from.y)),
-    zoomStage(zoom, last, { width: FRAME_WIDTH, height: FRAME_HEIGHT }, FPS * camera.samples),
+    zoomStage(zoom, ramp, { width: FRAME_WIDTH, height: FRAME_HEIGHT }, FPS * camera.samples),
   ]
 }
 

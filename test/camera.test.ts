@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { MAX_BLUR_SAMPLES, PAN_PX_PER_FRAME, cameraFor, masterSize } from '../src/camera.ts'
+import { moveFilter } from '../src/compose.ts'
+import { BEAT_MS, DIRECTIONS, MIN_PAN_PX_PER_FRAME, panTravelNeeded } from '../src/plan.ts'
 import type { Shot } from '../src/plan.ts'
+import { FRAME_WIDTH } from '../src/frame.ts'
 
 /** A pan of one beat, punched enough that a lateral axis has somewhere to go. */
 function panShot(direction: Shot['direction'], punchFactor = 1.2): Shot {
@@ -45,6 +48,49 @@ function travel(shot: Shot, sectionHeight: number) {
   }
 }
 
+/**
+ * The crop offsets a shot's filtergraph actually asks ffmpeg for, one per *output*
+ * frame (#51).
+ *
+ * The move is written as an expression in the sub-frame index `n` and `crop` rounds
+ * it to a whole master pixel, so this is the position the render lands on rather than
+ * the one the arithmetic wanted. An output frame is the mean of the `samples`
+ * sub-frames `tmix` averages into it, which is the position a viewer reads: a move
+ * that is smooth reads the same distance between every consecutive pair.
+ */
+function outputOffsets(shot: Shot, sectionHeight: number): { x: number[]; y: number[] } {
+  const camera = cameraOver(shot, sectionHeight)
+  const filter = moveFilter(camera)
+  const crop = /crop=w=\d+:h=\d+:x=([^:]+):y=([^,]+)/.exec(filter)
+  assert.ok(crop, `no crop stage in ${filter}`)
+  // The expressions are plain arithmetic in `n`, which JS reads the way ffmpeg does.
+  const axis = (expression: string) => {
+    const at = new Function('n', `return ${expression}`) as (n: number) => number
+    return Array.from({ length: camera.frames }, (_, frame) => {
+      let total = 0
+      for (let sub = 0; sub < camera.samples; sub++) {
+        total += rounded(at(frame * camera.samples + sub))
+      }
+      return total / camera.samples
+    })
+  }
+  return { x: axis(crop[1] as string), y: axis(crop[2] as string) }
+}
+
+/**
+ * A crop offset as ffmpeg lands it — `lrint`, which is to nearest and halves to even
+ * rather than the round-half-up JS reaches for first.
+ */
+function rounded(value: number): number {
+  const nearest = Math.round(value)
+  return Math.abs(value % 1) === 0.5 && nearest % 2 !== 0 ? nearest - 1 : nearest
+}
+
+/** The distance between consecutive output frames, rounded off floating-point dust. */
+function stepsBetween(offsets: number[]): number[] {
+  return offsets.slice(1).map((offset, i) => Number((offset - (offsets[i] as number)).toFixed(6)))
+}
+
 describe('camera', () => {
   test('a diagonal travels equally on both axes', () => {
     // A tall section leaves far more vertical room than the punch leaves lateral.
@@ -55,21 +101,28 @@ describe('camera', () => {
     assert.ok(moved.x > 0, 'a diagonal has to move laterally at all')
   })
 
-  test("a diagonal's oversample buys pixels, not travel", () => {
+  test("a diagonal's oversample buys pixels, and the grain travel is cut at", () => {
     // The master is doubled on both axes, so the same move is sampled from twice
-    // the pixels. Travel room comes from the punch, and the punch has not changed.
+    // the pixels. Travel *room* comes from the punch, and the punch has not changed —
+    // both of these have 216 output px of it. What the oversample buys is the grain:
+    // travel is rounded down to a whole master pixel per output frame (#51), so the
+    // diagonal keeps its room to the half output pixel where the lateral keeps it to
+    // the whole one. Resolution is not free travel, but it is less of it thrown away.
     const shot = panShot('diagonal')
     const master = masterSize(shot, 2800)
     assert.equal(master.over, 2)
     assert.deepEqual([master.width, master.height], [2592, 6720])
-    assert.equal(travel(shot, 2800).x, travel(panShot('lateral'), 2800).x)
+    assert.equal(travel(shot, 2800).x, 178.5)
+    assert.equal(travel(panShot('lateral'), 2800).x, 119)
   })
 
   test('a single-axis pan still travels as far as its room allows', () => {
     const lateral = travel(panShot('lateral'), 2800)
     assert.equal(lateral.y, 0)
-    // Punch 1.2 leaves 1080 * 0.2 of lateral room, and #12's pace wants more.
-    assert.equal(lateral.x, 216)
+    // Punch 1.2 leaves 1080 * 0.2 of lateral room, and #12's pace wants more. What it
+    // travels is that room rounded down to a whole pixel per frame: 216 over 119 gaps
+    // is 1.8px a frame, so it runs at 1 and covers 119 (#51).
+    assert.equal(lateral.x, 119)
 
     const vertical = travel(panShot('vertical'), 2800)
     assert.equal(vertical.x, 0)
@@ -83,14 +136,14 @@ describe('camera', () => {
     const running = cameraOver(panShot('lateral', 2), 2800)
     assert.equal(running.samples, PAN_PX_PER_FRAME)
 
-    // A pan the punch leaves less room than that travels slower, and blurs less. Its
-    // 216px of room over 119 steps is 1.82px a frame, which rounds up to 2.
-    const clamped = cameraOver(panShot('lateral'), 2800)
-    assert.equal(clamped.samples, 2)
+    // A pan the punch leaves less room than that travels slower, and blurs less: 540px
+    // of room over 119 gaps runs at 4px a frame once #51's rounding has had it.
+    const clamped = cameraOver(panShot('lateral', 1.5), 2800)
+    assert.equal(clamped.samples, 4)
 
     // A diagonal is measured in the pixels a viewer sees, not the ones it was cut
-    // from: its master is doubled on both axes, so 432 master-px of travel over 119
-    // steps is 2.57 output-px a frame. The oversample buys resolution, never blur.
+    // from: its master is doubled on both axes, so 357 master-px of travel over 119
+    // gaps is 2.12 output-px a frame. The oversample buys resolution, never blur.
     assert.equal(cameraOver(panShot('diagonal'), 2800).samples, 3)
 
     // A pan with nowhere to go still renders: one sub-frame, which is no blur at all.
@@ -111,5 +164,55 @@ describe('camera', () => {
     // turning into a render that never finishes, and it is the only thing that does.
     assert.equal(cameraOver(driftShot(133), 2800).samples, MAX_BLUR_SAMPLES)
     assert.equal(MAX_BLUR_SAMPLES, 32)
+  })
+
+  test('a pan steps the same distance on every output frame', () => {
+    // #51: the staircase. `crop` sits on whole master pixels, so a travel that is not
+    // a whole number of pixels per output frame lands consecutive frames unequal
+    // distances apart — a move that never lands, breaking in the small.
+    for (const direction of DIRECTIONS) {
+      const offsets = outputOffsets(panShot(direction, 1.5), 2800)
+      for (const [axis, series] of Object.entries(offsets)) {
+        const steps = new Set(stepsBetween(series))
+        assert.equal(steps.size, 1, `${direction} pan steps ${[...steps]} on ${axis}`)
+      }
+    }
+  })
+
+  test("a pan at `check`'s own floor still runs at the pace `check` certified", () => {
+    // #51's rounding takes travel away, so the floor is where it has to be shown not
+    // to take the move with it: a beat punched to exactly the travel `panTravelNeeded`
+    // demands still runs at MIN_PAN_PX_PER_FRAME and still has blur to average. The
+    // margin is `check`'s own — it counts the travel a pan needs over its frames and
+    // the pan spends it over the gaps between them, which is one more pixel a frame
+    // than the rounding can cost.
+    const shot = { ...panShot('lateral'), durationMs: BEAT_MS }
+    const needed = panTravelNeeded(BEAT_MS)
+    // The punch that leaves exactly that much lateral room, which is what `check` asks
+    // for and no more.
+    const punched = { ...shot, punchFactor: 1 + needed / FRAME_WIDTH }
+    const camera = cameraOver(punched, 2800)
+    const steps = camera.frames - 1
+    assert.ok(
+      (camera.to.x - camera.from.x) / steps >= MIN_PAN_PX_PER_FRAME,
+      'the floor of a certified pan is still a pan',
+    )
+    assert.ok(camera.samples > 1, 'and still moves fast enough to be worth blurring')
+  })
+
+  test('a pan covers its whole travel across its output frames', () => {
+    // The ramp is drawn on sub-frames and read on output frames, so it has to be
+    // written over the output grid: ramping to the last *sub*-frame instead leaves
+    // the shot short of the camera it was given.
+    for (const direction of DIRECTIONS) {
+      const shot = panShot(direction, 1.5)
+      const camera = cameraOver(shot, 2800)
+      const offsets = outputOffsets(shot, 2800)
+      for (const axis of ['x', 'y'] as const) {
+        const series = offsets[axis]
+        const covered = Number(((series.at(-1) as number) - (series[0] as number)).toFixed(6))
+        assert.equal(covered, camera.to[axis] - camera.from[axis], `${direction} on ${axis}`)
+      }
+    }
   })
 })

@@ -80,24 +80,42 @@ export function pad(label: StreamLabel): string {
 }
 
 /**
- * `zoompan`, ramping 1.00 → `zoom` across `steps` frame gaps and held on centre.
+ * A ramp, as much of one as spelling it needs: where the count starts and how far it
+ * runs. Structural rather than `camera.ts`'s `Ramp`, and declared here for the same
+ * reason `zoomStage` takes numbers — this file knows how a ramp is *written* and has
+ * no opinion about which sub-frame an output frame sits on.
+ */
+type Ramp = { offset: number; span: number }
+
+/**
+ * A ramp as an expression: 0 on the move's first output frame and 1 on its last,
+ * counted in whatever frame variable the filter it lands in offers.
+ */
+export function rampFraction(ramp: Ramp, variable: string): string {
+  const from = ramp.offset === 0 ? variable : `(${variable}-${ramp.offset})`
+  return `${from}/${ramp.span}`
+}
+
+/**
+ * `zoompan`, ramping 1.00 → `zoom` across `ramp` and held on centre.
  *
  * Plain numbers rather than a `Camera`, because both callers reach it with numbers of
  * their own: a shot's zoom is counted in sub-frames at `samples` times the frame rate,
  * and the card's is counted at frame size times the precision it is drawn at. `on`, so
- * the ramp is counted in output frames and reaches its end on the last one.
+ * the ramp is counted in the frames this filter emits — which the ramp then maps back
+ * onto the output frames a viewer sees.
  */
 export function zoomStage(
   zoom: number,
-  steps: number,
+  ramp: Ramp,
   size: { width: number; height: number },
   fps: number,
 ): string {
   // Trimmed rather than padded: `toFixed` alone spells a 3% ramp `0.030000`.
-  const ramp = Number((zoom - 1).toFixed(6))
+  const depth = Number((zoom - 1).toFixed(6))
   return (
-    `zoompan=z='1+${ramp}*on/${steps}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':` +
-    `d=1:s=${size.width}x${size.height}:fps=${fps}`
+    `zoompan=z='1+${depth}*${rampFraction(ramp, 'on')}':x='iw/2-(iw/zoom/2)':` +
+    `y='ih/2-(ih/zoom/2)':d=1:s=${size.width}x${size.height}:fps=${fps}`
   )
 }
 
