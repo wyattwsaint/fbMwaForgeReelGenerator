@@ -21,6 +21,9 @@ import type { SiteConfig } from './site.ts'
 
 export type Master = { shot: Shot; path: string; size: MasterSize }
 
+/** Called as each master lands, with what it cost — `render` reports the pass (#18). */
+export type OnCapture = (shot: Shot, ms: number) => void
+
 /** #11: JPEG, not PNG — tens of milliseconds a shot rather than half a second. */
 const JPEG_QUALITY = 92
 
@@ -40,6 +43,7 @@ export async function captureMasters(
   config: SiteConfig,
   timeline: Timeline,
   outDir: string,
+  onCapture: OnCapture = () => {},
 ): Promise<Master[]> {
   const dir = mastersDir(outDir)
   await rm(dir, { recursive: true, force: true })
@@ -51,7 +55,7 @@ export async function captureMasters(
     // A page load is per URL *and* per device scale factor: two beats at different
     // punch factors need the same page rasterised at two resolutions.
     for (const [, group] of groupShots(config, timeline)) {
-      masters.push(...(await captureGroup(browser, config, dir, group)))
+      masters.push(...(await captureGroup(browser, config, dir, group, onCapture)))
     }
     return masters.sort((a, b) => a.shot.startMs - b.shot.startMs)
   } finally {
@@ -86,12 +90,17 @@ async function captureGroup(
   config: SiteConfig,
   dir: string,
   group: Group,
+  onCapture: OnCapture,
 ): Promise<Master[]> {
   const page = await browser.newPage({
     viewport: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
     deviceScaleFactor: group.scale,
   })
   try {
+    // The clock starts before the load, so a group's page load and settle land on the
+    // first master taken off it rather than going unreported. Which is where they
+    // belong: a slow page is what "which beat is slow" is usually asking about.
+    let since = Date.now()
     await page.goto(group.url, { waitUntil: 'load', timeout: 60_000 })
     await settle(page, config.hook?.videoTime)
     const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
@@ -115,6 +124,8 @@ async function captureGroup(
       const path = join(dir, `${shotName(shot)}.jpg`)
       await page.screenshot({ path, type: 'jpeg', quality: JPEG_QUALITY, fullPage: true, clip })
       masters.push({ shot, path, size: masterSize(shot, clip.height) })
+      onCapture(shot, Date.now() - since)
+      since = Date.now()
     }
     return masters
   } finally {
