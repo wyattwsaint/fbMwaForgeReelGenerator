@@ -118,8 +118,12 @@ punches those to the minimum that gives them travel when config names no factor.
 factor the config does name is the human's, and `check` says whether it travels.
 
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
-belongs to the page, not to a section, so it appears only in the hook. Capturing
-a master without scrolling the page excludes it by construction.
+belongs to the page, not to a section. Capturing a master without scrolling the page
+keeps it out of every beat by construction: a clip carries chrome only where it
+reaches the top of the document, and a beat's clip never does. The hook's can — it is
+framed on the hero, so a hero that starts at the very top of the page, under an
+overlaying nav, brings the furniture with it, and a hero that starts below the nav
+leaves it out. Chrome is therefore in the hook or in nothing at all.
 
 ## Retention
 

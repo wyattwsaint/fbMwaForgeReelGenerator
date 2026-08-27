@@ -9,12 +9,14 @@ import { assertFadesOut, meanVolume, probe, workspace } from './helpers.ts'
 import type { Workspace } from './helpers.ts'
 
 /**
- * The bed, asserted on the mp4 rather than on the arguments that laid it down.
+ * The mux — the bed and the encode — asserted on the mp4 rather than on the arguments
+ * that laid it down.
  *
- * A real render is a browser and four masters; the bed is none of that, so it is
- * exercised here against two flat-colour shots and a track built to be readable by
- * ear: silence for the first two seconds, then a steady tone. Where the reel is loud
- * says which second of the track it started on, which is the whole of `music.offset`.
+ * A real render is a browser and four masters; neither the bed nor the video budget
+ * is any of that, so both are exercised here against two-second shots this file
+ * builds itself. The track is built to be readable by ear: silence for the first two
+ * seconds, then a steady tone. Where the reel is loud says which second of the track
+ * it started on, which is the whole of `music.offset`.
  */
 const TONE_STARTS_AT = 2
 const SHOT_MS = 2000
@@ -41,19 +43,32 @@ before(async () => {
   ])
   shots = []
   for (const [index, colour] of ['black', 'white'].entries()) {
-    const path = join(ws.root, `shot-${index}.mp4`)
-    await ffmpeg([
-      '-f', 'lavfi',
-      '-i', `color=c=${colour}:s=1080x1920:r=${FPS}`,
-      '-frames:v', String((SHOT_MS * FPS) / 1000),
-      '-an',
-      '-c:v', 'libx264',
-      '-pix_fmt', 'yuv420p',
-      path,
-    ])
-    shots.push(path)
+    shots.push(await shotFile(`shot-${index}`, colour))
   }
 })
+
+/**
+ * One shot of flat colour, `SHOT_MS` long — the stand-in for a master nobody took.
+ *
+ * `filter` is how a shot is given something to encode: flat colour compresses to
+ * nothing, which is exactly what the bed tests want and exactly what the encode test
+ * cannot use.
+ */
+async function shotFile(name: string, colour: string, filter?: string): Promise<string> {
+  const path = join(ws.root, `${name}.mp4`)
+  await ffmpeg([
+    '-f', 'lavfi',
+    '-i', `color=c=${colour}:s=1080x1920:r=${FPS}`,
+    ...(filter ? ['-vf', filter] : []),
+    '-frames:v', String((SHOT_MS * FPS) / 1000),
+    '-an',
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    ...(filter ? ['-preset', 'veryfast', '-crf', '12'] : []),
+    path,
+  ])
+  return path
+}
 
 after(() => ws.dispose())
 
@@ -122,6 +137,26 @@ describe('the signature bed', () => {
     const output = await assembled(31_500, 'ranout')
     const { duration } = await probe(output, 'format=duration')
     assert.equal(Number(duration).toFixed(1), (REEL_MS / 1000).toFixed(1))
+  })
+})
+
+describe('the encode', () => {
+  test('holds the video to #1’s ~3 Mbps, on pixels that would happily take more', async () => {
+    // Two seconds of full-frame noise: nothing in it compresses, so the encoder will
+    // spend whatever it is allowed. What comes back out is what the budget really is
+    // — the flat-coloured fixture reel never gets near it and so cannot say.
+    const noisy: string[] = []
+    for (const seed of [1, 2]) {
+      noisy.push(await shotFile(`noise-${seed}`, 'gray', `noise=alls=90:allf=t+u:all_seed=${seed}`))
+    }
+    const output = join(ws.root, 'noisy.mp4')
+    await assemble(noisy, timeline(0), output, track)
+
+    const { bit_rate } = await probe(output, 'stream=bit_rate', 'v:0')
+    const mbps = Number(bit_rate) / 1_000_000
+    // A rate-capped encode overshoots its target by the buffer it is allowed, so the
+    // claim is the one #1 makes: about 3, not 1.5 and not 6.
+    assert.ok(mbps > 2.6 && mbps < 3.6, `the video is not encoded at ~3 Mbps (${mbps.toFixed(2)})`)
   })
 })
 

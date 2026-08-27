@@ -31,7 +31,7 @@ import type { Run, Workspace } from './helpers.ts'
 const VIDEO_AT_PIN = '#017f01'
 const LAZY_IMAGE = '#00e5a0'
 const PARKED_ANIMATION = '#ff2ea6'
-/** The sticky nav. It belongs to the page, so it may never bake into a beat. */
+/** The sticky nav. It belongs to the page, so it may never bake into a shot. */
 const PAGE_CHROME = '#ffb300'
 /** House ink. The fixture's own body copy is this colour, but only ~150px of it. */
 const INK = '#eef1f6'
@@ -128,13 +128,22 @@ describe('reel render', () => {
 
   test('writes an mp4 in the container #1 requires', async () => {
     assert.ok(existsSync(reelPath), 'no mp4 at out/fixture-3beat.mp4')
-    const video = await probe(reelPath, 'stream=codec_name,width,height,r_frame_rate,avg_frame_rate', 'v:0')
+    const video = await probe(reelPath, 'stream=codec_name,width,height,r_frame_rate,avg_frame_rate,bit_rate', 'v:0')
     assert.equal(video.codec_name, 'h264')
     assert.equal(video.width, '1080')
     assert.equal(video.height, '1920')
     // Constant frame rate: the nominal and the average agree, at 30.
     assert.equal(video.r_frame_rate, '30/1')
     assert.equal(video.avg_frame_rate, '30/1')
+
+    // #1's ~3 Mbps, on the reel Wyatt would play. This is the ceiling half only, and
+    // the fixture never approaches it — flat colour blocks under slow moves compress
+    // to about 1.3 — so an encode with no rate control at all would pass here too.
+    // That the budget is real is asserted in `compose.test.ts`, against noise that
+    // would take every bit of it and is held to ~3 anyway.
+    const mbps = Number(video.bit_rate) / 1_000_000
+    assert.ok(mbps > 0.5, `the video is barely encoded at all (${mbps.toFixed(2)} Mbps)`)
+    assert.ok(mbps < 3.3, `the video is over #1's ~3 Mbps budget (${mbps.toFixed(2)})`)
 
     const audio = await probe(reelPath, 'stream=codec_name,profile,sample_rate,channels', 'a:0')
     assert.match(audio.codec_name ?? '', /aac/)
@@ -189,12 +198,19 @@ describe('reel render', () => {
     assert.ok(pixelsNear(first, PARKED_ANIMATION) > 10_000, 'the infinite animation is not parked')
   })
 
-  test('page chrome appears in the hook only, never baked into a beat', async () => {
+  test('page chrome is baked into no beat, and into this fixture’s hook either', async () => {
     // A master is a full-page shot clipped to the section's rect. Scrolling to a
-    // section instead would carry the sticky nav into the top of every beat.
-    for (const index of [120, 230, 340]) {
-      const beat = await frame(reelPath, index)
-      assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
+    // section instead would carry the sticky nav into the top of every beat, and no
+    // clip a beat takes reaches the top of the document.
+    //
+    // The hook's can, which is #34's correction to #23's "chrome appears in the hook
+    // only": the hook is framed on the hero, so whether chrome is in it is the
+    // fixture's fact rather than the tool's. This fixture's hero starts below its
+    // sticky nav, so this reel carries chrome nowhere — which is what the hook's
+    // frames are here to say, rather than being the half that was never asserted.
+    for (const index of [0, 45, 89, 120, 230, 340]) {
+      const shot = await frame(reelPath, index)
+      assert.equal(pixelsNear(shot, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
     }
   })
 
