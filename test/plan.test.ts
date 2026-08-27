@@ -4,16 +4,19 @@ import {
   BEAT_MS,
   COPY_BUDGETS,
   copyProblem,
+  darkFrame,
   DEFAULT_LATERAL_PUNCH_FACTOR,
   DEFAULT_TRACK,
   DIRECTIONS,
+  envelopeOf,
   FPS,
+  frameCount,
   panAxes,
   panTravelAvailable,
   panTravelNeeded,
   planReel,
 } from '../src/plan.ts'
-import type { Timeline } from '../src/plan.ts'
+import type { Shot, Timeline } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { snapshot } from './helpers.ts'
 
@@ -186,13 +189,19 @@ describe('planReel', () => {
           role: 'hook',
           startMs: 0,
           fadeInMs: 0,
-          holdMs: 2500,
+          // 3.0s less the 0.5s fade less one frame: the ramp reaches zero at the
+          // frame it ends on, and that frame has to be one the shot has (#36).
+          holdMs: 2467,
           fadeOutMs: 500,
         },
       )
       // Frame 0 carries the whole line — the thumbnail is not an animation.
       assert.equal(hook.startMs, 0)
       assert.equal(hook.fadeInMs, 0)
+      // And it is dark *on* the hook's last frame, not on the next shot's first: 7%
+      // of the wash over a hard cut is the dropped-frame read #24 refuses (#36).
+      const shot = timeline.shots[0] as Shot
+      assert.equal(darkFrame(envelopeOf(hook, shot)), frameCount(shot.durationMs) - 1)
     })
 
     test('a label fades in 0.2s after its cut and finishes 0.2s before the next', () => {

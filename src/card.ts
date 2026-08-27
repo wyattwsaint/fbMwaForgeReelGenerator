@@ -15,7 +15,9 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE, ffmpegColor } from './house.ts'
+import { ffmpegColor, pad, stream } from './filtergraph.ts'
+import type { StreamLabel } from './filtergraph.ts'
+import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE } from './house.ts'
 import { overflowProblems } from './measure.ts'
 import { escapeValue } from './overlay.ts'
 import { FPS } from './plan.ts'
@@ -151,23 +153,26 @@ export function wordmarkInput(mark: Wordmark): string[] {
 export function cardChains(
   credit: string,
   frames: number,
-  ground: string,
-  mark: string,
-  output: string,
+  ground: StreamLabel,
+  mark: StreamLabel,
+  output: StreamLabel,
 ): string[] {
   const layout = cardLayout()
+  const looped = stream('mark')
+  const marked = stream('marked')
+  const drawn = stream('drawn')
   return [
     // The mark is one frame and the card is seventy-five. Looped rather than re-read,
     // and given a frame rate as well as timestamps — `overlay` counts frames.
-    `[${mark}]format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}[mark]`,
-    `[${ground}][mark]overlay=x=${layout.mark.x}:y=${layout.mark.y}:shortest=1[marked]`,
-    `[marked]${[
+    `${pad(mark)}format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}${pad(looped)}`,
+    `${pad(ground)}${pad(looped)}overlay=x=${layout.mark.x}:y=${layout.mark.y}:shortest=1${pad(marked)}`,
+    `${pad(marked)}${[
       drawLine(HEADLINE, 'headline', layout.headline.y, ffmpegColor(INK)),
       drawLine(credit, 'credit', layout.credit.y, `${ffmpegColor(INK)}@${CREDIT_ALPHA}`),
       `drawbox=x=${layout.rule.x}:y=${layout.rule.y}:w=${layout.rule.width}:` +
         `h=${layout.rule.height}:color=${ffmpegColor(ACCENT)}:t=fill`,
-    ].join(',')}[drawn]`,
-    `[drawn]${driftFilter(frames)}[${output}]`,
+    ].join(',')}${pad(drawn)}`,
+    `${pad(drawn)}${driftFilter(frames)}${pad(output)}`,
   ]
 }
 

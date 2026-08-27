@@ -11,26 +11,14 @@
  * engine into a pipeline that is otherwise raw ffmpeg.
  */
 
-import { FONT_FILE, GROUND, INK, SCRIM, TEXT_SLOT, TYPE, channels, ffmpegColor } from './house.ts'
-import { FPS, frameCount } from './plan.ts'
-import type { Shot, TextCue } from './plan.ts'
+import { channels, ffmpegColor, pad, stream } from './filtergraph.ts'
+import type { StreamLabel } from './filtergraph.ts'
+import { FONT_FILE, GROUND, INK, SCRIM, TEXT_SLOT, TYPE } from './house.ts'
+import { FPS, envelopeFrames, envelopeOf } from './plan.ts'
+import type { Envelope, Shot, TextCue } from './plan.ts'
 
 /** The roles drawn over site pixels. The card's own text belongs to the card (#9 §5). */
 const OVERLAY_ROLES = new Set(['hook', 'label'])
-
-/**
- * A cue's life, in this shot's own frames.
- *
- * Frames, not seconds: the text's alpha is an expression and the scrim's is a `fade`,
- * and the two only agree to the frame if they are told the same integers. A scrim
- * that lets go one frame after its text is a wash with nothing under it.
- */
-export type Envelope = {
-  startFrame: number
-  fadeInFrames: number
-  holdFrames: number
-  fadeOutFrames: number
-}
 
 /**
  * The ones drawn over site pixels, from cues already narrowed to a shot. The card's
@@ -42,26 +30,6 @@ export function drawnOverlays(cues: TextCue[]): TextCue[] {
 }
 
 /**
- * A cue's envelope in shot time. Cue times are reel times — a label's envelope starts
- * after its own cut — and a shot is rendered on its own, so the shot's start comes off
- * before anything is drawn.
- */
-export function envelopeOf(cue: TextCue, shot: Shot): Envelope {
-  return {
-    startFrame: frameCount(cue.startMs - shot.startMs),
-    fadeInFrames: frameCount(cue.fadeInMs),
-    holdFrames: frameCount(cue.holdMs),
-    fadeOutFrames: frameCount(cue.fadeOutMs),
-  }
-}
-
-/** The frame the cue is finally dark on — one past its last lit frame. */
-export function darkFrame(envelope: Envelope): number {
-  const { startFrame, fadeInFrames, holdFrames, fadeOutFrames } = envelope
-  return startFrame + fadeInFrames + holdFrames + fadeOutFrames
-}
-
-/**
  * The cue's alpha at frame `n`, as an ffmpeg expression.
  *
  * The hook's fade-in is zero frames long, which is not a degenerate case but the
@@ -70,15 +38,12 @@ export function darkFrame(envelope: Envelope): number {
  * what keeps frame 0 bit-identical run to run.
  */
 export function alphaExpr(envelope: Envelope): string {
-  const { startFrame: f0, fadeInFrames, holdFrames, fadeOutFrames } = envelope
-  const f1 = f0 + fadeInFrames
-  const f2 = f1 + holdFrames
-  const f3 = f2 + fadeOutFrames
+  const { start, lit, held, dark } = envelopeFrames(envelope)
 
-  let expr = fadeOutFrames > 0 ? `if(lt(n,${f3}),(${f3}-n)/${fadeOutFrames},0)` : '0'
-  expr = `if(lt(n,${f2}),1,${expr})`
-  if (fadeInFrames > 0) expr = `if(lt(n,${f1}),(n-${f0})/${fadeInFrames},${expr})`
-  if (f0 > 0) expr = `if(lt(n,${f0}),0,${expr})`
+  let expr = dark > held ? `if(lt(n,${dark}),(${dark}-n)/${dark - held},0)` : '0'
+  expr = `if(lt(n,${held}),1,${expr})`
+  if (lit > start) expr = `if(lt(n,${lit}),(n-${start})/${lit - start},${expr})`
+  if (start > 0) expr = `if(lt(n,${start}),0,${expr})`
   return expr
 }
 
@@ -109,11 +74,10 @@ export function escapeValue(value: string): string {
  * change between frames. The envelope is `fade` on the alpha channel, whose ramp is
  * the same `(n - start) / length` the text's expression uses.
  */
-function scrimChain(envelope: Envelope, label: string): string {
+function scrimChain(envelope: Envelope, label: StreamLabel): string {
   const { r, g, b } = channels(GROUND)
   const alpha = `255*${SCRIM.peak}*(1-pow(Y/H,${SCRIM.falloff}))`
-  const { startFrame, fadeInFrames, fadeOutFrames } = envelope
-  const lit = startFrame + fadeInFrames + envelope.holdFrames
+  const { start, lit, held, dark } = envelopeFrames(envelope)
 
   const stages = [
     `color=c=${ffmpegColor(GROUND)}:s=${SCRIM.width}x${SCRIM.height}:r=1:d=1`,
@@ -127,15 +91,13 @@ function scrimChain(envelope: Envelope, label: string): string {
   ]
   // A cue that starts lit needs no ramp; one that starts dark needs at least the one
   // frame of ramp that tells `fade` where the dark part ends.
-  if (fadeInFrames > 0 || startFrame > 0) {
-    stages.push(
-      `fade=t=in:alpha=1:start_frame=${startFrame}:nb_frames=${Math.max(1, fadeInFrames)}`,
-    )
+  if (lit > start || start > 0) {
+    stages.push(`fade=t=in:alpha=1:start_frame=${start}:nb_frames=${Math.max(1, lit - start)}`)
   }
-  if (fadeOutFrames > 0) {
-    stages.push(`fade=t=out:alpha=1:start_frame=${lit}:nb_frames=${fadeOutFrames}`)
+  if (dark > held) {
+    stages.push(`fade=t=out:alpha=1:start_frame=${held}:nb_frames=${dark - held}`)
   }
-  return `${stages.join(',')}[${label}]`
+  return `${stages.join(',')}${pad(label)}`
 }
 
 /**
@@ -145,7 +107,12 @@ function scrimChain(envelope: Envelope, label: string): string {
  * and not freetype's, and so a config's newline never has to survive two levels of
  * filtergraph escaping on the way to the frame.
  */
-function textChain(cue: TextCue, envelope: Envelope, input: string, output: string): string {
+function textChain(
+  cue: TextCue,
+  envelope: Envelope,
+  input: StreamLabel,
+  output: StreamLabel,
+): string {
   const type = cue.role === 'hook' ? TYPE.hook : TYPE.label
   const alpha = alphaExpr(envelope)
   const draws = cue.content.split('\n').map((line, index) =>
@@ -162,7 +129,7 @@ function textChain(cue: TextCue, envelope: Envelope, input: string, output: stri
       `:y=${TEXT_SLOT.top + index * type.lineHeight}`,
     ].join(''),
   )
-  return `[${input}]${draws.join(',')}[${output}]`
+  return `${pad(input)}${draws.join(',')}${pad(output)}`
 }
 
 /**
@@ -175,18 +142,18 @@ function textChain(cue: TextCue, envelope: Envelope, input: string, output: stri
 export function overlayChains(
   cues: TextCue[],
   shot: Shot,
-  input: string,
-  output: string,
+  input: StreamLabel,
+  output: StreamLabel,
 ): string[] {
   const chains: string[] = []
   let source = input
   cues.forEach((cue, index) => {
     const envelope = envelopeOf(cue, shot)
-    const scrim = `scrim${index}`
-    const washed = `washed${index}`
-    const drawn = index === cues.length - 1 ? output : `drawn${index}`
+    const scrim = stream('scrim', index)
+    const washed = stream('washed', index)
+    const drawn = index === cues.length - 1 ? output : stream('drawn', index)
     chains.push(scrimChain(envelope, scrim))
-    chains.push(`[${source}][${scrim}]overlay=x=0:y=0:shortest=1[${washed}]`)
+    chains.push(`${pad(source)}${pad(scrim)}overlay=x=0:y=0:shortest=1${pad(washed)}`)
     chains.push(textChain(cue, envelope, washed, drawn))
     source = drawn
   })

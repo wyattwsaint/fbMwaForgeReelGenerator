@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { FRAME_WIDTH } from '../src/frame.ts'
 
 const REPO = fileURLToPath(new URL('../', import.meta.url))
 const BIN = join(REPO, 'bin', 'reel.mjs')
@@ -142,7 +143,7 @@ export function pixelsNear(frameBytes: Buffer, hex: string, tolerance = 14): num
 
 /** Mean channel value over a band of rows, 0..255 — how dark a scrim has made it. */
 export function meanLuma(frameBytes: Buffer, top: number, bottom: number): number {
-  const stride = 1080 * 3
+  const stride = FRAME_WIDTH * 3
   let total = 0
   for (let i = top * stride; i < bottom * stride; i++) total += frameBytes[i] as number
   return total / ((bottom - top) * stride)
@@ -158,7 +159,7 @@ export function meanLuma(frameBytes: Buffer, top: number, bottom: number): numbe
  * "softer" is asked as a number rather than looked at.
  */
 export function acutance(frameBytes: Buffer): number {
-  const stride = 1080 * 3
+  const stride = FRAME_WIDTH * 3
   const rows = frameBytes.length / stride
   let total = 0
   for (let row = 0; row < rows; row++) {

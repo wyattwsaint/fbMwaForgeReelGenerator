@@ -8,6 +8,7 @@ import {
   cardLayout,
   creditProblems,
 } from '../src/card.ts'
+import { stream } from '../src/filtergraph.ts'
 import { ACCENT, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
 import { lineWidth } from '../src/measure.ts'
 import { escapeValue } from '../src/overlay.ts'
@@ -18,7 +19,7 @@ const CARD_CENTRE_Y = 760
 const FRAMES = frameCount(CTA_MS)
 
 function graph(credit = 'fixture.test'): string {
-  return cardChains(credit, FRAMES, 'ground', 'mark', 'out').join(';')
+  return cardChains(credit, FRAMES, stream('ground'), stream('mark'), stream('out')).join(';')
 }
 
 describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', () => {
