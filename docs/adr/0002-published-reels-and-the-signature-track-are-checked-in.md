@@ -3,6 +3,8 @@
 ## Status
 
 Accepted (2026-08-26, resolves #14). Reverses the `audio/` half of #8.
+Amended 2026-08-27 (resolves #39): the repo is public and the decision stands anyway —
+see [Amendment](#amendment-2026-08-27-the-repo-is-public).
 
 ## Context
 
@@ -11,9 +13,11 @@ underneath it is not, the brand kit is sampled at render time, and a Suno track 
 be regenerated from its prompt (#8). So a rendered `.mp4` is the only record of what a
 reel actually was, and the signature track is unrecoverable rather than re-downloadable.
 #8 had recorded `audio/` as gitignored plus "a real backup" — written while music was
-still imagined as per-client library tracks under a third party's licence. #15 then
+still imagined as per-client library tracks under a third party's licence. ~~#15 then
 found Suno *assigns* rights outright and perpetually, leaving one file, a few MB, owned
-by MWA Forge, with no redistribution concern in a private repo.
+by MWA Forge, with no redistribution concern in a private repo.~~ Both halves of that
+sentence are false; see the [Amendment](#amendment-2026-08-27-the-repo-is-public).
+What is true is that one file, a few MB, is unrecoverable if it is not kept here.
 
 ## Decision
 
@@ -50,3 +54,55 @@ edits.
 - Because the renderer cannot verify a claimed licence tier, no licence metadata lives
   in site config and no re-render refusal is implemented. Provenance is a document, not
   a check.
+
+## Amendment (2026-08-27): the repo is public
+
+This ADR justified tracking `audio/` and `reels/` partly on a premise that was wrong
+when written and is doubly wrong now. Two corrections, and then the decision, unchanged.
+
+**Correction 1 — the rights claim.** #15 did not find that Suno assigns rights outright
+and perpetually; it found that Suno assigns Output ownership to **Pro and Premier**
+subscribers only. `audio/mwaforge-signature.mp3` was generated on the **free tier**, so
+no commercial grant attaches to it. `audio/PROVENANCE.md` has always recorded this
+correctly and is the authority; this ADR's summary of #15 was not. That exposure was
+decided in #8 and re-affirmed in #17 with #15's findings in hand — it is accepted, not
+overlooked, and the exit (one month of Pro, regenerate, one-line config change) stays
+cheap and open.
+
+**Correction 2 — the repo is public.** As of 2026-08-27 it is, so "no redistribution
+concern in a private repo" no longer holds even on its own terms. Two things are now
+published:
+
+- `audio/mwaforge-signature.mp3` — the one thing that makes a reel recognisably MWA
+  Forge's, now downloadable by anyone.
+- `reels/` — client work, promoted by `reel keep` ([ADR-0004](0004-promotion-is-a-command-the-judgment-is-not.md)).
+
+## Amended decision
+
+**Both stay tracked.** The alternatives — a release asset, a private submodule, gating
+`reel keep` on recorded client consent — each buy less than they cost:
+
+- The track is already published and the history cannot be trimmed cheaply (this ADR's
+  own first consequence). Untracking it now hides a file that is already out while
+  taking the repo's only backup of an unrecoverable binary with it, which is exactly
+  the failure this ADR exists to prevent.
+- A reel is marketing MWA Forge intends to boost as paid media. A promoted reel is
+  meant to be seen; being fetchable from the repo is a weaker exposure than the
+  Facebook post it was cut for. If a client ever needs a reel *not* published, that is
+  a reason to revisit — and it is a reason to revisit **before** the first such reel is
+  kept, not after.
+
+The distribution is therefore a **choice**, made here with eyes open, not an oversight
+to be discovered and quietly patched later. Same standing as the licence position above:
+if it changes, change it deliberately.
+
+## Amended consequences
+
+- Anyone can download the signature track. Nothing prevents its reuse; MWA Forge holds
+  no exclusivity on any Suno tier in any case ([`audio/PROVENANCE.md`](../../audio/PROVENANCE.md)),
+  so keeping the file private would not have bought exclusivity either.
+- A kept reel is public the moment it is committed. `reel keep` is a publishing step in
+  two senses now — treat the human judgment it records ([ADR-0004](0004-promotion-is-a-command-the-judgment-is-not.md))
+  as covering both.
+- The first client who needs a reel unpublished reopens this ADR, and reopens it while
+  `reels/` is still small enough to move.

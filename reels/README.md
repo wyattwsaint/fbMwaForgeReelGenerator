@@ -9,5 +9,9 @@ was, and the commit that adds it is its manifest: `git log --follow` on a kept r
 recovers the config that made it. Each reel is committed **on its own** for exactly
 that reason; nothing else belongs in one of these commits.
 
+This repo is public, so a reel is published the moment it is committed here. That is
+a deliberate choice (ADR-0002, amended #39), not an oversight — but it is part of what
+`reel keep` means, so judge a cut with it in mind.
+
 Scratch cuts and review stills live in `out/`, which is gitignored and wiped by the
 next render.
