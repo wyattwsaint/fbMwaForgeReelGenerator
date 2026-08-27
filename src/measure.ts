@@ -16,7 +16,7 @@
  */
 
 import { readFileSync } from 'node:fs'
-import { FONT_FILE, TEXT_SLOT, TYPE } from './house.ts'
+import { FONT_FILE, SAFE_ZONE, TYPE } from './house.ts'
 
 /** The roles with a size in `TYPE` — the ones drawn into the slot. */
 export type TypeRole = keyof typeof TYPE
@@ -144,7 +144,15 @@ export function lineWidth(line: string, fontSize: number): number {
 }
 
 /**
- * Every line of `content` that draws wider than the slot, named with what it costs.
+ * The width every line of copy is measured against.
+ *
+ * One number for the slot and the card both, because both are the boosted safe box's
+ * own width (#9 §3) — there is no second budget to name, so the report names the box.
+ */
+const COPY_WIDTH = SAFE_ZONE.right - SAFE_ZONE.left
+
+/**
+ * Every line of `content` that draws wider than its box, named with what it costs.
  *
  * A list, not a first failure, for the reason `check` reports everything at once: a
  * hook whose two lines are both long is one rewrite, and finding that out one line
@@ -156,9 +164,9 @@ export function overflowProblems(field: string, content: string, role: TypeRole)
   const problems: string[] = []
   lines.forEach((line, index) => {
     const width = lineWidth(line, size)
-    if (width <= TEXT_SLOT.width) return
+    if (width <= COPY_WIDTH) return
     const where = lines.length > 1 ? `${field} line ${index + 1}` : field
-    problems.push(`${where} draws ${width}px wide at ${size}px; the text slot is ${TEXT_SLOT.width}px`)
+    problems.push(`${where} draws ${width}px wide at ${size}px; the safe box is ${COPY_WIDTH}px`)
   })
   return problems
 }

@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { cardLayout } from '../src/card.ts'
+import { SAFE_ZONE, TYPE } from '../src/house.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
 import { frame, meanDiff, meanLuma, pixelsNear, probe, reel, workspace } from './helpers.ts'
@@ -24,9 +26,16 @@ const INK = '#eef1f6'
 /** The scrim's band — the top of the frame down to the text slot's foot. */
 const SCRIM_BAND = [0, 620] as const
 
+/** The house accent — on a rendered reel it appears on the CTA card's rule and nowhere else. */
+const ACCENT = '#8b5cf6'
+
 /** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
 const CUTS = [90, 195, 300]
 const LAST_FRAME = 470
+/** The card's crossfade starts here — 0.3s before the last beat would have ended. */
+const CARD_IN = 396
+/** The first frame the crossfade is over and the card is alone on screen. */
+const CARD_ALONE = 405
 
 /** A 3-beat config: 3.0 + 3 x 3.5 + 2.5 - 0.3 crossfade. */
 function fixtureSite(url: string): string {
@@ -206,6 +215,72 @@ describe('reel render', () => {
     // And a beat with no label is never washed at all.
     const unlabelled = meanLuma(await frame(reelPath, 150), ...SCRIM_BAND)
     assert.ok(unlabelled > without * 0.7, `an unlabelled beat is scrimmed (${unlabelled})`)
+  })
+
+  test('the card is MWA Forge’s: house pixels, the mark, and no site in it at all', async () => {
+    const card = await frame(reelPath, 440)
+    for (const [name, colour] of [
+      ['the hero video', VIDEO_AT_PIN],
+      ['a lazy image', LAZY_IMAGE],
+      ['the parked animation', PARKED_ANIMATION],
+      ['page chrome', PAGE_CHROME],
+    ] as const) {
+      assert.equal(pixelsNear(card, colour), 0, `${name} reaches the card`)
+    }
+    // The mark and the headline, in house ink, and the accent rule under them.
+    assert.ok(pixelsNear(card, INK) > 10_000, 'the card carries no mark or headline')
+    // The rule is 140x6, and its top and bottom rows are blended into the ground by
+    // the scale it is drifting under — so most of it, not all of it, is the accent.
+    assert.ok(pixelsNear(card, ACCENT) > 300, 'the card carries no accent rule')
+  })
+
+  test('the card’s content sits in the boosted safe box, centred on y 760', async () => {
+    const card = await frame(reelPath, CARD_ALONE)
+    const layout = cardLayout()
+    const empty = meanLuma(card, 1300, 1500) // Ground, below everything drawn.
+    const mark = meanLuma(card, layout.mark.y + 10, layout.mark.y + layout.mark.height - 10)
+    const headline = meanLuma(card, layout.headline.y + 10, layout.headline.y + 90)
+    const credit = meanLuma(card, layout.credit.y, layout.credit.y + TYPE.credit.lineHeight)
+
+    assert.ok(mark > empty * 2, `nothing is drawn where the mark should be (${mark})`)
+    assert.ok(headline > empty * 2, `nothing is drawn where the headline should be (${headline})`)
+    // The credit is on the card and is quieter than the headline — it is attribution,
+    // not the thing the card is asking for.
+    assert.ok(credit > empty, `the credit line never appears (${credit} vs ${empty})`)
+    assert.ok(credit < headline, `the credit is not muted against the headline (${credit})`)
+    // Nothing is drawn outside the box Meta's own UI leaves alone.
+    assert.ok(meanLuma(card, 0, SAFE_ZONE.top) < empty * 1.05, 'the card draws above the safe box')
+    assert.ok(
+      meanLuma(card, SAFE_ZONE.bottom, 1920) < empty * 1.05,
+      'the card draws below the safe box',
+    )
+  })
+
+  test('the card arrives on the reel’s only crossfade', async () => {
+    // Every other transition was asserted hard above. This one is not: the last beat
+    // and the card share these frames, so the change is spread across all of them
+    // instead of landing on one.
+    const within = meanDiff(await frame(reelPath, CARD_IN - 2), await frame(reelPath, CARD_IN - 1))
+    const across = meanDiff(await frame(reelPath, CARD_IN - 1), await frame(reelPath, CARD_IN))
+    assert.ok(across < within * 10, `the card cuts in rather than crossfading (${across})`)
+    // And it is genuinely arriving: the card's ink is not there at the start of the
+    // overlap and is there at the end of it.
+    const early = pixelsNear(await frame(reelPath, CARD_IN + 1), INK)
+    const done = pixelsNear(await frame(reelPath, CARD_ALONE), INK)
+    assert.ok(done > 10_000, 'the card never finishes arriving')
+    assert.ok(early < done / 2, `the card is already drawn when its crossfade starts (${early})`)
+  })
+
+  test('the card drifts to its last frame — the reel never rests', async () => {
+    // #12: a static final 2.5s reads as the video having ended early. The card scales
+    // 1.00 -> 1.03, so its pixels are still moving on the frame the reel stops on.
+    // Two frames apart rather than one: the card's fastest pixel travels under half a
+    // pixel a frame, so a single frame gap is small enough that the encoder's own
+    // rounding is a fair share of it and the reading jitters.
+    const midway = meanDiff(await frame(reelPath, 438), await frame(reelPath, 440))
+    const landing = meanDiff(await frame(reelPath, LAST_FRAME - 2), await frame(reelPath, LAST_FRAME))
+    assert.ok(landing > 0, 'the card is a still')
+    assert.ok(landing > midway / 2, `the card lands: ${midway.toFixed(3)} -> ${landing.toFixed(3)}`)
   })
 
   test('a second render re-takes its masters and reproduces frame 0 bit-identically', async () => {

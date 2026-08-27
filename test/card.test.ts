@@ -1,0 +1,162 @@
+import assert from 'node:assert/strict'
+import { describe, test } from 'node:test'
+import {
+  CARD_ZOOM,
+  HEADLINE,
+  MARK_WIDTH,
+  cardChains,
+  cardLayout,
+  creditProblems,
+} from '../src/card.ts'
+import { ACCENT, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
+import { lineWidth } from '../src/measure.ts'
+import { escapeValue } from '../src/overlay.ts'
+import { CTA_MS, frameCount, planReel } from '../src/plan.ts'
+import { wordmarkMask, wordmarkRgba } from '../src/wordmark.ts'
+
+const CARD_CENTRE_Y = 760
+const FRAMES = frameCount(CTA_MS)
+
+function graph(credit = 'fixture.test'): string {
+  return cardChains(credit, FRAMES, 'ground', 'mark', 'out').join(';')
+}
+
+describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', () => {
+  test('the mask keeps the SVG\u2019s aspect and is empty at its corners', () => {
+    const mask = wordmarkMask(MARK_WIDTH)
+    assert.equal(mask.width, MARK_WIDTH)
+    // 502 x 200 in the file, so the mask is that ratio and nothing else decides it.
+    assert.equal(mask.height, Math.round((MARK_WIDTH * 200) / 502))
+    const at = (x: number, y: number) => mask.alpha[y * mask.width + x] as number
+    assert.equal(at(0, 0), 0)
+    assert.equal(at(mask.width - 1, mask.height - 1), 0)
+  })
+
+  test('a stem is solid and the A’s counter is a hole', () => {
+    const mask = wordmarkMask(MARK_WIDTH)
+    const scale = MARK_WIDTH / 502
+    const at = (x: number, y: number) => mask.alpha[Math.round(y) * mask.width + Math.round(x)] as number
+    // The M's left stem runs x 0..32, y 20..180 in the file's own units.
+    assert.equal(at(16 * scale, 100 * scale), 255)
+    // The A's counter sits inside the letter, so an even-odd fill leaves it empty.
+    assert.equal(at(427 * scale, 104 * scale), 0)
+    // And the gap between the M's stems, which is outside the letter, is empty too.
+    assert.equal(at(75 * scale, 170 * scale), 0)
+  })
+
+  test('the mark is inked in the house palette, not in a colour of its own', () => {
+    const { data, width, height } = wordmarkRgba(MARK_WIDTH)
+    assert.equal(data.length, width * height * 4)
+    const ink = [1, 3, 5].map((at) => Number.parseInt(INK.slice(at, at + 2), 16))
+    let lit = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] as number) === 0) continue
+      lit++
+      assert.deepEqual([data[i], data[i + 1], data[i + 2]], ink)
+    }
+    // A mark that covers everything or nothing is a rasteriser that failed quietly.
+    const covered = lit / (width * height)
+    assert.ok(covered > 0.1 && covered < 0.5, `the mark covers ${(covered * 100).toFixed(1)}% of its box`)
+  })
+})
+
+describe('the card is laid out in the boosted safe box', () => {
+  const layout = cardLayout()
+
+  test('its content is centred on y 760, not on the frame\u2019s own middle', () => {
+    const top = layout.mark.y
+    const bottom = layout.credit.y + TYPE.credit.lineHeight
+    assert.ok(Math.abs((top + bottom) / 2 - CARD_CENTRE_Y) <= 1, `centred on ${(top + bottom) / 2}`)
+  })
+
+  test('nothing reaches outside the box Meta leaves alone', () => {
+    assert.ok(layout.mark.y >= SAFE_ZONE.top)
+    assert.ok(layout.credit.y + TYPE.credit.lineHeight <= SAFE_ZONE.bottom)
+    assert.ok(layout.mark.x >= SAFE_ZONE.left)
+    assert.ok(layout.mark.x + layout.mark.width <= SAFE_ZONE.right)
+    assert.ok(layout.rule.x >= SAFE_ZONE.left && layout.rule.x + layout.rule.width <= SAFE_ZONE.right)
+  })
+
+  test('mark, headline, rule and credit stack in that order', () => {
+    assert.ok(layout.mark.y + layout.mark.height < layout.headline.y)
+    assert.ok(layout.headline.y + TYPE.headline.lineHeight <= layout.rule.y)
+    assert.ok(layout.rule.y + layout.rule.height < layout.credit.y)
+  })
+
+  test('the headline fits the card at the size it is set in', () => {
+    // A constant, so this is a claim about the repo rather than about a config: the
+    // one line nobody can shorten has to fit before it ships.
+    assert.ok(lineWidth(HEADLINE, TYPE.headline.size) <= layout.width)
+  })
+})
+
+describe('the card\u2019s filtergraph', () => {
+  test('draws the mark, the headline, the accent rule and the credit', () => {
+    const chains = graph()
+    const layout = cardLayout()
+    assert.match(chains, /overlay=x=\d+:y=\d+/)
+    assert.match(chains, /text=mwaforge\.com/)
+    assert.match(chains, /text=fixture\.test/)
+    assert.match(chains, new RegExp(`drawbox=x=${layout.rule.x}:y=${layout.rule.y}`))
+    assert.ok(chains.includes(`color=0x${ACCENT.slice(1)}`), 'the rule is not the house accent')
+  })
+
+  test('the credit is muted and the headline is not', () => {
+    const chains = graph()
+    const headline = chains.slice(chains.indexOf('text=mwaforge.com'))
+    assert.match(headline, /fontcolor=0xeef1f6:/)
+    assert.match(chains, /fontcolor=0xeef1f6@0\.\d+/)
+  })
+
+  test('both lines are centred on the card rather than left-aligned in the slot', () => {
+    assert.equal(graph().match(/x=\(w-text_w\)\/2/g)?.length, 2)
+  })
+
+  test('a credit with a filtergraph metacharacter in it survives being drawn', () => {
+    // Escaped once for the graph parser and once for the option parser, like every
+    // other line of copy — a credit is whatever a human typed into a config.
+    assert.ok(graph('a:b').includes(`text=a${escapeValue(':')}b`))
+    assert.ok(graph('a:b').includes('text=a\\\\:b'))
+  })
+
+  test('the card scales 1.00 to 1.03 across its own frames and never lands', () => {
+    assert.equal(CARD_ZOOM, 1.03)
+    // The ramp runs on `on` and reaches its end on the card's last frame, so the card
+    // is still moving when the reel stops.
+    assert.ok(graph().includes(`z='1+0.03*on/${FRAMES - 1}'`))
+    assert.ok(!graph().includes('tmix'), 'the card is blurred, at half a pixel a frame')
+  })
+
+  test('no site pixels and no client asset reach the card', () => {
+    const chains = graph()
+    assert.ok(!chains.includes('.jpg'), 'the card names a master')
+    // Its only image is the repo's own mark.
+    assert.equal(chains.match(/overlay=/g)?.length, 1)
+  })
+})
+
+describe('the credit is checked like every other line of copy', () => {
+  test('a credit that fits the card draws no problem', () => {
+    assert.deepEqual(creditProblems('pharosacademy.net'), [])
+  })
+
+  test('a credit too wide for the card fails loudly, naming the card', () => {
+    const problems = creditProblems('W'.repeat(80))
+    assert.equal(problems.length, 1)
+    assert.match(problems[0] as string, /^cta\.credit draws \d+px wide at \d+px; the safe box is \d+px$/)
+  })
+})
+
+describe('the plan already carries the card', () => {
+  test('the credit is the card shot\u2019s own cue, brought in by the crossfade', () => {
+    const timeline = planReel({
+      url: 'https://example.test',
+      hook: { text: 'Spotless.' },
+      beats: [{ selector: '#a' }, { selector: '#b' }, { selector: '#c' }],
+      cta: { credit: 'example.test' },
+    })
+    const cue = timeline.text.find((c) => c.role === 'cta')
+    assert.equal(cue?.content, 'example.test')
+    assert.equal(cue?.fadeInMs, 0)
+  })
+})
