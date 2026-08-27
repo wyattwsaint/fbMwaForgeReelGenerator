@@ -127,6 +127,14 @@ export function pixelsNear(frameBytes: Buffer, hex: string, tolerance = 14): num
   return found
 }
 
+/** Mean channel value over a band of rows, 0..255 — how dark a scrim has made it. */
+export function meanLuma(frameBytes: Buffer, top: number, bottom: number): number {
+  const stride = 1080 * 3
+  let total = 0
+  for (let i = top * stride; i < bottom * stride; i++) total += frameBytes[i] as number
+  return total / ((bottom - top) * stride)
+}
+
 function capture(bin: string, args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { windowsHide: true })

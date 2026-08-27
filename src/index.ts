@@ -1,4 +1,5 @@
 export { defineSite } from './site.ts'
 export type { Beat, Direction, SiteConfig } from './site.ts'
+export { ACCENT, GROUND, INK, SAFE_ZONE, TEXT_SLOT, TYPE } from './house.ts'
 export { COPY_BUDGETS, planReel } from './plan.ts'
 export type { CopyBudget, Move, Shot, TextCue, Timeline } from './plan.ts'

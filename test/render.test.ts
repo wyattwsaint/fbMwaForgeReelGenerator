@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
-import { frame, meanDiff, pixelsNear, probe, reel, workspace } from './helpers.ts'
+import { frame, meanDiff, meanLuma, pixelsNear, probe, reel, workspace } from './helpers.ts'
 import type { Workspace } from './helpers.ts'
 
 /**
@@ -19,6 +19,10 @@ const LAZY_IMAGE = '#00e5a0'
 const PARKED_ANIMATION = '#ff2ea6'
 /** The sticky nav. It belongs to the page, so it may never bake into a beat. */
 const PAGE_CHROME = '#ffb300'
+/** House ink. The fixture's own body copy is this colour, but only ~150px of it. */
+const INK = '#eef1f6'
+/** The scrim's band — the top of the frame down to the text slot's foot. */
+const SCRIM_BAND = [0, 620] as const
 
 /** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
 const CUTS = [90, 195, 300]
@@ -30,10 +34,10 @@ function fixtureSite(url: string): string {
 import { defineSite } from 'reel'
 export default defineSite({
   url: '${url}',
-  hook: { text: 'Spotless, every time.' },
+  hook: { text: "Spotless, it's every\\ntime you look." },
   beats: [
     { selector: '#hero' },
-    { selector: '#services' },
+    { selector: '#services', label: 'Deep clean' },
     { selector: '#gallery', direction: 'diagonal' },
   ],
   cta: { credit: 'fixture.test' },
@@ -154,6 +158,54 @@ describe('reel render', () => {
       const across = meanDiff(await frame(reelPath, cut - 1), await frame(reelPath, cut))
       assert.ok(across > within * 10, `the cut at frame ${cut} is not hard (${within} -> ${across})`)
     }
+  })
+
+  test('the hook is fully drawn on frame 0 and never animates in', async () => {
+    // Frame 0 is the Facebook in-feed thumbnail, so the hook is a constraint on it
+    // rather than a by-product: it is already at full alpha, and it stays there for
+    // the whole hold. An animated-in hook would put a fraction of this on frame 0.
+    const first = pixelsNear(await frame(reelPath, 0), INK)
+    const held = pixelsNear(await frame(reelPath, 75), INK)
+    assert.ok(first > 10_000, `the hook is not drawn on frame 0 (${first}px of ink)`)
+    assert.ok(
+      Math.abs(first - held) < first * 0.05,
+      `the hook's alpha moves during its hold: ${first} -> ${held}`,
+    )
+  })
+
+  test('the hook and its scrim let go together, before the cut', async () => {
+    const held = await frame(reelPath, 75)
+    const gone = await frame(reelPath, 89) // The hook's last frame; the cut is at 90.
+    assert.ok(pixelsNear(gone, INK) === 0, 'the hook is still lit when the cut lands')
+    // The wash lifts with the words rather than dimming the site for the whole reel.
+    const under = meanLuma(held, ...SCRIM_BAND)
+    const clear = meanLuma(gone, ...SCRIM_BAND)
+    assert.ok(clear > under * 1.25, `the scrim outlived its text: ${under} -> ${clear}`)
+  })
+
+  test('a label lives and dies inside its own shot', async () => {
+    // #services carries the reel's one label. It is dark at both ends of its shot and
+    // lit in the middle, so no cut ever has text on either side of it.
+    for (const index of [195, 200, 294, 299]) {
+      const at = pixelsNear(await frame(reelPath, index), INK)
+      assert.equal(at, 0, `the label is lit at frame ${index}, next to a cut`)
+    }
+    const lit = pixelsNear(await frame(reelPath, 240), INK)
+    assert.ok(lit > 1000, `the label never appears (${lit}px of ink)`)
+  })
+
+  test('there is no scrim where there is no text', async () => {
+    // Same shot, same section, same camera: the only difference between these two
+    // frames is whether the label is up. A permanent wash would flatten the gap.
+    const withLabel = meanLuma(await frame(reelPath, 240), ...SCRIM_BAND)
+    const without = meanLuma(await frame(reelPath, 299), ...SCRIM_BAND)
+    assert.ok(
+      withLabel < without * 0.7,
+      `the scrim does not ride with its label: ${withLabel} vs ${without}`,
+    )
+    // And a beat with no label is never washed at all.
+    const unlabelled = meanLuma(await frame(reelPath, 150), ...SCRIM_BAND)
+    assert.ok(unlabelled > without * 0.7, `an unlabelled beat is scrimmed (${unlabelled})`)
   })
 
   test('a second render re-takes its masters and reproduces frame 0 bit-identically', async () => {
