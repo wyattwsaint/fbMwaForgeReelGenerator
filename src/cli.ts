@@ -5,16 +5,23 @@ import { loadSite } from './config.ts'
 import { keep } from './keep.ts'
 import { render } from './render.ts'
 import type { Phase, Render } from './render.ts'
+import { sectionLines, sections } from './sections.ts'
+import type { Section } from './sections.ts'
 
 const USAGE = [
-  'usage: reel check <site>',
-  '       reel render <site>',
-  '       reel keep   out/<file>.mp4',
+  // `sections` is the one command that takes a URL, and it takes one because it is
+  // what you run *before* `sites/<slug>.ts` exists — a slug is the one thing it
+  // cannot ask for. Said here, or the exception reads as an inconsistency.
+  'usage: reel sections <url>        # a URL, not a site: run it before a config exists',
+  '       reel check    <site>',
+  '       reel render   <site>',
+  '       reel keep     out/<file>.mp4',
 ].join('\n')
 
 export async function main(argv: string[], root = process.cwd()): Promise<number> {
   const [command, argument, ...rest] = argv
-  const known = command === 'check' || command === 'render' || command === 'keep'
+  const known =
+    command === 'check' || command === 'render' || command === 'keep' || command === 'sections'
   // One positional argument each and no flags anywhere (#18): a flag that changed a
   // reel's shape would make a kept reel's config no longer describe the reel.
   if (!known || !argument || argument.startsWith('-') || rest.length > 0) {
@@ -23,6 +30,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   }
 
   if (command === 'keep') return await promote(argument, root)
+  if (command === 'sections') return await reportSections(argument)
 
   // What is left takes a site, not a path: `check` and `render` are one path's halves.
   const slug = argument
@@ -63,6 +71,45 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   // never each other, and the only line worth reading when nothing went wrong.
   console.log(`done  ${relative(root, cut.path)}  ${seconds(cut.durationMs)}   [${elapsed} total]`)
   start([cut.path, ...cut.stills])
+  return 0
+}
+
+/**
+ * The page, reported — a selector that resolves, a height and the punch that height
+ * needs, one line per candidate section. Enough to paste a first config out of,
+ * which `check` then corrects.
+ */
+async function reportSections(url: string): Promise<number> {
+  // A slug is a whole config file's worth of decisions; this command exists because
+  // none of them have been made yet. Naming the mistake beats printing USAGE at it.
+  if (!/^https?:\/\//.test(url)) {
+    console.error(`sections ${url} — takes a URL, not a site: try \`reel sections https://${url}\``)
+    return 2
+  }
+  const started = Date.now()
+  let found: Section[]
+  try {
+    found = await sections(url)
+  } catch (error) {
+    // The first line only: a Playwright load failure carries a page of call log
+    // under its one-line reason, and that reason is the whole report here.
+    const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
+    console.error(`sections ${url} — ${reason}`)
+    return 1
+  }
+  const elapsed = seconds(Date.now() - started)
+
+  if (found.length === 0) {
+    // Not a crash and not a report either: the page loaded and `main` has nothing in
+    // it that draws, so there is nothing a beat could be written against.
+    console.error(`sections ${url} — no sections found  ${elapsed}`)
+    return 1
+  }
+  console.log(`sections ${url}  ${elapsed}`)
+  console.log('')
+  for (const line of sectionLines(found)) console.log(line ? `  ${line}` : '')
+  console.log('')
+  console.log(`${found.length} section${found.length === 1 ? '' : 's'}.`)
   return 0
 }
 

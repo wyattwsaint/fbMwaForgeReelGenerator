@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — no ids</title>
+<!--
+  The page `sections`' escape hatch exists for: `main`'s children are sections, and
+  none of them can be named by a selector of its own.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  main > section { height: 2000px; padding: 40px 32px; }
+</style>
+</head>
+<body>
+<main>
+  <section><h2>First</h2></section>
+  <section><h2>Second</h2></section>
+</main>
+</body>
+</html>

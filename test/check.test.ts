@@ -337,6 +337,6 @@ export default defineSite({
     withWorkspace(async (ws) => {
       const run = await reel(['publish', 'fixture'], ws.root)
       assert.equal(run.code, 2)
-      assert.match(run.output, /usage: reel check <site>/)
+      assert.match(run.output, /usage: reel sections <url>/)
     }))
 })
