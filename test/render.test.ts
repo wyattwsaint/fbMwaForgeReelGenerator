@@ -5,9 +5,19 @@ import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
 import { SAFE_ZONE, TYPE } from '../src/house.ts'
+import { AUDIO_FADE_OUT_MS } from '../src/plan.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
-import { frame, meanDiff, meanLuma, pixelsNear, probe, reel, workspace } from './helpers.ts'
+import {
+  frame,
+  meanDiff,
+  meanLuma,
+  meanVolume,
+  pixelsNear,
+  probe,
+  reel,
+  workspace,
+} from './helpers.ts'
 import type { Workspace } from './helpers.ts'
 
 /**
@@ -87,8 +97,6 @@ describe('reel render', () => {
     assert.equal(video.r_frame_rate, '30/1')
     assert.equal(video.avg_frame_rate, '30/1')
 
-    // Silent in this ticket, but present — #1 wants the stream either way, so the
-    // music ticket is a swap rather than a new stream.
     const audio = await probe(reelPath, 'stream=codec_name,profile,sample_rate,channels', 'a:0')
     assert.match(audio.codec_name ?? '', /aac/)
     assert.equal(audio.profile, 'LC')
@@ -100,6 +108,21 @@ describe('reel render', () => {
     const moov = head.indexOf('moov')
     const mdat = head.indexOf('mdat')
     assert.ok(moov > 0 && (mdat < 0 || moov < mdat), 'the moov atom is not at the front')
+  })
+
+  test('carries the signature track, with no word from the config about music', async () => {
+    // The fixture config says nothing about music, so this bed is the default one
+    // (#8) — one commissioned track under the body of work, found beside the face and
+    // the mark rather than beside the site config.
+    const opening = await meanVolume(reelPath, { start: 0.5, duration: 2 })
+    assert.ok(opening > -40, `the reel is silent (${opening} dB)`)
+  })
+
+  test('the bed ends with the reel — faded, never hard-cut', async () => {
+    const fade = AUDIO_FADE_OUT_MS / 1000
+    const before = await meanVolume(reelPath, { start: 15.7 - fade - 0.5, duration: 0.4 })
+    const last = await meanVolume(reelPath, { start: 15.7 - 0.2, duration: 0.2 })
+    assert.ok(last < before - 12, `the bed is cut off rather than faded: ${before} -> ${last} dB`)
   })
 
   test('is exactly as long as the timeline says', async () => {

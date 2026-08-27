@@ -142,6 +142,14 @@ promoted, since the reel itself is the record and both are recoverable from it.
 
 **Signature track** — the one commissioned piece of music reused across MWA Forge's
 reels. Not reproducible from the prompt that made it, so the file itself is the asset.
+It is MWA Forge's, like the face and the mark, so it is found beside them in this repo
+rather than beside any site's config.
+
+**Bed** — the signature track as it appears under one reel: slid by an offset,
+trimmed to the reel's length and faded out at the end, so the music ends *with* the
+reel rather than being cut off. It sits underneath and nothing is timed to it — no
+beat-locking, no BPM — so a reel is exactly as long with a bed as without. Only the
+opening of a track is ever heard.
 
 **Provenance** — the record of where a track came from and under what terms it may be
 used. It belongs to the track, not to any site that uses it, and it is a document to be

@@ -135,7 +135,7 @@ export function meanLuma(frameBytes: Buffer, top: number, bottom: number): numbe
   return total / ((bottom - top) * stride)
 }
 
-function capture(bin: string, args: string[]): Promise<Buffer> {
+function capture(bin: string, args: string[], wantStderr = false): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { windowsHide: true })
     const chunks: Buffer[] = []
@@ -145,8 +145,32 @@ function capture(bin: string, args: string[]): Promise<Buffer> {
     child.on('error', reject)
     child.on('close', (code) =>
       code === 0
-        ? resolve(Buffer.concat(chunks))
+        ? resolve(wantStderr ? Buffer.from(stderr) : Buffer.concat(chunks))
         : reject(new Error(`${bin} exited ${code}\n${stderr.trim()}`)),
     )
   })
+}
+
+/**
+ * Mean volume of a slice of a file's audio, in dBFS — silence reads as `-inf`.
+ *
+ * The bed is asserted the way it is heard rather than by the arguments that laid it
+ * down: whether the reel is loud where the track is loud, and quiet where it fades.
+ */
+export async function meanVolume(
+  path: string,
+  window: { start: number; duration: number },
+): Promise<number> {
+  const out = await capture('ffmpeg', [
+    '-v', 'info',
+    '-ss', window.start.toFixed(3),
+    '-t', window.duration.toFixed(3),
+    '-i', path,
+    '-af', 'volumedetect',
+    '-f', 'null',
+    '-',
+  ], true)
+  const found = /mean_volume:\s*(-?[\d.]+|-inf) dB/.exec(out.toString('utf8'))
+  if (!found) throw new Error(`no mean_volume in volumedetect output:\n${out.toString('utf8')}`)
+  return found[1] === '-inf' ? Number.NEGATIVE_INFINITY : Number(found[1])
 }

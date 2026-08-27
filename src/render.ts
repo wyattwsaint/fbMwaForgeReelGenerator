@@ -11,6 +11,7 @@ import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { captureMasters, mastersDir } from './capture.ts'
 import { check } from './check.ts'
+import { trackPath } from './config.ts'
 import { assemble, renderShot } from './compose.ts'
 import { planReel } from './plan.ts'
 import type { SiteConfig } from './site.ts'
@@ -45,6 +46,6 @@ export async function render(config: SiteConfig, root: string, slug: string): Pr
   }
 
   const path = join(dir, `${slug}-${config.beats.length}beat.mp4`)
-  await assemble(shots, timeline, path)
+  await assemble(shots, timeline, path, trackPath(timeline.audio.file, root))
   return { path, problems: [] }
 }

@@ -1,16 +1,30 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { creditProblems } from './card.ts'
 import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { overflowProblems } from './measure.ts'
 import type { TypeRole } from './measure.ts'
-import { COPY_BUDGETS, copyProblem } from './plan.ts'
+import { COPY_BUDGETS, DEFAULT_TRACK, copyProblem } from './plan.ts'
 import type { CopyBudget } from './plan.ts'
 import type { SiteConfig } from './site.ts'
 
 export function sitePath(slug: string, root: string): string {
   return resolve(root, 'sites', `${slug}.ts`)
+}
+
+/**
+ * Where a bed the timeline named actually lives.
+ *
+ * The signature track is MWA Forge's, checked in beside the face and the mark
+ * (ADR-0002), so its own name resolves against this repo however you spell it —
+ * omitted from a config, or written out to hang an offset off it, which is the only
+ * way #7's schema lets you slide the default. Any other path is the human's and
+ * resolves against their cwd, like every other path they write.
+ */
+export function trackPath(file: string, root: string): string {
+  if (file === DEFAULT_TRACK) return fileURLToPath(new URL(`../${DEFAULT_TRACK}`, import.meta.url))
+  return isAbsolute(file) ? file : resolve(root, file)
 }
 
 /** Load `sites/<slug>.ts`. Throws with the path when there is nothing to load. */
@@ -72,14 +86,20 @@ export function configProblems(config: SiteConfig, root: string): string[] {
     })
   }
 
-  if (config.music) {
-    const file = config.music.file
-    if (typeof file !== 'string' || file === '') {
-      problems.push('music.file is required when music is set')
-    } else {
-      const path = isAbsolute(file) ? file : resolve(root, file)
-      if (!existsSync(path)) problems.push(`music.file '${file}' — not found`)
-    }
+  // Every reel has a bed, so the default is checked exactly as hard as an override:
+  // a signature track that is not on disk is a render that dies inside ffmpeg a
+  // minute in, having captured everything, to say what `check` says in seconds (#18).
+  const music = config.music
+  if (music && (typeof music.file !== 'string' || music.file === '')) {
+    problems.push('music.file is required when music is set')
+  } else {
+    const file = music?.file ?? DEFAULT_TRACK
+    if (!existsSync(trackPath(file, root))) problems.push(`music.file '${file}' — not found`)
+  }
+  // Offsets run forward into the track and nowhere else. There is no check on how far
+  // in: the bed is padded to length, so an offset past the end is silence, not a crash.
+  if (music?.offset !== undefined && !(music.offset >= 0)) {
+    problems.push(`music.offset is ${music.offset}; an offset slides forward into the track`)
   }
 
   return problems
