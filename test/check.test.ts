@@ -180,7 +180,7 @@ export default defineSite({
       )
       const run = await reel(['check', 'shouty'], ws.root)
       assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /hook\.text draws 1007px wide at 76px; the text slot is 950px/)
+      assert.match(run.stdout, /hook\.text draws 1007px wide at 76px; the safe box is 950px/)
       assert.doesNotMatch(run.stdout, /characters/)
     }))
 

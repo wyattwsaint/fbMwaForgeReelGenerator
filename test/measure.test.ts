@@ -43,7 +43,7 @@ describe('slot overflow', () => {
     const copy = 'CURB APPEAL, GUARANTEED'
     assert.ok(copy.length < COPY_BUDGETS.hook.chars)
     assert.deepEqual(overflowProblems('hook.text', copy, 'hook'), [
-      `hook.text draws 1007px wide at 76px; the text slot is ${TEXT_SLOT.width}px`,
+      `hook.text draws 1007px wide at 76px; the safe box is ${TEXT_SLOT.width}px`,
     ])
   })
 
@@ -63,7 +63,7 @@ describe('slot overflow', () => {
   test('a label is measured at label size, not hook size', () => {
     const copy = 'W'.repeat(28)
     assert.deepEqual(overflowProblems('beats[0].label', copy, 'label'), [
-      `beats[0].label draws ${lineWidth(copy, TYPE.label.size)}px wide at 44px; the text slot is ${TEXT_SLOT.width}px`,
+      `beats[0].label draws ${lineWidth(copy, TYPE.label.size)}px wide at 44px; the safe box is ${TEXT_SLOT.width}px`,
     ])
     assert.ok(lineWidth(copy, TYPE.label.size) < lineWidth(copy, TYPE.hook.size))
   })

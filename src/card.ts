@@ -104,17 +104,15 @@ export function cardLayout(): CardLayout {
 }
 
 /**
- * The card's copy against the card's own width.
+ * The card's copy, measured.
  *
  * The credit is the one line on the card a config owns, so it is the one line that
  * can overflow — and it fails at `check` like every other line of copy, because type
- * on a card never shrinks to fit either.
+ * on a card never shrinks to fit either. The card is the safe box wide, which is the
+ * width `measure` already holds, so this is the same check the overlay lines get.
  */
 export function creditProblems(credit: string): string[] {
-  return overflowProblems('cta.credit', credit, 'credit', {
-    name: 'card',
-    width: cardLayout().width,
-  })
+  return overflowProblems('cta.credit', credit, 'credit')
 }
 
 export type Wordmark = { path: string; width: number; height: number }
@@ -127,7 +125,7 @@ export type Wordmark = { path: string; width: number; height: number }
  * them — it is derived from a checked-in constant, so it is never something to keep.
  */
 export async function writeWordmark(dir: string): Promise<Wordmark> {
-  const { data, width, height } = wordmarkRgba(MARK_WIDTH, INK)
+  const { data, width, height } = wordmarkRgba(MARK_WIDTH)
   const path = join(dir, 'wordmark.rgba')
   await writeFile(path, data)
   return { path, width, height }

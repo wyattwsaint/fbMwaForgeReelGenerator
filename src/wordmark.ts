@@ -121,12 +121,9 @@ function contains(polygon: Polygon, x: number, y: number): boolean {
  * frozen in `house.ts` at all: a mark with its own hex in it is a second palette, and
  * the first one to drift is the one nobody is looking at.
  */
-export function wordmarkRgba(
-  width: number,
-  hex: string = INK,
-): { data: Buffer; width: number; height: number } {
+export function wordmarkRgba(width: number): { data: Buffer; width: number; height: number } {
   const mask = wordmarkMask(width)
-  const { r, g, b } = channels(hex)
+  const { r, g, b } = channels(INK)
   const data = Buffer.alloc(mask.width * mask.height * 4)
   for (let i = 0; i < mask.alpha.length; i++) {
     const at = i * 4

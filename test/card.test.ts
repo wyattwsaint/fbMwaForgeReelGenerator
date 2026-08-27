@@ -143,7 +143,7 @@ describe('the credit is checked like every other line of copy', () => {
   test('a credit too wide for the card fails loudly, naming the card', () => {
     const problems = creditProblems('W'.repeat(80))
     assert.equal(problems.length, 1)
-    assert.match(problems[0] as string, /^cta\.credit draws \d+px wide at \d+px; the card is \d+px$/)
+    assert.match(problems[0] as string, /^cta\.credit draws \d+px wide at \d+px; the safe box is \d+px$/)
   })
 })
 

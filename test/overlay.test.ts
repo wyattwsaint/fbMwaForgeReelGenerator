@@ -7,8 +7,8 @@ import {
   darkFrame,
   envelopeOf,
   escapeValue,
+  drawnOverlays,
   overlayChains,
-  overlayCues,
 } from '../src/overlay.ts'
 import { planReel } from '../src/plan.ts'
 import type { Shot, TextCue, Timeline } from '../src/plan.ts'
@@ -27,9 +27,14 @@ function labelled(n: number): SiteConfig {
   }
 }
 
+/** The cues one shot draws over site pixels — what `render` hands the overlay. */
+function drawnOn(timeline: Timeline, shotIndex: number): TextCue[] {
+  return drawnOverlays(timeline.text.filter((cue) => cue.shot === shotIndex))
+}
+
 function graphOf(timeline: Timeline, shotIndex: number): string {
   const shot = timeline.shots[shotIndex] as Shot
-  return overlayChains(overlayCues(timeline.text, shotIndex), shot, 'in', 'out').join(';')
+  return overlayChains(drawnOn(timeline, shotIndex), shot, 'in', 'out').join(';')
 }
 
 describe('which cues are drawn', () => {
@@ -37,11 +42,11 @@ describe('which cues are drawn', () => {
 
   test('the hook belongs to the hook shot and a label to its own beat', () => {
     assert.deepEqual(
-      overlayCues(timeline.text, 0).map((cue) => cue.role),
+      drawnOn(timeline, 0).map((cue) => cue.role),
       ['hook'],
     )
     assert.deepEqual(
-      overlayCues(timeline.text, 2).map((cue) => cue.content),
+      drawnOn(timeline, 2).map((cue) => cue.content),
       ['Beat 1'],
     )
   })
@@ -49,13 +54,13 @@ describe('which cues are drawn', () => {
   test('the card draws its own text — the overlay does not reach onto it', () => {
     const card = timeline.shots.length - 1
     assert.ok(timeline.text.some((cue) => cue.shot === card && cue.role === 'cta'))
-    assert.deepEqual(overlayCues(timeline.text, card), [])
+    assert.deepEqual(drawnOn(timeline, card), [])
     assert.deepEqual(graphOf(timeline, card), '')
   })
 
   test('a beat with no label draws nothing at all', () => {
     const plain = planReel({ ...labelled(3), beats: [{ selector: '#a' }, { selector: '#b' }, { selector: '#c' }] })
-    assert.deepEqual(overlayCues(plain.text, 1), [])
+    assert.deepEqual(drawnOn(plain, 1), [])
     assert.deepEqual(graphOf(plain, 1), '')
   })
 })
@@ -96,7 +101,7 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
     for (const n of [3, 4, 5]) {
       const timeline = planReel(labelled(n))
       timeline.shots.forEach((shot, index) => {
-        for (const cue of overlayCues(timeline.text, index)) {
+        for (const cue of drawnOn(timeline, index)) {
           const envelope = envelopeOf(cue, shot)
           assert.ok(envelope.startFrame >= 0, `${n} beats: shot ${index} starts before its cut`)
           // The cut frame is the *next* shot's frame 0, so a cue whose alpha reaches

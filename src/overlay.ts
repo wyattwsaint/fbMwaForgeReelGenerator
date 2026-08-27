@@ -32,11 +32,6 @@ export type Envelope = {
   fadeOutFrames: number
 }
 
-/** The cues of one shot, in the order they are drawn. */
-export function overlayCues(cues: TextCue[], shotIndex: number): TextCue[] {
-  return drawnOverlays(cues.filter((cue) => cue.shot === shotIndex))
-}
-
 /**
  * The ones drawn over site pixels, from cues already narrowed to a shot. The card's
  * cue survives being handed around and is drawn by `card.ts` instead — a shot carries
