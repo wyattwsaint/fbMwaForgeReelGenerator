@@ -15,3 +15,7 @@ test/.tmp/
 # drifts, the brand kit is sampled at render, and a Suno track is not
 # reproducible from its prompt. This repo is their backup. Do not "tidy" them
 # into the list above.
+
+# Agent worktrees (`.claude/worktrees/<name>`) — each is a full checkout of this
+# repo, created and removed per task. Never content; never committed.
+.claude/worktrees/
