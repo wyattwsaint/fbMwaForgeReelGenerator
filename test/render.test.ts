@@ -740,6 +740,67 @@ export default defineSite({
   })
 })
 
+/**
+ * The other end of #66: a `fit: true` the cap refused, cut into a real reel.
+ *
+ * `check` says what it decided and `capture` frames the master, both asserted in their
+ * own files. What only a render can say is that the beat the human asked to fit is a
+ * shot like any other by the time it is on screen — 3.5s of a camera that is still
+ * moving at the cut.
+ */
+describe('a fit beat past the legibility cap', () => {
+  /** #tall is 4400px against a 3840px cap, so beat 2 is the one that falls back. */
+  function cappedSite(url: string): string {
+    return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { text: "Spotless, it's every\\ntime you look." },
+  beats: [
+    { selector: '#hero' },
+    { selector: '#services' },
+    { selector: '#tall', fit: true },
+  ],
+  cta: { credit: 'fixture.test' },
+})
+`
+  }
+
+  let capped: Workspace
+  let cappedPath: string
+  let cappedRun: Run
+
+  before(async () => {
+    capped = await workspace()
+    await capped.site('capped', cappedSite(fixture.url))
+    cappedPath = join(capped.root, 'out', 'capped-3beat.mp4')
+    cappedRun = await reel(['render', 'capped'], capped.root)
+  })
+
+  after(() => capped.dispose())
+
+  test('renders, and says what it did with the fit on the way', () => {
+    assert.equal(cappedRun.code, 0, cappedRun.output)
+    assert.match(
+      cappedRun.stdout,
+      /^note {2}beats\[2\] '#tall' is 4400px tall; fit pulls out to at most 3840px/m,
+    )
+    // A note never becomes a refusal: the reel is cut, and it is the length #12 says.
+    assert.match(cappedRun.stdout, /^done {2}out[\\/]capped-3beat\.mp4 {2}15\.7s/m)
+    assert.ok(existsSync(cappedPath), 'no mp4 at out/capped-3beat.mp4')
+  })
+
+  test('the beat is a vertical pan, still travelling at its own cut', async () => {
+    // Beat 2's shot, read the way every other shot is (#12): a camera that has eased
+    // or landed shows a last pair of frames quieter than a middle pair.
+    const [mid, end] = [351, 395]
+    const midway = meanDiff(await frame(cappedPath, mid - 1), await frame(cappedPath, mid))
+    const landing = meanDiff(await frame(cappedPath, end - 1), await frame(cappedPath, end))
+    assert.ok(landing > 0, 'the fallback beat is a still')
+    assert.ok(landing > midway / 2, `the fallback beat lands: ${midway} -> ${landing}`)
+  })
+})
+
 /** One tile out of a contact sheet, as raw RGB — the same shape `frame` returns. */
 function tile(sheet: Buffer, index: number): Buffer {
   const { width, height, gap } = SHEET_TILE

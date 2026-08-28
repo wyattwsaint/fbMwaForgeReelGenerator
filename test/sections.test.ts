@@ -23,7 +23,7 @@ describe('reel sections', () => {
       assert.match(run.stdout, /#services\s+y 3120\s+2400px\s+punchFactor 1\.2/)
       // #short is 400px, and a section that short needs a lot of punch to fill a frame.
       assert.match(run.stdout, /#short\s+y 5520\s+400px\s+punchFactor 5\.33/)
-      assert.match(run.stdout, /5 sections\./)
+      assert.match(run.stdout, /6 sections\./)
     }))
 
   test('says which sections would need a fit, and the width they would fit at', () =>
@@ -36,6 +36,12 @@ describe('reel sections', () => {
       assert.match(run.stdout, /#gallery\s+y 5920\s+2800px\s+punchFactor 1\.20\s+fit 1575px/)
       // #short already sits inside one frame, so there is nothing for a fit to show.
       assert.doesNotMatch(run.stdout, /#short.*fit /)
+      // #tall is 4400px: a fit would draw it under half size, which is past the
+      // legibility cap — so the report offers no width `check` would not honour (#66).
+      const tall = run.stdout.split(/\r?\n/).find((line) => line.includes('#tall'))
+      assert.ok(tall, run.output)
+      assert.match(tall, /#tall\s+y \d+\s+4400px\s+punchFactor 1\.20/)
+      assert.doesNotMatch(tall, /fit /)
     }))
 
   test('marks the hero as the hook, and gives it no punch factor', () =>

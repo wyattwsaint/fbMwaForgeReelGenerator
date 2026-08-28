@@ -109,6 +109,14 @@ export type FitWidths = ReadonlyMap<Shot, number>
  * loads there are — the answer cannot come off a load that the answer chose. Only the
  * URLs that actually carry a fit shot are loaded, so a config naming `fit` nowhere
  * captures exactly the pages it captured before, in exactly the order it did.
+ *
+ * The legibility cap is not re-applied here (#66). It is the plan's: a shot still
+ * carrying `fit` is one the plan measured and let through, and a shot the cap caught is
+ * a vertical pan by the time it arrives — it has no `fit` to widen for. This is the
+ * second measurement of the same section, so a page that changed between `check`'s load
+ * and this one could read a hair past the cap; fitting it anyway is a section slightly
+ * smaller than the floor, where re-capping it here would be a shot the plan framed as
+ * one frame and capture shot as something else.
  */
 async function measureFitWidths(
   browser: Browser,

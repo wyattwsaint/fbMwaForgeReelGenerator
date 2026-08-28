@@ -368,6 +368,43 @@ export default defineSite({
       assert.equal(run.code, 0, run.output)
     }))
 
+  test('a fit beat past the legibility cap is panned instead, and said so by name', () =>
+    withWorkspace(async (ws) => {
+      // #tall is 4400px, and a fit would draw the page at well under half its own size
+      // — a section nobody can read. So the beat is fit to width and panned, which is
+      // a decision the human hears about here rather than finding in the render.
+      await ws.site(
+        'fittall',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#tall', fit: true }]`,
+        ),
+      )
+      const run = await reel(['check', 'fittall'], ws.root)
+      assert.equal(run.code, 0, run.output)
+      assert.match(
+        run.stdout,
+        /note {2}beats\[2\] '#tall' is 4400px tall; fit pulls out to at most 3840px, so this beat is fit to width and panned vertically instead/,
+      )
+      // A note, not a problem: the reel still renders, and the report still says ok.
+      assert.match(run.stdout, /check ok {2}fittall/)
+      assert.doesNotMatch(run.stdout, /problem/)
+    }))
+
+  test('a fit beat inside the cap says nothing — the cap is not a new report', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'fitinside',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services', fit: true }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'fitinside'], ws.root)
+      assert.equal(run.code, 0, run.output)
+      assert.doesNotMatch(run.stdout, /note/)
+    }))
+
   test('a fit beat asked to pan is refused — a fit section has nothing to travel', () =>
     withWorkspace(async (ws) => {
       await ws.site(

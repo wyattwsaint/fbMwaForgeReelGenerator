@@ -39,6 +39,14 @@
   /* Hazard 5b — shorter than the 1920px frame. */
   #short { height: 400px; background: #3a2b1d; }
 
+  /* Hazard 5c — taller than a fit may pull out to (#66): 4400px against a 3840px cap,
+     so `fit: true` on it is fit to width and a vertical pan instead. Last in the
+     document, so every other section's y stays where the report says it is. */
+  /* Banded along y, like #services is along its diagonal: the fallback is a vertical
+     pan, and a pan over a flat field is a move nothing can see. */
+  #tall { height: 4400px;
+    background: repeating-linear-gradient(0deg, #1d3a2b 0 40px, #24503a 40px 80px); }
+
   /* Hazard 2 — lazy images. The section has no height of its own: it is only tall
      enough for a beat once the images below the fold have actually loaded. */
   #gallery { padding: 0; background: #11151c; }
@@ -75,6 +83,8 @@
   </section>
 
   <section id="pulse"><h2>Pulse</h2></section>
+
+  <section id="tall"><h2>Tall</h2></section>
 </main>
 
 <script>

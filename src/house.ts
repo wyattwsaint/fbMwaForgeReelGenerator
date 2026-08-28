@@ -103,6 +103,24 @@ export const TYPE = {
   credit: { size: 34, lineHeight: 44 },
 }
 
+/**
+ * The legibility floor under **fit** (#66): the smallest fraction of its own size the
+ * client's page may be drawn at in the frame.
+ *
+ * Here rather than with the capture geometry because it is the same doctrine as the
+ * table above, read from the other end. Type never shrinks to fit, and a fit beat
+ * shrinks the site's *whole* type — the section's own body copy included — so past
+ * some scale a fit section is a section nobody can read. Half is that scale: a site's
+ * 16px body copy draws at 8px in a 1080-wide frame, far under anything the table above
+ * sets, and past it the copy is a texture rather than a line.
+ *
+ * One number, chosen once, and by eye like the scrim's: no finding fixes it. What it
+ * buys is that the failure is loud — a beat that would cross it is fit to width and
+ * panned instead, and `check` says so by name rather than letting a human find an
+ * unreadable section in the render.
+ */
+export const MIN_FIT_SCALE = 0.5
+
 /** The air between the copy's foot and the boosted bottom boundary. */
 const SLOT_BREATH = 48
 const SLOT_FOOT = SAFE_ZONE.bottom - SLOT_BREATH
