@@ -318,14 +318,26 @@ describe('reel render', () => {
   })
 
   test('a label lives and dies inside its own shot', async () => {
-    // #services carries the reel's one label. It is dark at both ends of its shot and
-    // lit in the middle, so no cut ever has text on either side of it.
+    // #services carries the reel's written label. It is dark at both ends of its shot
+    // and lit in the middle, so no cut ever has text on either side of it.
     for (const index of [195, 200, 294, 299]) {
       const at = pixelsNear(await frame(reelPath, index), INK)
       assert.equal(at, 0, `the label is lit at frame ${index}, next to a cut`)
     }
     const lit = pixelsNear(await frame(reelPath, 240), INK)
     assert.ok(lit > 1000, `the label never appears (${lit}px of ink)`)
+  })
+
+  test('a beat naming no label draws its section’s own heading, on the same cue', async () => {
+    // #hero's beat says nothing about copy, so it draws "Fixture hero" off the page
+    // (#62) — and the label the page wrote keeps the cue a written one gets: dark at
+    // both ends of the shot, lit in the middle, never across a cut.
+    for (const index of [CUTS[0]!, CUTS[0]! + 5, 189, 194]) {
+      const at = pixelsNear(await frame(reelPath, index), INK)
+      assert.equal(at, 0, `the defaulted label is lit at frame ${index}, next to a cut`)
+    }
+    const lit = pixelsNear(await frame(reelPath, 150), INK)
+    assert.ok(lit > 1000, `the heading is never drawn (${lit}px of ink)`)
   })
 
   test('there is no scrim where there is no text', async () => {
@@ -337,9 +349,17 @@ describe('reel render', () => {
       withLabel < without * 0.7,
       `the scrim does not ride with its label: ${withLabel} vs ${without}`,
     )
-    // And a beat with no label is never washed at all.
-    const unlabelled = meanLuma(await frame(reelPath, 150), ...SCRIM_BAND)
-    assert.ok(unlabelled > without * 0.7, `an unlabelled beat is scrimmed (${unlabelled})`)
+    // And a beat with nothing to say is never washed at all: #gallery is four images
+    // and no heading, so nothing defaults it a label either (#62). Read where the
+    // label of the shot before it was up, and where its own would have been — both
+    // clear, and neither the other, so the wash is not merely late or early.
+    for (const index of [320, 350]) {
+      const unlabelled = meanLuma(await frame(reelPath, index), ...SCRIM_BAND)
+      assert.ok(
+        unlabelled > without * 0.7,
+        `an unlabelled beat is scrimmed at frame ${index} (${unlabelled} vs ${without})`,
+      )
+    }
   })
 
   test('the card is MWA Forge’s: house pixels, the mark, and no site in it at all', async () => {

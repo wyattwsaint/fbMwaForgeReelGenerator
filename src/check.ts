@@ -1,6 +1,6 @@
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
-import { configProblems } from './config.ts'
+import { configProblems, copyProblems } from './config.ts'
 import {
   DEFAULT_PUNCH_FACTOR,
   FRAME_HEIGHT,
@@ -9,9 +9,9 @@ import {
   MIN_BEATS,
   punchedFrameHeight,
 } from './frame.ts'
-import { panTravelProblems, planReel } from './plan.ts'
+import { COPY_BUDGETS, panTravelProblems, planReel } from './plan.ts'
 import type { Shot, Timeline } from './plan.ts'
-import { hookRect, rectOf } from './page.ts'
+import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { settle } from './settle.ts'
 import type { Beat, SiteConfig } from './site.ts'
@@ -19,14 +19,33 @@ import type { Beat, SiteConfig } from './site.ts'
 export type { Rect } from './page.ts'
 
 /**
+ * What one settle bought: everything wrong with the config, and the headings the page
+ * gave up while it was open.
+ *
+ * The headings ride along rather than being fetched again by the render, because they
+ * are read off the *settled* page and settling it is the expensive thing `check` already
+ * did — a render that loaded every page a second time to ask for its labels would pay
+ * the whole preflight twice for text it had already been handed.
+ */
+export type Checked = {
+  problems: string[]
+  /**
+   * In beat order. Null where the section has no heading, where the beat never
+   * resolved, and where the config named a label — the plan draws that label whatever
+   * the page says, so the heading it beats is not worth a round trip to read.
+   */
+  headings: (string | null)[]
+}
+
+/**
  * The render path stopped after settle. Reports *every* problem it finds — a
  * drifted site usually breaks several selectors at once, and fail-fast turns one
  * fix-and-rerun cycle into four.
  */
-export async function check(config: SiteConfig, root: string): Promise<string[]> {
+export async function check(config: SiteConfig, root: string): Promise<Checked> {
   const problems = configProblems(config, root)
   if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
-    return problems // Nothing left to resolve against.
+    return { problems, headings: [] } // Nothing left to resolve against.
   }
 
   // The plan says which beats pan and where, so it is what decides whether a punch
@@ -37,11 +56,11 @@ export async function check(config: SiteConfig, root: string): Promise<string[]>
 
   const browser = await chromium.launch()
   try {
-    problems.push(...(await resolveOnPages(browser, config, timeline)))
+    const resolved = await resolveOnPages(browser, config, timeline)
+    return { problems: [...problems, ...resolved.problems], headings: resolved.headings }
   } finally {
     await browser.close()
   }
-  return problems
 }
 
 /** One load per distinct URL: beats that share a route share a page. */
@@ -49,8 +68,12 @@ async function resolveOnPages(
   browser: Browser,
   config: SiteConfig,
   timeline: Timeline | null,
-): Promise<string[]> {
+): Promise<Checked> {
   const problems: string[] = []
+  // Beats are visited grouped by page rather than in reel order, so the headings are
+  // filled in by index rather than pushed — a beat on another route would otherwise
+  // caption the beat that happened to be resolved before it.
+  const headings: (string | null)[] = config.beats.map(() => null)
   const byUrl = new Map<string, { index: number; beat: Beat }[]>()
   config.beats.forEach((beat, index) => {
     const url = beat.url ?? config.url
@@ -74,7 +97,9 @@ async function resolveOnPages(
         const shot =
           timeline?.shots.find((planned) => planned.kind === 'beat' && planned.index === index) ??
           null
-        problems.push(...(await checkBeat(page, index, beat, pageHeight, shot)))
+        const checked = await checkBeat(page, index, beat, pageHeight, shot)
+        problems.push(...checked.problems)
+        headings[index] = checked.heading
       }
     } catch (error) {
       // The page is gone, so none of its beats can be resolved. Name them, rather
@@ -86,7 +111,7 @@ async function resolveOnPages(
       await page.close()
     }
   }
-  return problems
+  return { problems, headings }
 }
 
 async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {
@@ -103,10 +128,31 @@ async function checkBeat(
   beat: Beat,
   pageHeight: number,
   shot: Shot | null,
-): Promise<string[]> {
+): Promise<{ problems: string[]; heading: string | null }> {
   const rect = await rectOf(page, beat.selector)
-  if (!rect) return [`beats[${index}] selector '${beat.selector}' — no element matches`]
+  if (!rect) {
+    return {
+      problems: [`beats[${index}] selector '${beat.selector}' — no element matches`],
+      heading: null,
+    }
+  }
   const problems: string[] = []
+
+  // Only asked when the config named no label: a config that did is what will be drawn,
+  // `configProblems` has already measured it, and the heading it overrides is a line
+  // this reel will never carry. Windowed by the beat's own `y`/`height` where it has
+  // them, because that hatch resolves to an ancestor and the heading wanted is the one
+  // inside the slice, not the first one on the page.
+  //
+  // A label the page wrote is then held to exactly the standard a label Wyatt wrote is
+  // held to: over the budget or over the width it draws, and `check` says so by name
+  // (#62). So a page with a long heading fails until a human writes a shorter line, and
+  // that pressure is the point — type never shrinks to fit (#9).
+  const heading =
+    beat.label === undefined ? await headingIn(page, beat.selector, beat) : null
+  if (heading !== null) {
+    problems.push(...copyProblems(`beats[${index}] heading`, heading, COPY_BUDGETS.label, 'label'))
+  }
 
   // `y`/`height` is the escape hatch for when no element wraps the subject: the
   // selector still has to resolve, it just does not have to be the right shape.
@@ -134,12 +180,12 @@ async function checkBeat(
     )
     // The section does not fill the frame, so asking what a pan has left over on top
     // of that is the same defect said twice.
-    return problems
+    return { problems, heading }
   }
 
   // A pan only travels across what the punch left over, so #7 wants a punch that
   // leaves none caught here rather than discovered as a still.
   if (shot) problems.push(...panTravelProblems(shot, beat.selector, height))
-  return problems
+  return { problems, heading }
 }
 
