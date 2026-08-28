@@ -114,7 +114,7 @@ export const HOOK_FADE_OUT_MS = 500
 /** One frame, in milliseconds — the step an envelope spends to land inside its shot. */
 export const FRAME_MS = Math.round(1000 / FPS)
 
-/** #8: one signature track across reels; config overrides the file, never the terms. */
+/** #8: the track a config names none; an override changes the file, never the terms. */
 export const DEFAULT_TRACK = 'audio/mwaforge-signature.mp3'
 /** #8: the bed is trimmed and faded to length, so music ends with the reel. */
 export const AUDIO_FADE_OUT_MS = 1000

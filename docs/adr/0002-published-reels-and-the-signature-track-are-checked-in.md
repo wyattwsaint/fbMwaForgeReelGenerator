@@ -27,7 +27,10 @@ Binaries that cannot be regenerated are **checked into this repo**:
   Only reels that actually shipped are kept; everything rendered while iterating stays
   in gitignored `out/` scratch.
 - **The signature track** lives in a tracked `audio/`, alongside an `audio/PROVENANCE.md`
-  recording tier, generation date, download date and ToS version (written by #17).
+  recording tier, generation date, download date and ToS version (written by #17). This
+  says *the signature track* because it was the only one; the rule was always about the
+  binary being unrecoverable, so it holds for any track a config names — #67 added a
+  second, with its own provenance entry, and nothing here had to change.
 
 Regenerable intermediates stay ignored: `out/`, `frames/`. Masters are never persisted
 across runs — a cached master is a photograph of a page that may no longer exist, and a

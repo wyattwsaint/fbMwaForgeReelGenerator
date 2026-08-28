@@ -64,7 +64,10 @@ transition rather than a cut, and it is the only one two shots share.
 to action: the MWA wordmark, the **tagline** beneath it, `mwaforge.com` in large
 type, and the client's domain credited under that. The reel is MWA Forge's
 marketing, so the viewer's next step is hiring MWA Forge; the client site is the
-proof, and the credit line attributes it. The card drifts like everything else, and
+proof, and the credit line attributes it. On MWA Forge's own reel (#67) the credit is
+`mwaforge.com` and the card therefore says it twice — the credit line answers "whose
+site was that", and on that one reel the honest answer is the same domain. The card
+keeps its shape rather than growing a special case. The card drifts like everything else, and
 takes its turn at pushing and pulling: it is drawn rather than filmed, so a pull costs
 it no sharpness, and it is the last thing on screen, which is where an alternation is
 most visible.
@@ -290,15 +293,18 @@ card is the exception, because its cut point is where its crossfade *starts* —
 taken there shows neither the beat being left nor the card, so the card's tile is the
 first frame it is alone on screen.
 
-**Signature track** — the one commissioned piece of music reused across MWA Forge's
-reels. Not reproducible from the prompt that made it, so the file itself is the asset.
-It is MWA Forge's, like the face and the mark, so it is found beside them in this repo
-rather than beside any site's config.
+**Signature track** — the piece of music a reel gets when its config names none. Not
+reproducible from the prompt that made it, so the file itself is the asset. It is MWA
+Forge's, like the face and the mark, so it is found beside them in this repo rather
+than beside any site's config. It is the default rather than the only one: `audio/`
+holds a second track that MWA Forge's own reel names for itself, and a track a config
+names is checked in and provenanced exactly as this one is.
 
-**Bed** — the signature track as it appears under one reel: slid by an **offset**,
+**Bed** — a track as it appears under one reel: slid by an **offset**,
 trimmed to the reel's length and faded out at the end, so the music ends *with* the
 reel rather than being cut off. It sits underneath and nothing is timed to it — no
-beat-locking, no BPM — so a reel is exactly as long with a bed as without. A track is
+beat-locking, no BPM — so a reel is exactly as long with a bed as without, and a
+second track buys a different sound rather than a second timing rule. A track is
 minutes long and a reel is seconds, so only the stretch the offset lands on is ever
 heard.
 
@@ -345,9 +351,11 @@ that softest frame last, where nobody is looking.
 
 ## Config
 
-**Site config** — one TS module per client site, `sites/<slug>.ts`, checked into this
-repo. The human's entire steering wheel: a URL, hook text, 3–5 beat selectors, and a
-CTA. Everything else in the file is an **override**.
+**Site config** — one TS module per site, `sites/<slug>.ts`, checked into this repo.
+Usually a client's; `mwaforge` is MWA Forge's own (#67), and the pipeline knows no
+difference — a site is its config file and nothing reads whose site it is. The human's
+entire steering wheel: a URL, hook text, 3–5 beat selectors, and a CTA. Everything else
+in the file is an **override**.
 
 **Override** — a config field that exists because a real site broke a default. Move,
 pan direction, push / pull, punch factor, beat label, video pin and hook motion are all
