@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { readdir } from 'node:fs/promises'
 import { after, before, describe, test } from 'node:test'
 import { chromium } from 'playwright'
-import { settle } from '../src/settle.ts'
+import type { Page } from 'playwright'
+import { freeze, settle, stabilise } from '../src/settle.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
@@ -115,21 +116,60 @@ describe('settle, directly', () => {
       await page.goto(fixture.url, { waitUntil: 'load' })
       await settle(page, 2.0)
 
-      const pinned = () =>
-        page.evaluate(() => {
-          const video = document.querySelector('video')
-          return { time: video?.currentTime, paused: video?.paused }
-        })
-      assert.deepEqual(await pinned(), { time: 2, paused: true })
+      assert.deepEqual(await pinned(page), { time: 2, paused: true })
 
       // The fixture re-plays its own hero every 200ms. Pausing without stubbing
       // `play()` first loses this race, and the master lands on an arbitrary frame.
       await page.waitForTimeout(1500)
-      assert.deepEqual(await pinned(), { time: 2, paused: true })
+      assert.deepEqual(await pinned(page), { time: 2, paused: true })
     } finally {
       await browser.close()
     }
   })
 })
+
+/**
+ * The half of settle a live shot wants on its own: stabilise prepares the page,
+ * freeze pins it. Only callable directly — settle is still the render path's
+ * entry point, so `check` and a master see no difference (#59).
+ */
+describe('stabilise and freeze, separately', () => {
+  test('stabilise leaves the page moving, and freeze pins it', async () => {
+    const browser = await chromium.launch()
+    try {
+      const page = await browser.newPage({ viewport: { width: FRAME_WIDTH, height: FRAME_HEIGHT } })
+      await page.goto(fixture.url, { waitUntil: 'load' })
+      await stabilise(page)
+
+      // The same wait the settle test uses: it is what proves a video is playing
+      // because nothing stopped it, rather than because the re-play race was won.
+      await page.waitForTimeout(1500)
+      assert.equal(await paused(page), false, 'the hero is still playing after stabilise')
+
+      const first = await pulseHeight(page)
+      await page.waitForTimeout(400)
+      assert.notEqual(await pulseHeight(page), first, '#pulse is still animating after stabilise')
+
+      await freeze(page, 2.0)
+      assert.deepEqual(await pinned(page), { time: 2, paused: true })
+      assert.equal(await pulseHeight(page), 1200, '#pulse is parked at its first frame')
+      await page.waitForTimeout(1500)
+      assert.deepEqual(await pinned(page), { time: 2, paused: true }, 'and stays pinned')
+    } finally {
+      await browser.close()
+    }
+  })
+})
+
+const pinned = (page: Page) =>
+  page.evaluate(() => {
+    const video = document.querySelector('video')
+    return { time: video?.currentTime, paused: video?.paused }
+  })
+
+const paused = (page: Page) => page.evaluate(() => document.querySelector('video')?.paused)
+
+const pulseHeight = (page: Page) =>
+  page.evaluate(() => document.querySelector('#pulse')?.getBoundingClientRect().height)
 
 const stripTimings = (output: string) => output.replace(/\d+\.\d+s/g, '<t>')
