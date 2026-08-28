@@ -5,13 +5,14 @@ import {
   CARD_CENTRE_Y,
   HEADLINE,
   MARK_WIDTH,
+  TAGLINE,
   cardChains,
   cardCredit,
   cardLayout,
   creditProblems,
 } from '../src/card.ts'
 import { escapeValue, stream } from '../src/filtergraph.ts'
-import { ACCENT, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
+import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
 import { lineWidth } from '../src/measure.ts'
 import { drawnOverlays } from '../src/overlay.ts'
 import { CTA_MS, frameCount, planReel } from '../src/plan.ts'
@@ -42,6 +43,13 @@ function graph(credit = 'fixture.test', shot: Shot = CARD_SHOT): string {
     stream('mark'),
     stream('out'),
   ).join(';')
+}
+
+/** The one `drawtext` that draws the tagline, cut out of a graph whole. */
+function taglineStage(chains: string): string {
+  const at = chains.indexOf(`text=${escapeValue(TAGLINE)}`)
+  assert.ok(at > 0, 'the graph never draws the tagline')
+  return chains.slice(chains.lastIndexOf('drawtext', at), chains.indexOf(',', at))
 }
 
 describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', () => {
@@ -100,25 +108,61 @@ describe('the card is laid out in the boosted safe box', () => {
     assert.ok(layout.rule.x >= SAFE_ZONE.left && layout.rule.x + layout.rule.width <= SAFE_ZONE.right)
   })
 
-  test('mark, headline, rule and credit stack in that order', () => {
-    assert.ok(layout.mark.y + layout.mark.height < layout.headline.y)
+  test('mark, tagline, headline, rule and credit stack in that order', () => {
+    assert.ok(layout.mark.y + layout.mark.height < layout.tagline.y)
+    assert.ok(layout.tagline.y + TYPE.tagline.lineHeight <= layout.headline.y)
     assert.ok(layout.headline.y + TYPE.headline.lineHeight <= layout.rule.y)
     assert.ok(layout.rule.y + layout.rule.height < layout.credit.y)
   })
 
-  test('the headline fits the card at the size it is set in', () => {
-    // A constant, so this is a claim about the repo rather than about a config: the
-    // one line nobody can shorten has to fit before it ships.
+  test('the stack lands on these numbers, which is the card as it ships', () => {
+    // The one place the card's own geometry is written down rather than derived. Every
+    // other test here asserts a relation — inside the box, in this order, centred on
+    // 760 — and a relation survives a type size moving by twenty pixels. These do not:
+    // a change to any of `TYPE`'s card roles or to a gap breaks this test first, which
+    // is the point. Read off `cardLayout` and checked by eye against a rendered card.
+    assert.equal(layout.mark.y, 472)
+    assert.equal(layout.tagline.y, 687)
+    assert.equal(layout.headline.y, 803)
+    assert.equal(layout.rule.y, 959)
+    assert.equal(layout.credit.y, 1005)
+    assert.equal(layout.credit.y + TYPE.credit.lineHeight, 1049)
+  })
+
+  test('the tagline sits closer to the mark than to the headline', () => {
+    // #61: the mark and the words for what it sells are one lockup. Set equidistant
+    // they read as two separate lines that happen to be stacked, and the tagline
+    // starts to look like a second headline instead of the mark's own signature.
+    const toMark = layout.tagline.y - (layout.mark.y + layout.mark.height)
+    const toHeadline = layout.headline.y - (layout.tagline.y + TYPE.tagline.lineHeight)
+    assert.ok(toMark < toHeadline, `the lockup is not one object: ${toMark} vs ${toHeadline}`)
+  })
+
+  test('the headline and the tagline both fit the card at the sizes they are set in', () => {
+    // Constants, so this is a claim about the repo rather than about a config: the
+    // lines nobody can shorten have to fit before they ship.
     assert.ok(lineWidth(HEADLINE, TYPE.headline.size) <= layout.width)
+    assert.ok(lineWidth(TAGLINE, TYPE.tagline.size) <= layout.width)
+    // And the headline stays the biggest thing on the card — the tagline says what is
+    // sold, the headline is where to buy it.
+    assert.ok(TYPE.tagline.size < TYPE.headline.size)
   })
 })
 
 describe('the card\u2019s filtergraph', () => {
-  test('draws the mark, the headline, the accent rule and the credit', () => {
+  test('draws the mark, the tagline, the headline, the accent rule and the credit', () => {
     const chains = graph()
     const layout = cardLayout()
     assert.match(chains, /overlay=x=\d+:y=\d+/)
     assert.match(chains, /text=mwaforge\.com/)
+    assert.ok(chains.includes(`text=${escapeValue(TAGLINE)}`), 'the card is unsigned')
+    // In the checked-in face and at the tagline's own size — not the credit's, and not
+    // whatever face the machine running the render happens to have installed.
+    assert.ok(
+      taglineStage(chains).startsWith(`drawtext=fontfile=${escapeValue(FONT_FILE)}`),
+      'the tagline is not set in the checked-in face',
+    )
+    assert.ok(taglineStage(chains).includes(`fontsize=${TYPE.tagline.size}`))
     assert.match(chains, /text=fixture\.test/)
     assert.match(chains, new RegExp(`drawbox=x=${layout.rule.x}:y=${layout.rule.y}`))
     assert.ok(chains.includes(`color=0x${ACCENT.slice(1)}`), 'the rule is not the house accent')
@@ -131,8 +175,16 @@ describe('the card\u2019s filtergraph', () => {
     assert.match(chains, /fontcolor=0xeef1f6@0\.\d+/)
   })
 
-  test('both lines are centred on the card rather than left-aligned in the slot', () => {
-    assert.equal(graph().match(/x=\(w-text_w\)\/2/g)?.length, 2)
+  test('every line is centred on the card rather than left-aligned in the slot', () => {
+    assert.equal(graph().match(/x=\(w-text_w\)\/2/g)?.length, 3)
+  })
+
+  test('no config reaches the tagline — an empty credit still leaves it signed', () => {
+    // House style, like the face, the mark and the accent: the same words on every
+    // reel, for every client. A card with no credit is still MWA Forge's card.
+    assert.ok(graph('').includes(`text=${escapeValue(TAGLINE)}`), 'a card with no credit is unsigned')
+    // Byte-identical across two different configs: no field reaches these pixels.
+    assert.equal(taglineStage(graph('example.test')), taglineStage(graph('pharosacademy.net')))
   })
 
   test('a credit with a filtergraph metacharacter in it survives being drawn', () => {

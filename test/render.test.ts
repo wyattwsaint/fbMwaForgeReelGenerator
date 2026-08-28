@@ -364,11 +364,25 @@ describe('reel render', () => {
     const layout = cardLayout()
     const empty = meanLuma(card, 1300, 1500) // Ground, below everything drawn.
     const mark = meanLuma(card, layout.mark.y + 10, layout.mark.y + layout.mark.height - 10)
+    const tagline = meanLuma(card, layout.tagline.y, layout.tagline.y + TYPE.tagline.lineHeight)
     const headline = meanLuma(card, layout.headline.y + 10, layout.headline.y + 90)
     const credit = meanLuma(card, layout.credit.y, layout.credit.y + TYPE.credit.lineHeight)
 
     assert.ok(mark > empty * 2, `nothing is drawn where the mark should be (${mark})`)
+    assert.ok(tagline > empty * 2, `nothing is drawn where the tagline should be (${tagline})`)
     assert.ok(headline > empty * 2, `nothing is drawn where the headline should be (${headline})`)
+    // Four separate elements down the card and not one block of ink (#61): between the
+    // mark and the tagline, and between the tagline and the ask, the ground is bare.
+    // Read on the pixels rather than off the layout — `card.test.ts` already asserts
+    // the arithmetic, and what this frame is evidence of is that it rendered that way.
+    // Inset windows, because the card is drifting and its pixels have travelled.
+    for (const [name, from, to] of [
+      ['the mark and the tagline', layout.mark.y + layout.mark.height + 5, layout.tagline.y - 5],
+      ['the tagline and the ask', layout.tagline.y + TYPE.tagline.size + 15, layout.headline.y - 5],
+    ] as const) {
+      const gap = meanLuma(card, from, to)
+      assert.ok(gap < empty * 1.5, `${name} run together into one block (${gap} vs ${empty})`)
+    }
     // The credit is on the card and is quieter than the headline — it is attribution,
     // not the thing the card is asking for.
     assert.ok(credit > empty, `the credit line never appears (${credit} vs ${empty})`)

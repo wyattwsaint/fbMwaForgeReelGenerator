@@ -88,10 +88,17 @@ export const SAFE_ZONE = {
 export const TYPE = {
   hook: { size: 76, lineHeight: 92 },
   label: { size: 44, lineHeight: 56 },
-  /** The card's own two roles (#9 §5). The headline is the largest type on a reel:
-   * it is the only line the whole reel is asking the viewer to act on, and it sits on
-   * a flat ground with nothing to compete with. The credit is set small on purpose —
-   * it is attribution, not the subject of the card. */
+  /** The card's own three roles (#9 §5, #61). The headline is the largest type on a
+   * reel: it is the only line the whole reel is asking the viewer to act on, and it
+   * sits on a flat ground with nothing to compete with. The credit is set small on
+   * purpose — it is attribution, not the subject of the card.
+   *
+   * The tagline falls between them, and has a role of its own rather than borrowing
+   * the credit's: it is not attribution, it is what MWA Forge sells, said in words
+   * next to the mark for the viewer who catches only the last two seconds. Set below
+   * the headline because it explains the offer rather than making the ask, and above
+   * the credit because it is the card's own voice rather than a footnote. */
+  tagline: { size: 48, lineHeight: 60 },
   headline: { size: 96, lineHeight: 116 },
   credit: { size: 34, lineHeight: 44 },
 }
