@@ -114,21 +114,44 @@ export function oversampleOf(shot: Shot): number {
 }
 
 /**
+ * Master pixels per CSS pixel of the capture viewport — the device scale factor the
+ * page is rasterised at.
+ *
+ * A master is always `FRAME_WIDTH * punch * over` pixels wide, because a section is
+ * exactly as wide as whatever viewport it is laid out in and the punch and the
+ * oversample are both stated against the frame. So widening the viewport for a **fit**
+ * beat is paid for here: the page is rasterised finer or coarser to keep the master at
+ * the resolution the frame needs, rather than the master growing with the viewport.
+ */
+export function masterScale(shot: Shot, viewportWidth: number = FRAME_WIDTH): number {
+  return (shot.punchFactor * oversampleOf(shot) * FRAME_WIDTH) / viewportWidth
+}
+
+/**
  * The master a shot needs, in pixels: the frame times the shot's punch factor,
  * doubled on both axes for a diagonal. Width is the frame's, because a section is
- * exactly as wide as the frame; height is the section's, which is what a vertical
- * pan travels across.
+ * exactly as wide as the viewport it is captured in; height is the section's, which is
+ * what a vertical pan travels across.
+ *
+ * `sectionHeight` is in the capture viewport's own CSS pixels, so a **fit** beat
+ * passes the viewport it widened to and its section is scaled by the same factor the
+ * page is rasterised at (#65).
  *
  * A live shot's is the frame's height whatever the section's, so `sectionHeight` is
  * ignored for one: a recording is the viewport over time, not a clip out of a
  * full-page screenshot, so there is no taller window to have taken (#63).
  */
-export function masterSize(shot: Shot, sectionHeight: number): MasterSize {
+export function masterSize(
+  shot: Shot,
+  sectionHeight: number,
+  viewportWidth: number = FRAME_WIDTH,
+): MasterSize {
   const over = oversampleOf(shot)
-  const scale = shot.punchFactor * over
   return {
-    width: Math.round(FRAME_WIDTH * scale),
-    height: Math.round((isLive(shot) ? FRAME_HEIGHT : sectionHeight) * scale),
+    width: Math.round(FRAME_WIDTH * shot.punchFactor * over),
+    height: Math.round(
+      (isLive(shot) ? FRAME_HEIGHT : sectionHeight) * masterScale(shot, viewportWidth),
+    ),
     over,
   }
 }

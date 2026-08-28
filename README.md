@@ -40,6 +40,10 @@ resolves, where the section sits, how tall it is, the punch factor that height
 needs, and the heading it leads with. Enough to paste a first config out of, which
 `check` then corrects.
 
+A section taller than one frame also gets a `fit` column — the capture viewport width
+`fit: true` would load the page at to show the whole of it. Every section on this page
+is already inside a frame, so none of them has one.
+
 ```
 $ reel sections https://brobstcleaning.com
 sections https://brobstcleaning.com  7.1s

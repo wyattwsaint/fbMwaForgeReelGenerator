@@ -200,6 +200,34 @@ covers a whole number of them a frame. A punched pan therefore travels slightly
 less far than its room allows, and the bigger the master the less it gives up
 (#51).
 
+**Fit** — capturing a beat's section whole, by widening the **capture viewport**
+instead of punching in. A section is exactly as wide as whatever viewport it is laid
+out in, so loading the page wider makes the section proportionally shorter against the
+frame; the page is then rasterised back down so the master is still frame resolution.
+The other end of the punch, not a punch below 1.0 — a punch crops a narrower column
+out of a page already rendered at frame width, and asking for less than all of it asks
+for pixels that were never drawn. Per-beat, and mutually exclusive with a punch factor.
+
+Fit only ever widens. A section already inside one frame has nothing to fit, and
+narrowing to reach it would shoot the site's phone layout, which is a different site
+rather than a wider view of this one — so such a section stays at the base viewport
+and `check` refuses it for the reason it always did: too short for a frame.
+
+Two things follow. A fit beat sees a **different layout**: widening reflows the site,
+so its section is measured twice — once at the base viewport to learn the width, once
+after the reflow to frame the clip — and the second measurement is the one that is
+shot. The reflow moves the height either way and the width is not re-derived from it:
+a fit clip is one frame exactly, centred on the section, because a fit master that
+came back taller than a frame would be a fit beat quietly not fitting. And a fit beat
+**cannot share a page load** with a non-fit one: a page load is
+per url, per viewport width and per raster scale, so two fit beats at the same width
+are one load and a fit and a non-fit beat on the same url are two.
+
+A fit section is one frame, so it has no room for a pan to travel and the plan drifts
+it — the same reasoning that punches a lateral pan config left flat, read the other
+way round. A beat that names `move: 'pan'` anyway gets one, and `check` says what it
+left the pan to travel.
+
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
 belongs to the page, not to a section. Capturing a master without scrolling the page
 keeps it out of every beat by construction: a clip carries chrome only where it

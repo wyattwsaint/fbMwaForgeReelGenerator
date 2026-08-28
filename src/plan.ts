@@ -26,6 +26,12 @@ export type Shot = {
   pushPull?: PushPull
   punchFactor: number
   /**
+   * Capture this shot in a viewport wide enough to put its whole section in one
+   * frame (#65). Absent unless config asked for it: `fit` is an override like every
+   * other, so a config that names it nowhere plans exactly the reel it did before.
+   */
+  fit?: true
+  /**
    * How this shot's site pixels are got. Absent is `still` — one frozen master, with
    * the move synthesised over it — which is every shot but an `ambient` hook (#63).
    *
@@ -293,13 +299,22 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
   ]
 
   beats.forEach((beat, index) => {
-    const move = beat.move ?? defaultMove(index)
+    // A fit section is exactly one frame, so there is nothing for a pan to travel
+    // across — the same reasoning that makes the plan punch a lateral pan config left
+    // flat, read the other way round. An explicit `move: 'pan'` is still the human's,
+    // and `check` still says what it leaves a pan to travel.
+    const move = beat.move ?? (beat.fit ? 'drift' : defaultMove(index))
     const rotated = DIRECTIONS[rotationOrdinal(index) % DIRECTIONS.length] as Direction
     const direction = move === 'pan' ? (beat.direction ?? rotated) : undefined
     const pushPull = move === 'drift' ? (beat.pushPull ?? rotatedPushPull(index)) : undefined
     const lateral = direction !== undefined && panAxes(direction).includes('x')
-    const punchFactor =
-      beat.punchFactor ?? (lateral ? DEFAULT_LATERAL_PUNCH_FACTOR : DEFAULT_PUNCH_FACTOR)
+    // The plan's lateral punch is not applied to a fit beat: a punch crops back into
+    // the section fit just widened the viewport to show whole, so a fit beat that took
+    // one would not be fit. `check` reports the pan it leaves no travel instead, which
+    // is the finding rather than a silent half-fit.
+    const punchFactor = beat.fit
+      ? DEFAULT_PUNCH_FACTOR
+      : (beat.punchFactor ?? (lateral ? DEFAULT_LATERAL_PUNCH_FACTOR : DEFAULT_PUNCH_FACTOR))
     shots.push({
       kind: 'beat',
       index,
@@ -309,6 +324,7 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
       ...(direction ? { direction } : {}),
       ...(pushPull ? { pushPull } : {}),
       punchFactor,
+      ...(beat.fit ? { fit: true as const } : {}),
       source: {
         url: beat.url ?? config.url,
         selector: beat.selector,
@@ -473,14 +489,24 @@ export function darkFrame(envelope: Envelope): number {
 export function panTravelProblems(shot: Shot, selector: string, sectionHeight: number): string[] {
   if (shot.move !== 'pan' || !shot.direction) return []
   const need = panTravelNeeded(shot.durationMs)
+  // A fit beat's section is one frame by construction, whatever it measured at the
+  // base viewport — that is what fit means — so that is the height its pan travels
+  // across. Which is none, on either axis: the finding still applies, and it is the
+  // finding a fit beat asked to pan has coming.
+  const height = shot.fit ? FRAME_HEIGHT : sectionHeight
   const problems: string[] = []
   for (const axis of panAxes(shot.direction)) {
-    const available = panTravelAvailable(axis, shot.punchFactor, sectionHeight)
+    const available = panTravelAvailable(axis, shot.punchFactor, height)
     if (available >= need) continue
+    // What left the pan short, and what would fix it. A punch has a number to raise;
+    // a fit beat does not — the only way it travels is by not being fit, so the fix it
+    // is offered is the move a fit section can actually take.
+    const [cause, fix] = shot.fit
+      ? ['a fit section is exactly one frame and', 'drift it instead']
+      : [`a punchFactor of ${shot.punchFactor}`, `needs ${punchFactorFor(axis, need, height)}`]
     problems.push(
       `beats[${shot.index}] '${selector}' — a ${shot.direction} pan needs ${need}px of ` +
-        `travel, a punchFactor of ${shot.punchFactor} leaves ${Math.max(available, 0)}px ` +
-        `(needs ${punchFactorFor(axis, need, sectionHeight)})`,
+        `travel, ${cause} leaves ${Math.max(available, 0)}px (${fix})`,
     )
   }
   return problems

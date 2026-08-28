@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
+import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from './frame.ts'
 import { hookRect, sectionRects } from './page.ts'
 import type { Rect } from './page.ts'
 import { BEAT_MS, panTravelNeeded, punchFactorFor } from './plan.ts'
@@ -28,6 +28,12 @@ export type Section = {
   hook: boolean
   /** Absent on the hook, whose punch is the plan's rather than the config's. */
   punchFactor?: number
+  /**
+   * The capture viewport a `fit: true` beat would widen to, in CSS pixels — present
+   * only on the sections a punch cannot show whole, which is the sections taller than
+   * one frame. Absent on the hook, which is not a beat and takes no `fit`.
+   */
+  fitWidth?: number
   /**
    * The line this section leads with — the label a beat written against it inherits
    * when its config names no `label` (#62). Absent where the section has no heading,
@@ -69,6 +75,7 @@ export async function sections(url: string): Promise<Section[]> {
         height: rounded,
         hook,
         ...(hook ? {} : { punchFactor: punchFor(rounded) }),
+        ...(hook || rounded <= FRAME_HEIGHT ? {} : { fitWidth: fitViewportWidth(rounded) }),
         ...(heading === null ? {} : { heading }),
       }
     })
@@ -124,11 +131,18 @@ export function sectionLines(found: Section[]): string[] {
   // The hook has no punch factor, so its cell is padded to the width of the ones that
   // do rather than dropped — a heading that slid left on that one row would stop the
   // column being a column. Measured off the cells themselves, so the pad cannot drift
-  // from the format that wrote them.
+  // from the format that wrote them. The fit cell is padded for the same reason and is
+  // empty far more often: only the sections a punch cannot show whole have one.
   const factors = found.map((section) =>
     section.punchFactor === undefined ? '' : `   punchFactor ${section.punchFactor.toFixed(2)}`,
   )
+  // The two ways to shoot the section, side by side: punch in on part of it, or fit
+  // the whole of it by capturing this wide.
+  const fits = found.map((section) =>
+    section.fitWidth === undefined ? '' : `   fit ${section.fitWidth}px`,
+  )
   const factorWidth = Math.max(...factors.map((factor) => factor.length))
+  const fitWidth = Math.max(...fits.map((fit) => fit.length))
   const lines = found.map((section, index) =>
     [
       (section.hook ? 'hook' : '').padEnd(6),
@@ -136,6 +150,7 @@ export function sectionLines(found: Section[]): string[] {
       `y ${String(section.y).padEnd(7)}`,
       `${String(section.height).padStart(String(tallest).length)}px`,
       (factors[index] as string).padEnd(factorWidth),
+      (fits[index] as string).padEnd(fitWidth),
       section.heading === undefined ? '' : `  "${section.heading}"`,
     ]
       .join('')
