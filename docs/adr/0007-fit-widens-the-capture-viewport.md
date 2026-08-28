@@ -63,3 +63,13 @@ would not surface as a failure, it would surface as a pan.
   reflows hard enough that one pass lands badly, the fix is a second pass or a config
   override — not re-deriving the width from the reflowed height, which is the loop
   this decision closes.
+- **Widening has a floor, and #66 set it where the type sizes are.** This decision
+  says fit only ever widens; it does not say how far. Widening draws the client's
+  whole page smaller, its body copy included, so past some scale a fit section is a
+  section nobody can read — which makes the limit a *legibility* question and not a
+  capture-geometry one. It is therefore one house constant beside the type sizes it
+  defends, not a second number next to `fitViewportWidth`. Past it a fit beat falls
+  back to fit-to-width plus a vertical pan, and `check` names the beat and the
+  section that was too tall; `CONTEXT.md`'s **Fit** entry carries the rule. Nothing
+  above changes: the premises this ADR argued are the ones the cap was argued
+  against.
