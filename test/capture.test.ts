@@ -28,8 +28,13 @@ function config(beats: Beat[]): SiteConfig {
 
 /** The same three beats, with the hook recorded from the running page instead (#63). */
 function ambient(): SiteConfig {
+  return live('ambient')
+}
+
+/** The same again, under #64's scripted scroll. */
+function live(motion: 'ambient' | 'scroll'): SiteConfig {
   const site = config([beat(), beat(), beat()])
-  return { ...site, hook: { ...site.hook, motion: 'ambient' } }
+  return { ...site, hook: { ...site.hook, motion } }
 }
 
 /** Drifting beats, so nothing but an explicit `punchFactor` moves the punch. */
@@ -161,6 +166,19 @@ describe('capturePlan', () => {
   test('the card is in no group — it has no site pixels in it', () => {
     const groups = planFor([beat(), beat(), beat()])
     assert.ok(!groups.some((group) => group.shots.some((shot) => shot.kind === 'cta')))
+  })
+
+  test('a scroll hook is its own load too, and carries which live motion it is', () => {
+    // #64: the group key is what the load *is*, and a walked page and a dwelt one are
+    // not the same load — capture reads the motion off the group to decide whether to
+    // drive the page. The beats are unmoved either way.
+    const site = live('scroll')
+    const groups = capturePlan(site, planReel(site))
+    assert.equal(groups.length, 2)
+    assert.deepEqual(shotNames(groups[0]!), ['hook'])
+    assert.equal(groups[0]!.motion, 'scroll')
+    assert.deepEqual(shotNames(groups[1]!), ['beat-0', 'beat-1', 'beat-2'])
+    assert.equal(groups[1]!.motion, undefined)
   })
 
   test('a live hook is its own load, even at the punch its beats share', () => {

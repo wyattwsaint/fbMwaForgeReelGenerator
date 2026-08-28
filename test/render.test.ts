@@ -801,6 +801,162 @@ export default defineSite({
   })
 })
 
+/**
+ * The scroll hook (#64, ADR-0006) — the same recording as an ambient one, taken while
+ * the page is walked from the top of the document down through the hero, so the
+ * effects keyed to the viewport *moving* fire on camera.
+ *
+ * Its own render for the same reason the ambient one is: the claim is about a whole
+ * pass. In this file rather than a file of its own for the same reason too — a third
+ * render running alongside these two saturates the machine, and here they run in turn.
+ *
+ * What it is read against is the fixture's `#reveal`: a 400px bar 50px below the fold
+ * at scroll 0, which an IntersectionObserver shows whenever it enters the viewport and
+ * hides again when it leaves. No capture that holds the page still can see it. This one
+ * can, and that is the whole of what #64 buys.
+ */
+describe('a scroll hook', () => {
+  /** The reveal's own colour, which appears nowhere else on the fixture. */
+  const REVEAL = '#00e676'
+  /**
+   * Where the reveal lands once the house scroll has run: comfortably inside the bar,
+   * and above the scrim's release, so no wash attenuates the count.
+   */
+  const REVEAL_BAND = [540, 700] as const
+  const HOOK_FRAMES = frameCount(HOOK_MS)
+
+  function scrollSite(url: string): string {
+    return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { motion: 'scroll', text: "It reveals.\\nOn camera." },
+  beats: [
+    { selector: '#hero', move: 'drift' },
+    { selector: '#services' },
+    { selector: '#gallery' },
+  ],
+  cta: { credit: 'fixture.test' },
+})
+`
+  }
+
+  let walked: Workspace
+  let walkedPath: string
+  let walkedRun: Run
+
+  before(async () => {
+    walked = await workspace()
+    await walked.site('scrolled', scrollSite(fixture.url))
+    walkedPath = join(walked.root, 'out', 'scrolled-3beat.mp4')
+    walkedRun = await reel(['render', 'scrolled'], walked.root)
+    assert.equal(walkedRun.code, 0, walkedRun.output)
+  })
+
+  after(() => walked.dispose())
+
+  test('is exactly the hook, at the timeline’s rate and the camera’s pixels', async () => {
+    // ADR-0006's arithmetic is unchanged by driving the page: the recording is the
+    // shot's own length at the reel's fps, and one frame of pixels.
+    const shot = await probe(
+      join(walked.root, 'out', 'masters', 'hook.mp4'),
+      'stream=nb_frames,width,height',
+      'v:0',
+    )
+    assert.equal(Number(shot.nb_frames), HOOK_FRAMES)
+    assert.deepEqual([Number(shot.width), Number(shot.height)], [FRAME_WIDTH, FRAME_HEIGHT])
+  })
+
+  test('fires the reveal on camera — the frames carry what no still could', async () => {
+    // Frame 0 is the top of the document, where the reveal is 50px below the fold: not
+    // in the band, and not anywhere else in the frame either.
+    const first = await frame(walkedPath, 0)
+    assert.equal(pixelsNear(first, REVEAL), 0, 'the reveal is already on the thumbnail')
+
+    // And by the last frame of the hook the walk has carried it up into the band.
+    const last = await frame(walkedPath, (CUTS[0] as number) - 1)
+    const revealed = pixelsNear(rows(last, ...REVEAL_BAND), REVEAL)
+    const band = (REVEAL_BAND[1] - REVEAL_BAND[0]) * FRAME_WIDTH
+    assert.ok(
+      revealed > band * 0.9,
+      `the reveal never fired: ${revealed} of ${band} px in the band`,
+    )
+  })
+
+  test('the page moves under the lens, not the lens over the page', async () => {
+    // A 3% breath cannot carry a bar 1500px up the frame. Sampled across the hook, the
+    // frames travel far further than the same camera manages over a frozen beat — and
+    // beat 0 is the same `#hero`, under a drift three times deeper.
+    const at = [5, 25, 45, 65, 85]
+    const travel = async (from: number) => {
+      const frames = await Promise.all(at.map((offset) => frame(walkedPath, from + offset)))
+      return frames
+        .slice(1)
+        .reduce((total, bytes, i) => total + meanDiff(bytes, frames[i] as Buffer), 0)
+    }
+    const moving = await travel(0)
+    const frozen = await travel(CUTS[0] as number)
+    // A lower bar than the ambient hook's, and for the reason that makes the argument
+    // one-way: the control is a *deeper* camera over the same section, and a 10% drift
+    // over the fixture's textured hero is not a small number to beat.
+    assert.ok(
+      moving > frozen * 3 && moving > 100,
+      `the scroll hook barely moves: ${moving.toFixed(1)} against a frozen ${frozen.toFixed(1)}`,
+    )
+  })
+
+  test('starts at the top of the document, and scrolls off it', async () => {
+    // The one capture that scrolls, said the other way round from #63's: an ambient
+    // hook is scrolled *to* its hero and holds there, so its chrome is baked in for the
+    // whole shot. A walk starts at the document's top — where the sticky nav is what a
+    // frame 0 sees — and leaves it behind, because the fixture's nav is not fixed.
+    const first = await frame(walkedPath, 0)
+    assert.ok(
+      pixelsNear(rows(first, 0, 100), PAGE_CHROME) > 50_000,
+      'the walk did not start at the top of the document',
+    )
+    // And still nowhere in a beat: every beat is still clipped rather than scrolled to.
+    for (const index of [130, 235, 340]) {
+      const beat = await frame(walkedPath, index)
+      assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
+    }
+  })
+
+  test('draws its line fully on frame 0, and still cuts hard into a frozen beat', async () => {
+    // Everything ADR-0006 fixed for an ambient hook holds for a walked one: frame 0 is
+    // the thumbnail whichever way the pixels were got, and the cut is still a cut.
+    // Counted in the slot only, and never across the frame as the still and ambient
+    // hooks are: a walk starts at the top of the document, so the fixture's own `<h1>`
+    // is on this thumbnail at full size, and it is set in the same ink. The claim being
+    // made is about the overlay's alpha, so it is read where the overlay is.
+    const first = await frame(walkedPath, 0)
+    const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
+    assert.ok(inSlot > 5_000, `the hook is not drawn on frame 0 (${inSlot}px of ink)`)
+    const held = pixelsNear(rows(await frame(walkedPath, HOOK_HELD), TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
+    assert.ok(
+      Math.abs(inSlot - held) < inSlot * 0.05,
+      `the hook’s alpha moves during its hold: ${inSlot} -> ${held}`,
+    )
+
+    // Read in the slot rather than across the frame, unlike the still and ambient hooks
+    // above: by the last frame the walk has pulled the fixture's own `#services`
+    // heading up into the bottom of the shot, and that ink is the page's, not the
+    // overlay's. The slot is where the overlay would be if it had outlived its cue.
+    const cut = CUTS[0] as number
+    const last = rows(await frame(walkedPath, cut - 1), TEXT_SLOT.top, TEXT_SLOT.bottom)
+    assert.equal(pixelsNear(last, INK), 0, 'the hook outlives its shot')
+    const within = meanDiff(await frame(walkedPath, cut - 2), await frame(walkedPath, cut - 1))
+    const across = meanDiff(await frame(walkedPath, cut - 1), await frame(walkedPath, cut))
+    assert.ok(across > within * 3, `the hook does not cut hard (${within} -> ${across})`)
+  })
+
+  test('is not noted as degraded — the fixture’s reveal re-fires', () => {
+    // The other half of #64's report, from the render side: a note here would mean the
+    // hook above was an ambient one wearing a scroll config's name.
+    assert.doesNotMatch(walkedRun.stdout, /^note/m)
+  })
+})
+
 /** One tile out of a contact sheet, as raw RGB — the same shape `frame` returns. */
 function tile(sheet: Buffer, index: number): Buffer {
   const { width, height, gap } = SHEET_TILE

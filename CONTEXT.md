@@ -143,8 +143,11 @@ the constraint the viewer actually sees.
 
 **Live shot** — a shot **recorded** from the running page over time instead of
 synthesised from a still. Config picks it per site, on the hook alone: `still` is
-today's behaviour and the default, and `ambient` dwells on the stabilised hero
-while its own animation runs — a video background, a carousel, a parallax idle.
+today's behaviour and the default, `ambient` dwells on the stabilised hero
+while its own animation runs — a video background, a carousel, a parallax idle —
+and `scroll` records the hero while a **scripted scroll** runs. The two live
+motions differ in what the page is doing, not in how it is filmed: `ambient`
+waits for the page to move, `scroll` makes it.
 The trade is deliberate (ADR-0006): the page animates on a clock this pipeline
 does not own, so no two recordings are alike. Recording starts at a fixed
 post-stabilise moment, so **frame 0** is at least reproducible in *composition* —
@@ -164,6 +167,16 @@ Run-scoped exactly like a master, discarded with them, never a build artifact an
 never promoted. It is the one capture that *scrolls* to its subject, because a
 recording is the viewport — so a live hook carries whatever page chrome sits over
 its hero.
+
+**Scripted scroll** — the walk down the page a `scroll` **live shot** is recorded
+under: from the top of the document through the hero, at a constant pace, for
+exactly the shot. It exists because a scroll-triggered reveal or a parallax is keyed
+to the viewport *moving*, and every other capture holds it still. Its pace and
+distance are **house style**, not config: a per-site scroll speed is a hand-timed
+edit wearing a config field. There is a limit stated rather than chased —
+**stabilise** has already walked the page, so a reveal wired to fire once has fired,
+and where it cannot fire again a `scroll` hook is an `ambient` one. That degradation
+is named by `check`, never silent.
 
 **Master** — the single static, high-resolution capture a shot's camera move is
 computed over. One master per beat, framed on that beat's section. Camera motion
@@ -343,7 +356,11 @@ preference.
 **Check** — the render pipeline stopped after settle: resolves every beat's selector and
 reports missing selectors, sections shorter than the frame, punch factors that leave
 a pan no room to travel, and **headings** that break a **label**'s budget. Catches
-client drift in seconds rather than a full capture pass.
+client drift in seconds rather than a full capture pass. It also carries **notes**:
+findings that are not failures, because the render will do something other than what
+the config asked and get away with it. A `scroll` hook that must degrade to `ambient`
+is the one there is — a problem would make that config permanently unrenderable,
+which is a worse answer than a good ambient hook and a line saying so.
 A **preflight**, never a monitor: it is run when a new reel is about to be cut, and
 nothing schedules it or reacts to it on its own. A render runs it first and refuses on
 failure — it is the settle the render was going to do anyway.

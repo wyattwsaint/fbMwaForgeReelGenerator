@@ -508,6 +508,64 @@ export default defineSite({
       assert.match(run.stdout, /gone\.html — .*\(unchecked: beats\[2\]\)/)
     }))
 
+  /**
+   * #64's known limit, reported rather than silent. A `scroll` hook is only worth the
+   * name where the page's scroll effects can fire again — `stabilise` has already
+   * walked the whole page by the time anything is recorded — so `check` says which
+   * hook the render will actually cut, and says it by name.
+   */
+  describe("a scroll hook's degradation", () => {
+    function scrolling(url: string): string {
+      return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { motion: 'scroll', text: 'Spotless, every time.' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+})
+`
+    }
+
+    test('a page whose reveals cannot re-fire is named as an ambient hook', () =>
+      withWorkspace(async (ws) => {
+        // `once.html`'s reveal unobserves itself the first time it fires, which
+        // `stabilise` has already made it do.
+        await ws.site('once', scrolling(`${fixture.url}/once.html`))
+        const run = await reel(['check', 'once'], ws.root)
+        // A note and not a problem: the reel still renders, and what it renders is a
+        // perfectly good ambient hook. A problem here would make the config
+        // permanently unrenderable, which is a worse answer than a line saying so.
+        assert.equal(run.code, 0, run.output)
+        assert.match(run.stdout, /check ok {2}once/)
+        assert.match(run.stdout, /^note {7}hook\.motion 'scroll' — this page's scroll effects do not re-fire, so the hook is recorded as 'ambient'$/m)
+      }))
+
+    test('a page whose reveals do re-fire is not noted at all', () =>
+      withWorkspace(async (ws) => {
+        await ws.site('fires', scrolling(fixture.url))
+        const run = await reel(['check', 'fires'], ws.root)
+        assert.equal(run.code, 0, run.output)
+        assert.doesNotMatch(run.stdout, /^note/m)
+      }))
+
+    test('a still hook is never asked the question', () =>
+      withWorkspace(async (ws) => {
+        // `once.html` degrades only because a `scroll` hook was asked for. The same
+        // page under the default plans exactly the reel it always did.
+        await ws.site(
+          'stillonce',
+          minimal(
+            `${fixture.url}/once.html`,
+            `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
+          ),
+        )
+        const run = await reel(['check', 'stillonce'], ws.root)
+        assert.equal(run.code, 0, run.output)
+        assert.doesNotMatch(run.stdout, /^note/m)
+      }))
+  })
+
   test('names the config file when there is none', () =>
     withWorkspace(async (ws) => {
       const run = await reel(['check', 'nosuch'], ws.root)

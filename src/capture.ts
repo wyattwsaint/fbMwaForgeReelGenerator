@@ -6,9 +6,10 @@
  * screenshot *clipped* to the section's page rect and never by scrolling to it, which
  * is what keeps sticky page chrome out of a beat by construction.
  *
- * A live shot is the exception (#63, ADR-0006): the hero is stabilised but never
+ * A live shot is the exception (#63, #64, ADR-0006): the hero is stabilised but never
  * frozen, and the viewport is *recorded* for exactly the shot's duration while the
- * page animates on its own clock. Both come back as a `Master` — a path and the size
+ * page animates on its own clock or is walked down under a scripted scroll. Both come
+ * back as a `Master` — a path and the size
  * its move is computed over — because everything downstream of here wants the same
  * two things whichever way the pixels were got.
  */
@@ -25,6 +26,7 @@ import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { FPS, frameCount } from './plan.ts'
 import type { Shot, Timeline } from './plan.ts'
+import { scriptedScroll, scrollEffectsRefire } from './scroll.ts'
 import { settle, stabilise } from './settle.ts'
 import type { LiveMotion, SiteConfig } from './site.ts'
 
@@ -333,13 +335,21 @@ function clipFor(
 }
 
 /**
- * A live shot: the stabilised hero recorded while it animates on its own clock.
+ * A live shot: the stabilised hero recorded while the page moves.
  *
  * `stabilise` and never `settle` — the freeze is exactly what a live shot must not
- * have (ADR-0006), so videos autoplay and animations run. The page is then scrolled
- * to the hero and left alone for `RECORD_START_MS`, which is the fixed moment frame 0
- * is reproducible from, and recorded a little past the shot so there is a window to
- * cut out of the middle of the file rather than off the end of it.
+ * have (ADR-0006), so videos autoplay and animations run. The page is then framed,
+ * left alone for `RECORD_START_MS` — the fixed moment frame 0 is reproducible from —
+ * and recorded a little past the shot, so there is a window to cut out of the middle
+ * of the file rather than off the end of it.
+ *
+ * How it is framed is the difference between the two live motions (#64). An `ambient`
+ * shot scrolls the hero to the top of the viewport and holds there while the page
+ * animates on its own clock. A `scroll` shot starts at the top of the *document* and
+ * is walked down through the hero across the whole shot, so the effects keyed to the
+ * viewport moving fire on camera — unless this page's cannot re-fire, in which case
+ * there is nothing a scroll would show that a dwell would not, and the shot degrades
+ * to an ambient one. `check` reports that degradation; here it is simply done.
  *
  * One shot to a group by construction: only the hook can be live, and its motion is
  * in the group key.
@@ -371,11 +381,15 @@ async function recordGroup(
     const page = await context.newPage()
     await page.goto(group.url, { waitUntil: 'load', timeout: 60_000 })
     await stabilise(page)
-    await scrollToShot(page, shot)
+    const walking = await framedForRecording(page, shot, group.motion as LiveMotion)
     await page.waitForTimeout(RECORD_START_MS)
 
     const startedAt = Date.now()
+    // Started rather than awaited: the walk and the recording window are the same
+    // stretch of time, so the page has to be driven while the browser is filming it.
+    const walk = walking ? scriptedScroll(page, shot.durationMs) : null
     await page.waitForTimeout(shot.durationMs + RECORD_TAIL_MS)
+    await walk
     const video = page.video()
     if (!video) throw new Error(`${shotName(shot)} — the browser recorded no video`)
     // Recording stops when the page does, so this is the last moment on the file.
@@ -394,22 +408,32 @@ async function recordGroup(
 }
 
 /**
- * Put the shot's subject at the top of the viewport, because a recording *is* the
- * viewport — there is no full-page screenshot to clip one out of.
+ * Put the page where the recording starts, and say whether it will be walked from
+ * there — a recording *is* the viewport, so there is no full-page screenshot to clip
+ * a frame out of and the scroll position is the framing.
  *
  * The one place this pipeline scrolls *to* a section rather than past it, and the
  * reason `CONTEXT.md` lets the hook carry page chrome: a sticky nav sits over the hero
  * here whether or not the hero starts at the top of the document. Beats still never
  * scroll, so chrome is still in the hook or in nothing at all.
+ *
+ * The hero's rect is resolved either way, including on the `scroll` path that starts
+ * at the top of the document and does not need it: a hook whose selector has drifted
+ * fails by name here rather than quietly recording whatever the top of the page is.
  */
-async function scrollToShot(page: Page, shot: Shot): Promise<void> {
+async function framedForRecording(page: Page, shot: Shot, motion: LiveMotion): Promise<boolean> {
   const rect = await rectFor(page, shot)
+  // Asked before the page is moved, so the probe's own walk starts where `stabilise`
+  // left it and its "back to the top" is where a scroll shot begins anyway.
+  const walking = motion === 'scroll' && (await scrollEffectsRefire(page, shot.durationMs))
   // The same `y` escape hatch a master's clip honours, in the same page coordinates —
-  // a scroll is what a clip is for a recording.
-  await page.evaluate((y) => window.scrollTo(0, y), shot.source?.y ?? rect.y)
+  // a scroll is what a clip is for a recording. A walk starts at the document's top,
+  // which is where the effects it is there to re-fire are wound back to.
+  await page.evaluate((y) => window.scrollTo(0, y), walking ? 0 : (shot.source?.y ?? rect.y))
   // One painted frame at the new scroll position, so the dwell is spent on a page that
   // has already drawn where it was put rather than on the scroll itself.
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+  return walking
 }
 
 /**

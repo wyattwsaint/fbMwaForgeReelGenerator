@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — a reveal that fires once</title>
+<!--
+  The other half of #64's hazard, and the limit ADR-0006 states rather than chases:
+  a hero whose reveal unobserves itself the first time it fires.
+
+  `stabilise` step-scrolls the whole page before anything is captured, to trip the
+  observers behind lazy images — so by the time a recording starts, this reveal has
+  already fired and can never fire again. There is nothing a scripted scroll would
+  show here that a dwell would not, so a `scroll` hook degrades to `ambient` and
+  `check` says so.
+
+  Deliberately still: no video, no infinite animation, nothing but the reveal. The
+  claim under test is "nothing changes across a scroll", and a page carrying the
+  other hazards would be making it about them.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  section { padding: 40px 32px; }
+
+  /* The same shape as index.html's hero, so a config written against one resolves
+     against the other: 3000px, with the reveal 50px below the fold at scroll 0. */
+  #hero { position: relative; height: 3000px; background: #253856; }
+  #hero #reveal { position: absolute; top: 1850px; left: 0; width: 1080px; height: 400px;
+    background: #00e676; opacity: 0; }
+
+  #services { height: 2400px;
+    background: repeating-linear-gradient(45deg, #1d2b3a 0 40px, #24374b 40px 80px); }
+  #gallery { height: 2000px; background: #11151c; }
+</style>
+</head>
+<body>
+<main>
+  <section id="hero">
+    <h1>Fixture hero</h1>
+    <div id="reveal"></div>
+  </section>
+
+  <section id="services"><h2>Services</h2></section>
+
+  <section id="gallery"><h2>Gallery</h2></section>
+</main>
+
+<script>
+  // Fires once and unobserves — so it is revealed for good, and no later scroll of any
+  // pace or distance changes a pixel of this page.
+  const once = new IntersectionObserver((entries, observer) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue
+      e.target.style.opacity = '1'
+      observer.unobserve(e.target)
+    }
+  })
+  once.observe(document.querySelector('#reveal'))
+</script>
+</body>
+</html>
