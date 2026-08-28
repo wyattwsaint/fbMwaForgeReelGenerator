@@ -58,4 +58,13 @@ describe('the house style is #9’s, frozen', () => {
     assert.ok(SCRIM.top + SCRIM.release <= TEXT_SLOT.top, 'the wash is still coming up under the copy')
     assert.ok(SCRIM.top + SCRIM.height >= TEXT_SLOT.bottom, 'the wash lets go above the slot’s foot')
   })
+
+  test('the tagline is its own role, under the headline and over the credit', () => {
+    // #61: the card's signature line is neither the thing being asked for nor
+    // attribution, so it is neither the headline's size nor the credit's. `mwaforge.com`
+    // stays the largest type on the reel — it is the one line asking a viewer to act.
+    assert.ok(TYPE.tagline.size < TYPE.headline.size, 'the tagline crowds the headline')
+    assert.ok(TYPE.tagline.size > TYPE.credit.size, 'the tagline is set as quietly as attribution')
+    assert.ok(TYPE.tagline.lineHeight > TYPE.tagline.size)
+  })
 })

@@ -3,9 +3,9 @@
  *
  * The card is MWA Forge's, not the client's: these reels are MWA Forge's own
  * marketing, the client site is the subject and the proof, and the viewer's next step
- * is hiring Wyatt. So the mark and the headline are repo constants, and the only
- * thing config puts on the card is `cta.credit` — the client's domain, credited,
- * because proof needs attribution.
+ * is hiring Wyatt. So the mark, the tagline and the headline are repo constants, and
+ * the only thing config puts on the card is `cta.credit` — the client's domain,
+ * credited, because proof needs attribution.
  *
  * Pure and synchronous like `plan`, `camera` and `overlay`, apart from the one call
  * that has to put the rasterised mark somewhere ffmpeg can read it. `compose` turns
@@ -28,6 +28,16 @@ import { wordmarkHeight, wordmarkRgba } from './wordmark.ts'
 /** The repo's own call to action. Config never reaches it — #9 §5 is explicit. */
 export const HEADLINE = 'mwaforge.com'
 
+/**
+ * What the mark sells, in words (#61).
+ *
+ * House style, like the face, the mark and the accent: the same line on every reel,
+ * for every client, so it is a constant here and not a config field. A viewer who
+ * catches only the last two seconds sees a wordmark and a domain, neither of which
+ * says what is being offered; this is the line that does.
+ */
+export const TAGLINE = 'Websites by MWA Forge'
+
 /** The mark, in frame pixels. Wide enough to read as the mark and no wider. */
 export const MARK_WIDTH = 460
 
@@ -41,8 +51,15 @@ export const CARD_CENTRE_Y = 760
  */
 const RULE = { width: 140, height: 6 }
 
-/** Space under the mark, and around the rule. */
-const MARK_GAP = 56
+/**
+ * The mark and the tagline are one lockup — the words are the mark's own signature,
+ * not a second line stacked under it — so they sit tighter than the gaps between the
+ * card's other elements. Set equidistant, the tagline starts to read as a headline.
+ */
+const SIGNATURE_GAP = 32
+
+/** Space under the lockup, and around the rule. */
+const LOCKUP_GAP = 56
 const RULE_GAP = 40
 
 /** The credit is attribution, so it is set muted as well as small. */
@@ -52,6 +69,7 @@ export type CardLayout = {
   /** The content box: the boosted safe box's own width, centred in the frame. */
   width: number
   mark: { x: number; y: number; width: number; height: number }
+  tagline: { y: number }
   headline: { y: number }
   rule: { x: number; y: number; width: number; height: number }
   credit: { y: number }
@@ -69,7 +87,9 @@ export function cardLayout(): CardLayout {
   const markHeight = wordmarkHeight(MARK_WIDTH)
   const stack =
     markHeight +
-    MARK_GAP +
+    SIGNATURE_GAP +
+    TYPE.tagline.lineHeight +
+    LOCKUP_GAP +
     TYPE.headline.lineHeight +
     RULE_GAP +
     RULE.height +
@@ -77,7 +97,8 @@ export function cardLayout(): CardLayout {
     TYPE.credit.lineHeight
   const top = Math.round(CARD_CENTRE_Y - stack / 2)
 
-  const headlineY = top + markHeight + MARK_GAP
+  const taglineY = top + markHeight + SIGNATURE_GAP
+  const headlineY = taglineY + TYPE.tagline.lineHeight + LOCKUP_GAP
   const ruleY = headlineY + TYPE.headline.lineHeight + RULE_GAP
   return {
     width: SAFE_ZONE.right - SAFE_ZONE.left,
@@ -87,6 +108,7 @@ export function cardLayout(): CardLayout {
       width: MARK_WIDTH,
       height: markHeight,
     },
+    tagline: { y: taglineY },
     headline: { y: headlineY },
     rule: {
       x: Math.round((FRAME_WIDTH - RULE.width) / 2),
@@ -153,7 +175,7 @@ export function wordmarkInput(mark: Wordmark): string[] {
  *
  * Drawn first and scaled after, so the drift moves the card rather than its elements
  * moving against each other — mark, type and rule are one object, and a zoom applied
- * per element would read as four things sliding apart.
+ * per element would read as five things sliding apart.
  */
 export function cardChains(
   cues: TextCue[],
@@ -173,6 +195,7 @@ export function cardChains(
     `${pad(mark)}format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}${pad(looped)}`,
     `${pad(ground)}${pad(looped)}overlay=x=${layout.mark.x}:y=${layout.mark.y}:shortest=1${pad(marked)}`,
     `${pad(marked)}${[
+      drawLine(TAGLINE, 'tagline', layout.tagline.y, ffmpegColor(INK)),
       drawLine(HEADLINE, 'headline', layout.headline.y, ffmpegColor(INK)),
       drawLine(credit, 'credit', layout.credit.y, `${ffmpegColor(INK)}@${CREDIT_ALPHA}`),
       `drawbox=x=${layout.rule.x}:y=${layout.rule.y}:w=${layout.rule.width}:` +
@@ -186,11 +209,16 @@ export function cardChains(
  * One line of card copy, centred on the frame — the card's axis, not the slot's.
  *
  * Centred by freetype's own measurement at draw time. `check` has already refused a
- * credit too wide for the card, so this centres a line known to fit. No alpha: the
- * card arrives on the reel's one crossfade and holds, so neither of its lines has an
- * envelope to ramp.
+ * credit too wide for the card, and the tagline and headline are constants a test
+ * measures, so this centres a line known to fit. No alpha: the card arrives on the
+ * reel's one crossfade and holds, so none of its lines has an envelope to ramp.
  */
-function drawLine(content: string, role: 'headline' | 'credit', y: number, colour: string): string {
+function drawLine(
+  content: string,
+  role: 'tagline' | 'headline' | 'credit',
+  y: number,
+  colour: string,
+): string {
   return drawText({
     content,
     fontFile: FONT_FILE,

@@ -60,12 +60,20 @@ a beat boundary; the last is where the CTA's crossfade starts, which is a
 transition rather than a cut, and it is the only one two shots share.
 
 **CTA** — the closing 2.5s. A card, crossfaded in, carrying **MWA Forge's** call
-to action: the MWA wordmark and `mwaforge.com` in large type, with the client's
-domain credited beneath it. The reel is MWA Forge's marketing, so the viewer's
-next step is hiring MWA Forge; the client site is the proof, and the credit line
-attributes it. The card drifts like everything else, and takes its turn at pushing
-and pulling: it is drawn rather than filmed, so a pull costs it no sharpness, and it
-is the last thing on screen, which is where an alternation is most visible.
+to action: the MWA wordmark, the **tagline** beneath it, `mwaforge.com` in large
+type, and the client's domain credited under that. The reel is MWA Forge's
+marketing, so the viewer's next step is hiring MWA Forge; the client site is the
+proof, and the credit line attributes it. The card drifts like everything else, and
+takes its turn at pushing and pulling: it is drawn rather than filmed, so a pull costs
+it no sharpness, and it is the last thing on screen, which is where an alternation is
+most visible.
+
+**Tagline** — the line on the CTA card that says what MWA Forge sells:
+`Websites by MWA Forge`, set between the wordmark and `mwaforge.com`. House
+style, not config — the same words on every reel, like the face, the mark and the
+accent. It is not the **credit**: a credit attributes the client's site, a tagline
+is the author's own signature. Set smaller than `mwaforge.com`, which stays the
+largest type on the card because it is the one line asking the viewer to act.
 
 **Card** — a rendered frame containing no site pixels. Currently the CTA is the
 only card, and it is drawn in the house style — a card is never the client's.
@@ -77,9 +85,9 @@ optional label. It is what makes a muted reel watchable. Never captions: there i
 no spoken audio in a reel, so all text is editorial.
 
 **House style** — the one visual treatment every overlay and card uses, on every
-reel, for every client: MWA Forge's own display face, ink, ground and accent,
-frozen as constants in this repo. The client's brand reaches the viewer as site
-pixels; the overlay is the author's voice, not the subject's.
+reel, for every client: MWA Forge's own display face, ink, ground, accent and
+**tagline**, frozen as constants in this repo. The client's brand reaches the
+viewer as site pixels; the overlay is the author's voice, not the subject's.
 
 **Slot** — the single fixed region overlay text occupies: left-aligned, in the
 lower band of the safe zone, its foot a breath clear of the boosted bottom
