@@ -34,6 +34,22 @@ export function scrollDistance(durationMs: number): number {
 /** How long the probe below dwells after a walk before reading the page. */
 const SETTLE_MS = 200
 
+/** How many steps the probe's walk takes, and how long it holds each one. */
+const PROBE_STEPS = 8
+const PROBE_STEP_MS = 40
+
+/**
+ * How many elements the probe reads styles off, in document order.
+ *
+ * A bound, not a sample: `getComputedStyle` forces layout, and a pathological DOM
+ * would otherwise turn a preflight into a page load. Document order is what makes the
+ * bound safe — the walk never leaves the first `scrollDistance(HOOK_MS)` pixels of the
+ * page, so everything it can move is the hero and whatever sits immediately under it,
+ * which is the front of the document. The cap is set far past any hero that is still a
+ * hero rather than an application.
+ */
+const PROBE_ELEMENTS = 4000
+
 /**
  * Walk the page from the top down through the hero, at the house pace, for exactly the
  * shot's duration.
@@ -80,10 +96,14 @@ export function scriptedScroll(page: Page, durationMs: number): Promise<void> {
  * a parallax moves, and none of which a video background or a height animation touches.
  * A page that changes none of them across the walk changes nothing a scroll could show.
  *
- * The comparison errs towards scrolling: an unrelated infinite transform animation, on
- * a page that is stabilised rather than frozen, reads as an effect that re-fires, and
- * what that buys is the scroll the config asked for. The costly mistake is the other
- * one — silently dwelling on a hero that was built to reveal.
+ * Both callers ask this of a stabilised, unfrozen page — `check` splits its settle to
+ * do so — because freezing parks the animations the question is about, and a preflight
+ * that answered a different question than the render is worse than none.
+ *
+ * The comparison errs towards scrolling: an unrelated infinite transform animation
+ * reads as an effect that re-fires, and what that buys is the scroll the config asked
+ * for. The costly mistake is the other one — silently dwelling on a hero that was
+ * built to reveal.
  */
 export function scrollEffectsRefire(page: Page, durationMs: number): Promise<boolean> {
   return page.evaluate(
@@ -94,13 +114,13 @@ export function scrollEffectsRefire(page: Page, durationMs: number): Promise<boo
         // Stepped rather than jumped, so an observer sees the viewport cross an element
         // rather than teleport past it.
         const from = window.scrollY
-        for (let step = 1; step <= 8; step++) {
-          window.scrollTo(0, from + ((target - from) * step) / 8)
-          await new Promise((r) => setTimeout(r, 40))
+        for (let step = 1; step <= walk.steps; step++) {
+          window.scrollTo(0, from + ((target - from) * step) / walk.steps)
+          await new Promise((r) => setTimeout(r, walk.stepMs))
         }
         await new Promise((r) => setTimeout(r, walk.settleMs))
         const parts: string[] = []
-        for (const element of [...document.querySelectorAll('body *')].slice(0, 400)) {
+        for (const element of [...document.querySelectorAll('body *')].slice(0, walk.elements)) {
           const style = getComputedStyle(element)
           parts.push(style.opacity, style.transform, style.visibility)
         }
@@ -110,7 +130,13 @@ export function scrollEffectsRefire(page: Page, durationMs: number): Promise<boo
       await new Promise((r) => setTimeout(r, walk.settleMs))
       return samples[0] !== samples[1]
     },
-    { distance: scrollDistance(durationMs), settleMs: SETTLE_MS },
+    {
+      distance: scrollDistance(durationMs),
+      settleMs: SETTLE_MS,
+      steps: PROBE_STEPS,
+      stepMs: PROBE_STEP_MS,
+      elements: PROBE_ELEMENTS,
+    },
   )
 }
 

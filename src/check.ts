@@ -3,6 +3,7 @@ import type { Browser, Page } from 'playwright'
 import { configProblems, copyProblems } from './config.ts'
 import {
   DEFAULT_PUNCH_FACTOR,
+  DEFAULT_VIDEO_TIME,
   FRAME_HEIGHT,
   FRAME_WIDTH,
   MAX_BEATS,
@@ -14,7 +15,7 @@ import type { Shot } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { AMBIENT_DEGRADATION, scrollEffectsRefire } from './scroll.ts'
-import { settle } from './settle.ts'
+import { freeze, stabilise } from './settle.ts'
 import type { Beat, SiteConfig } from './site.ts'
 
 export type { Rect } from './page.ts'
@@ -127,11 +128,15 @@ async function resolveOnPages(
     })
     try {
       await page.goto(url, { waitUntil: 'load', timeout: 60_000 })
-      await settle(page, config.hook?.videoTime)
-      if (url === config.url) {
-        problems.push(...(await checkHook(page, config)))
-        notes.push(...(await noteHookMotion(page, config)))
-      }
+      // Settle, split at its seam (#64): the scroll probe has to read the page a live
+      // hook is recorded from, which is stabilised and never frozen. Freezing first
+      // parks the very animations the probe is asking about, so a `check` that settled
+      // whole would answer a question capture never asks. Everything else here still
+      // reads the settled page it always did.
+      await stabilise(page)
+      if (url === config.url) notes.push(...(await noteHookMotion(page, config)))
+      await freeze(page, config.hook?.videoTime ?? DEFAULT_VIDEO_TIME)
+      if (url === config.url) problems.push(...(await checkHook(page, config)))
       const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
       for (const { index, beat } of group) {
         // The plan reads the section's height, so the shot is planned once the page
@@ -163,8 +168,9 @@ async function resolveOnPages(
  * Asked here rather than left to the capture pass because this is the preflight — the
  * whole point of `check` is learning in seconds what a render would otherwise teach in
  * a minute, and "your hook is not the hook you configured" is exactly that kind of
- * finding. Capture asks the same question again on its own page and acts on it; the
- * two agree because the answer is a fact about the site, not about the run.
+ * finding. Capture asks the same question again on its own page and acts on it, and
+ * the two agree because both ask it of a stabilised, unfrozen page — which is why the
+ * settle above is split rather than taken whole.
  */
 async function noteHookMotion(page: Page, config: SiteConfig): Promise<string[]> {
   if (config.hook?.motion !== 'scroll') return []

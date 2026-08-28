@@ -538,7 +538,10 @@ export default defineSite({
         // permanently unrenderable, which is a worse answer than a line saying so.
         assert.equal(run.code, 0, run.output)
         assert.match(run.stdout, /check ok {2}once/)
-        assert.match(run.stdout, /^note {7}hook\.motion 'scroll' — this page's scroll effects do not re-fire, so the hook is recorded as 'ambient'$/m)
+        assert.match(
+          run.stdout,
+          /^note {2}hook\.motion 'scroll' — this page's scroll effects do not re-fire, so the hook is recorded as 'ambient'$/m,
+        )
       }))
 
     test('a page whose reveals do re-fire is not noted at all', () =>
