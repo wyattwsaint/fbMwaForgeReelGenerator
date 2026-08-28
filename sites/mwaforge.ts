@@ -111,5 +111,5 @@ export default defineSite({
   // rather than to slide the default (`audio/PROVENANCE.md`). No offset: nothing in
   // this reel is timed to the music, so the bed starts where the track does and is
   // trimmed and faded to the reel's length like every other bed (#8).
-  music: { file: 'audio/mwaforge-quiet-confidence.mp3' },
+  music: { file: 'audio/quiet-confidence.mp3' },
 })
