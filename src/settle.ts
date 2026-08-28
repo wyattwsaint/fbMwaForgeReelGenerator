@@ -6,11 +6,28 @@ import { DEFAULT_VIDEO_TIME } from './frame.ts'
  * captures bit-identically run to run, and `check` resolves selectors against it
  * so a section is measured at the size it will be captured at.
  *
+ * Two halves, because only one of them is about determinism: `stabilise` is the
+ * preparation every capture needs, and `freeze` is the pinning only a master does
+ * (#59). Settle is both, in that order, which is what every path did before the
+ * split — so masters, `check` and the sections report are unchanged.
+ */
+export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promise<void> {
+  await stabilise(page)
+  await freeze(page, videoTime)
+}
+
+/**
+ * Load what the page is waiting to load: lazy images tripped and decoded, fonts
+ * ready. Everything here a live shot wants too, because a shot of a page still
+ * swapping in its images is a shot of a placeholder.
+ *
  * The page is never scrolled *to a section*: the step-scroll below exists only to
  * trip the IntersectionObservers behind lazy images, and it returns to 0. Masters
  * are taken `fullPage` + `clip`, which is what keeps page chrome out of a beat.
+ * A once-only scroll-triggered reveal has therefore already fired by the time
+ * anything is recorded.
  */
-export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promise<void> {
+export async function stabilise(page: Page): Promise<void> {
   // 1. Lazy images. `loading = 'eager'` alone does not trip an IntersectionObserver,
   //    so walk the page in 0.8-viewport steps and come back (#6, defect 1).
   await page.evaluate(async () => {
@@ -39,7 +56,22 @@ export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promis
     }
   })
 
-  // 3. Videos. Stubbing `play()` first is the whole trick: a paused video that the
+  // 3. Fonts last: everything above can pull in a face.
+  await page.evaluate(async () => {
+    await document.fonts.ready
+  })
+}
+
+/**
+ * Stop the page moving: the video pinned to one frame and the animations parked.
+ * This is what makes two runs of the same master identical, and it is exactly what
+ * a live shot must not have — a live shot's whole subject is the motion.
+ *
+ * Only meaningful on a stabilised page: an image that arrives after the freeze is
+ * motion the freeze did not stop.
+ */
+export async function freeze(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promise<void> {
+  // 1. Videos. Stubbing `play()` first is the whole trick: a paused video that the
   //    page's own script re-plays lands the master on an arbitrary frame (#6, defect 2).
   await page.evaluate(async (t) => {
     // No named helpers in here: the TS loader renames functions, and the injected
@@ -71,7 +103,7 @@ export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promis
     }
   }, videoTime)
 
-  // 4. Animations. An infinite one differs frame to frame even at scroll 0 (#6, defect 3).
+  // 2. Animations. An infinite one differs frame to frame even at scroll 0 (#6, defect 3).
   await page.evaluate(() => {
     for (const animation of document.getAnimations()) {
       const iterations = animation.effect?.getTiming?.().iterations
@@ -86,10 +118,5 @@ export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promis
         }
       }
     }
-  })
-
-  // 5. Fonts last: everything above can pull in a face.
-  await page.evaluate(async () => {
-    await document.fonts.ready
   })
 }

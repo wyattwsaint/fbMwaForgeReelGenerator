@@ -52,9 +52,7 @@ export async function captureMasters(
   const browser = await chromium.launch()
   try {
     const masters: Master[] = []
-    // A page load is per URL *and* per device scale factor: two beats at different
-    // punch factors need the same page rasterised at two resolutions.
-    for (const [, group] of groupShots(config, timeline)) {
+    for (const group of capturePlan(config, timeline)) {
       masters.push(...(await captureGroup(browser, config, dir, group, onCapture)))
     }
     return masters.sort((a, b) => a.shot.startMs - b.shot.startMs)
@@ -63,20 +61,42 @@ export async function captureMasters(
   }
 }
 
-type Group = { url: string; scale: number; shots: Shot[] }
+/** One page load, and every shot taken off it. */
+type CaptureGroup = {
+  url: string
+  /** CSS pixels the page is laid out at. */
+  viewport: { width: number; height: number }
+  /** Device scale factor: master pixels per CSS pixel. */
+  scale: number
+  shots: Shot[]
+}
 
-function groupShots(config: SiteConfig, timeline: Timeline): Map<string, Group> {
-  const groups = new Map<string, Group>()
+/**
+ * Which page loads at which viewport and scale, and which shots come off each load —
+ * the whole decision as a value, so it is assertable without a browser.
+ *
+ * A load is per URL *and* per viewport width *and* per device scale factor: two beats
+ * at different punch factors need the same page rasterised at two resolutions, and the
+ * width is in the key because #57's fit is what will vary it. Every shot is laid out at
+ * the frame's own width today, so no current config sees more than `url @ scale`.
+ * Groups come back in the order their first shot does — the order the pass loads in.
+ *
+ * The config is here because a viewport is the site's decision to make and fit will
+ * read it; every shot's own url and punch already reach this through the timeline.
+ */
+export function capturePlan(config: SiteConfig, timeline: Timeline): CaptureGroup[] {
+  const groups = new Map<string, CaptureGroup>()
   for (const shot of timeline.shots) {
     if (!shot.source) continue // The card is the one shot with no site pixels in it.
     const url = shot.source.url
+    const viewport = { width: FRAME_WIDTH, height: FRAME_HEIGHT }
     const scale = masterScale(shot)
-    const key = `${url}@${scale.toFixed(4)}`
+    const key = `${url}@${viewport.width}@${scale.toFixed(4)}`
     const group = groups.get(key)
     if (group) group.shots.push(shot)
-    else groups.set(key, { url, scale, shots: [shot] })
+    else groups.set(key, { url, viewport, scale, shots: [shot] })
   }
-  return groups
+  return [...groups.values()]
 }
 
 /** Master pixels per page pixel — the punch, doubled for a diagonal's second axis. */
@@ -89,11 +109,11 @@ async function captureGroup(
   browser: Browser,
   config: SiteConfig,
   dir: string,
-  group: Group,
+  group: CaptureGroup,
   onCapture: OnCapture,
 ): Promise<Master[]> {
   const page = await browser.newPage({
-    viewport: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
+    viewport: group.viewport,
     deviceScaleFactor: group.scale,
   })
   try {
