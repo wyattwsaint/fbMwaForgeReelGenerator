@@ -48,8 +48,8 @@ export function alphaExpr(envelope: Envelope): string {
 }
 
 /**
- * The scrim: a wash of house ground, densest at the top of the frame and gone at the
- * text band's foot, sharing its text's envelope exactly.
+ * The scrim: a wash of house ground, densest at the foot of the frame and gone one
+ * release above the text band's head, sharing its text's envelope exactly.
  *
  * Generated once and looped rather than evaluated per frame — the gradient is
  * constant, never sampled from the page, so there is nothing about it that could
@@ -58,7 +58,10 @@ export function alphaExpr(envelope: Envelope): string {
  */
 function scrimChain(envelope: Envelope, label: StreamLabel): string {
   const { r, g, b } = channels(GROUND)
-  const alpha = `255*${SCRIM.peak}*(1-pow(Y/H,${SCRIM.falloff}))`
+  // Y is measured from the wash's own head, so the ramp is written against `release`
+  // rather than `H`: everything past the release is at peak, all the way to the foot
+  // of the frame, and only the stretch above the copy is spent coming up from nothing.
+  const alpha = `255*${SCRIM.peak}*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release},0,1),${SCRIM.falloff}))`
   const { start, lit, held, dark } = envelopeFrames(envelope)
 
   const stages = [
@@ -132,7 +135,7 @@ export function overlayChains(
     const washed = stream('washed', index)
     const drawn = index === cues.length - 1 ? output : stream('drawn', index)
     chains.push(scrimChain(envelope, scrim))
-    chains.push(`${pad(source)}${pad(scrim)}overlay=x=0:y=0:shortest=1${pad(washed)}`)
+    chains.push(`${pad(source)}${pad(scrim)}overlay=x=0:y=${SCRIM.top}:shortest=1${pad(washed)}`)
     chains.push(textChain(cue, envelope, washed, drawn))
     source = drawn
   })

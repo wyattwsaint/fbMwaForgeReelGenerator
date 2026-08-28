@@ -138,8 +138,14 @@ describe('what gets drawn', () => {
     const { r, g, b } = channels(GROUND)
     assert.ok(hook.includes(`color=c=${ffmpegColor(GROUND)}:s=${SCRIM.width}x${SCRIM.height}`))
     assert.ok(hook.includes(`geq=r=${r}:g=${g}:b=${b}`))
-    // The alpha ramp is the only thing about it that varies, and it varies with Y.
-    assert.ok(hook.includes(`a=255*${SCRIM.peak}*(1-pow(Y/H\\,${SCRIM.falloff}))`))
+    // The alpha ramp is the only thing about it that varies, and it varies with Y —
+    // clipped, so the wash is at peak from the copy's head all the way to the foot of
+    // the frame and spends its whole release above the band.
+    assert.ok(
+      hook.includes(
+        `a=255*${SCRIM.peak}*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release}\\,0\\,1)\\,${SCRIM.falloff}))`,
+      ),
+    )
   })
 
   test('the scrim shares the text\u2019s envelope exactly', () => {
@@ -188,7 +194,7 @@ describe('what gets drawn', () => {
 
   test('one shot\u2019s chains hand off from the named input to the named output', () => {
     assert.match(hook, /^color=/)
-    assert.match(hook, /\[in\]\[scrim0\]overlay=x=0:y=0:shortest=1\[washed0\]/)
+    assert.ok(hook.includes(`[in][scrim0]overlay=x=0:y=${SCRIM.top}:shortest=1[washed0]`))
     assert.match(hook, /\[washed0\]drawtext=.*\[out\]$/)
   })
 })
@@ -255,8 +261,8 @@ describe('the hook is dark on its last frame, on the decoded pixels', () => {
     // it at all. 7% of the wash — a ramp that reaches zero one frame past the shot —
     // shows up here as about four levels of dimming.
     assert.ok(
-      Math.abs(meanLuma(dark, 0, SCRIM.height) - GREY) < 1,
-      `something is still drawn on the hook's last frame: ${meanLuma(dark, 0, SCRIM.height)}`,
+      Math.abs(meanLuma(dark, SCRIM.top, FRAME_HEIGHT) - GREY) < 1,
+      `something is still drawn on the hook's last frame: ${meanLuma(dark, SCRIM.top, FRAME_HEIGHT)}`,
     )
   })
 
@@ -265,7 +271,7 @@ describe('the hook is dark on its last frame, on the decoded pixels', () => {
     // which is what makes the one above a test rather than a tolerance.
     const fading = await frame(rendered, last - 1)
     assert.ok(
-      GREY - meanLuma(fading, 0, SCRIM.height) > 1,
+      GREY - meanLuma(fading, SCRIM.top, FRAME_HEIGHT) > 1,
       'the fade is already over a frame before it ends',
     )
   })

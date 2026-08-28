@@ -4,7 +4,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
-import { SAFE_ZONE, TYPE } from '../src/house.ts'
+import { FRAME_WIDTH } from '../src/frame.ts'
+import { SAFE_ZONE, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
 import { AUDIO_FADE_OUT_MS, FRAME_MS, HOOK_FADE_OUT_MS, HOOK_MS, frameCount } from '../src/plan.ts'
 import { SHEET_TILE, sheetSize } from '../src/review.ts'
 import { startFixtureSite } from './fixture/server.ts'
@@ -35,8 +36,19 @@ const PARKED_ANIMATION = '#ff2ea6'
 const PAGE_CHROME = '#ffb300'
 /** House ink. The fixture's own body copy is this colour, but only ~150px of it. */
 const INK = '#eef1f6'
-/** The scrim's band — the top of the frame down to the text slot's foot. */
-const SCRIM_BAND = [0, 620] as const
+/** The scrim's band — where it comes up, down to the boosted bottom boundary. */
+const SCRIM_BAND = [SCRIM.top, SAFE_ZONE.bottom] as const
+/**
+ * Everything above the wash — which includes the whole band the slot used to occupy,
+ * the top of the frame down to its old foot at 620. Nothing is drawn up here now
+ * (#60), and the band is derived rather than restated so it follows the wash.
+ */
+const ABOVE_THE_WASH = [0, SCRIM.top] as const
+
+/** One band of a decoded frame, so a colour can be counted where it should be and not. */
+function rows(frameBytes: Buffer, top: number, bottom: number): Buffer {
+  return frameBytes.subarray(top * FRAME_WIDTH * 3, bottom * FRAME_WIDTH * 3)
+}
 
 /** The house accent — on a rendered reel it appears on the CTA card's rule and nowhere else. */
 const ACCENT = '#8b5cf6'
@@ -193,11 +205,20 @@ describe('reel render', () => {
     assert.deepEqual(await size(join(masters, 'beat-2.jpg')), [2592, 6720])
   })
 
-  test('frame 0 is a settled page: video pinned, lazy images in, animation parked', async () => {
+  test('the hook is cut from a settled page: video pinned, lazy images in, animation parked', async () => {
+    // Read off the hook's last frame rather than its first. The scrim is anchored to
+    // the foot of the frame now (#60), and on frame 0 the wash is over two of the
+    // three hazards — which is the wash working, not the page being unsettled. It is
+    // the same shot and the same master either way: the hook is one continuous move
+    // over one capture, so this is the settled page frame 0 was cut from.
+    const bare = await frame(reelPath, CUTS[0]! - 1)
+    assert.ok(pixelsNear(bare, VIDEO_AT_PIN) > 10_000, 'the hero video is not at its pinned time')
+    assert.ok(pixelsNear(bare, LAZY_IMAGE) > 10_000, 'the lazy image never loaded')
+    assert.ok(pixelsNear(bare, PARKED_ANIMATION) > 10_000, 'the infinite animation is not parked')
+    // And frame 0 — the in-feed thumbnail — carries the one hazard that sits above
+    // the scrim's release, so the thumbnail is that capture rather than a re-shoot.
     const first = await frame(reelPath, 0)
-    assert.ok(pixelsNear(first, VIDEO_AT_PIN) > 10_000, 'the hero video is not at its pinned time')
-    assert.ok(pixelsNear(first, LAZY_IMAGE) > 10_000, 'the lazy image never loaded')
-    assert.ok(pixelsNear(first, PARKED_ANIMATION) > 10_000, 'the infinite animation is not parked')
+    assert.ok(pixelsNear(first, VIDEO_AT_PIN) > 10_000, 'the thumbnail is not the settled page')
   })
 
   test('page chrome is baked into no beat, and into this fixture’s hook either', async () => {
@@ -258,6 +279,21 @@ describe('reel render', () => {
     )
   })
 
+  test('the thumbnail reads with its copy at the bottom: ink in the slot, nothing up top', async () => {
+    // Frame 0 is the in-feed thumbnail, and #60 moved the copy on it. Every pixel of
+    // ink is inside the slot's own band, and the band the slot used to occupy — the
+    // whole frame above the wash — carries none of it and none of the wash either.
+    const first = await frame(reelPath, 0)
+    const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
+    assert.ok(inSlot > 10_000, `the hook is not in the slot on the thumbnail (${inSlot}px of ink)`)
+    assert.equal(
+      pixelsNear(first, INK) - inSlot,
+      0,
+      'the thumbnail draws ink outside the slot',
+    )
+    assert.equal(pixelsNear(rows(first, ...ABOVE_THE_WASH), INK), 0, 'ink is still up top')
+  })
+
   test('the hook and its scrim let go together, before the cut', async () => {
     const held = await frame(reelPath, HOOK_HELD)
     // The hook's last frame — dark on it, and the cut is at 90 (#36).
@@ -267,6 +303,18 @@ describe('reel render', () => {
     const under = meanLuma(held, ...SCRIM_BAND)
     const clear = meanLuma(gone, ...SCRIM_BAND)
     assert.ok(clear > under * 1.25, `the scrim outlived its text: ${under} -> ${clear}`)
+  })
+
+  test('the wash rides with its text at the bottom, and the old band is left alone', async () => {
+    // The same two frames read at the band the slot used to occupy (#60). The hook is
+    // lit on one and gone on the other, and up here that makes no difference at all:
+    // the wash inverted with the copy rather than the copy sliding out from under it.
+    const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...ABOVE_THE_WASH)
+    const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...ABOVE_THE_WASH)
+    assert.ok(
+      Math.abs(lit - dark) < dark * 0.05,
+      `something is still drawn above the wash: ${lit} vs ${dark}`,
+    )
   })
 
   test('a label lives and dies inside its own shot', async () => {

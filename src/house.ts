@@ -76,19 +76,6 @@ export const SAFE_ZONE = {
 }
 
 /**
- * The one slot overlay text occupies — left-aligned in the upper band of the safe
- * zone. There is deliberately no per-beat override: a per-beat position is a
- * hand-timed edit by another name (#7's "no duration knobs"), and a slot that shifts
- * between cuts reads as sloppy.
- */
-export const TEXT_SLOT = {
-  x: SAFE_ZONE.left, // 65
-  top: SAFE_ZONE.top, // 270
-  bottom: 620,
-  width: SAFE_ZONE.right - SAFE_ZONE.left, // 950
-}
-
-/**
  * Type sizes, fixed per role. Type never shrinks to fit — a reel whose type size
  * depends on how much Wyatt typed is a reel a viewer can feel is off without being
  * able to say why — so the size is chosen once against #9's budget and the copy is
@@ -109,29 +96,72 @@ export const TYPE = {
   credit: { size: 34, lineHeight: 44 },
 }
 
+/** The air between the copy's foot and the boosted bottom boundary. */
+const SLOT_BREATH = 48
+const SLOT_FOOT = SAFE_ZONE.bottom - SLOT_BREATH
+
 /**
- * The scrim's shape: opaque at the top of the frame, gone at the text band's foot.
+ * The one slot overlay text occupies — left-aligned in the *lower* band of the safe
+ * zone, its foot a breath clear of the boosted bottom boundary (#60).
  *
- * The cube keeps it dense across the text and spends the fade in the band's last
- * stretch, where there is nothing to keep legible — a straight ramp is thinnest
- * exactly where a two-line hook's second line sits. It is a wash, not a plate: a hard
- * edge reads as a TV chyron and competes with the card.
+ * Low, because that is where a Reels viewer is already looking: the caption rail, the
+ * account name and the audio line all sit down there, so a line up in the top band is
+ * a line read last or not at all. Clear of the boundary rather than on it, because
+ * the boundary is where Meta's own UI starts and copy that touches it reads as
+ * something the app drew.
  *
- * `peak` and `falloff` cite no finding, because there is none to cite: #9 fixes the
- * scrim's colour and its top-down gradient and stops there. Both numbers were set by
+ * Two hook lines of leading tall, and text fills it top-down: the slot's head is where a
+ * line starts whatever its role, so a one-line label and a two-line hook share a
+ * first baseline instead of drifting against each other. There is deliberately no
+ * per-beat override — a per-beat position is a hand-timed edit by another name (#7's
+ * "no duration knobs"), and a slot that shifts between cuts reads as sloppy.
+ */
+export const TEXT_SLOT = {
+  x: SAFE_ZONE.left, // 65
+  /** A breath of air under the copy, so the boosted boundary is a margin, not an edge. */
+  bottom: SLOT_FOOT, // 1200
+  top: SLOT_FOOT - 2 * TYPE.hook.lineHeight, // 1016
+  width: SAFE_ZONE.right - SAFE_ZONE.left, // 950
+}
+
+/** The **release**: the stretch above the text the wash takes to come up from nothing. */
+const SCRIM_RELEASE = 240
+const SCRIM_TOP = TEXT_SLOT.top - SCRIM_RELEASE
+
+/**
+ * The scrim's shape: released above the text band, at full density from the band's
+ * head down to the foot of the frame.
+ *
+ * Anchored to the foot rather than the top (#60): the wash exists to hold up the text
+ * and the text is at the bottom now, so the geometry inverts with it rather than
+ * merely sliding. Below the band there is nothing to fade towards — the frame ends,
+ * and the last 35% of it is under Meta's UI anyway — so the whole gradient is spent
+ * *above* the copy, easing the site into the wash instead of stopping at a line.
+ *
+ * The cube is the same cube: it reaches density fast and spends its tail at the thin
+ * end, which over a rising ramp means the wash is already solid where the first line
+ * starts and the eye never finds the edge. It is a wash, not a plate: a hard edge
+ * reads as a TV chyron and competes with the card.
+ *
+ * `peak`, `falloff` and `release` cite no finding, because there is none to cite: #9
+ * fixes the scrim's colour and its gradient and stops there. The numbers were set by
  * eye, and the only pixels they have ever been read against are the fixture site's
- * own — `test/render.test.ts` decodes the hook's band off a rendered fixture reel and
- * asserts the wash rides with its text, which is the shape and not these two values.
- * No client capture (`sites/`) has been reviewed for them. A hero that reads through
- * the wash, or copy that goes muddy over one, is a reason to retune them here — and
- * the retuning is a finding, at which point this comment cites it instead.
+ * own — `test/render.test.ts` decodes the band off a rendered fixture reel and asserts
+ * the wash rides with its text, which is the shape and not these values. No client
+ * capture (`sites/`) has been reviewed for them. A hero that reads through the wash,
+ * or copy that goes muddy over one, is a reason to retune them here — and the retuning
+ * is a finding, at which point this comment cites it instead.
  */
 export const SCRIM = {
-  /** Alpha at the top of the frame. */
+  /** Alpha at the foot of the frame. */
   peak: 0.9,
-  /** The ramp's exponent — higher holds the wash longer before it lets go. */
+  /** The ramp's exponent — higher reaches density sooner and leaves a longer thin tail. */
   falloff: 3,
-  /** Full width, from the top of the frame down to the slot's foot. */
+  /** Full width, from the release point down to the foot of the frame. */
   width: FRAME_WIDTH,
-  height: TEXT_SLOT.bottom,
+  /** Where the wash begins, at zero alpha: one release above the slot's head. */
+  top: SCRIM_TOP, // 776
+  height: FRAME_HEIGHT - SCRIM_TOP, // 1144
+  /** The stretch the wash takes to go from nothing to `peak`, ending at the slot's head. */
+  release: SCRIM_RELEASE,
 }

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
-import { ACCENT, GROUND, INK, SAFE_ZONE, SCRIM, TEXT_SLOT } from '../src/house.ts'
+import { ACCENT, GROUND, INK, SAFE_ZONE, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
 
 /**
  * The frozen table, pinned to the values #9 actually specifies.
@@ -29,13 +29,33 @@ describe('the house style is #9’s, frozen', () => {
     assert.ok(Math.abs((FRAME_HEIGHT - SAFE_ZONE.bottom) / FRAME_HEIGHT - 0.35) < 0.005)
   })
 
-  test('the text slot is one band inside the safe zone, and the scrim covers it', () => {
+  test('the text slot is the safe zone’s lower band, where a Reels viewer looks', () => {
     assert.equal(TEXT_SLOT.x, SAFE_ZONE.left)
-    assert.equal(TEXT_SLOT.top, SAFE_ZONE.top)
-    assert.ok(TEXT_SLOT.bottom < SAFE_ZONE.bottom, 'the slot runs past the safe box')
-    // Full width, from the top of the frame down to the slot's foot: text is never
-    // drawn over an unwashed pixel.
+    // Lower band, not upper: below the midline of the safe box, and its foot a breath
+    // clear of the boosted bottom boundary rather than merely inside it — copy that
+    // touches the boundary reads as something Meta's own UI drew (#60).
+    assert.ok(TEXT_SLOT.top > (SAFE_ZONE.top + SAFE_ZONE.bottom) / 2, 'the slot is still up top')
+    assert.ok(TEXT_SLOT.bottom < SAFE_ZONE.bottom, 'the slot crosses into the bottom 35%')
+    assert.ok(
+      SAFE_ZONE.bottom - TEXT_SLOT.bottom >= 32,
+      'the slot sits right on the boosted boundary',
+    )
+    // And it holds a two-line hook at the hook's own size — type never shrinks to fit.
+    assert.ok(
+      TEXT_SLOT.top + TYPE.hook.lineHeight + TYPE.hook.size <= TEXT_SLOT.bottom,
+      'a two-line hook runs out of the slot',
+    )
+  })
+
+  test('the scrim is dense at the frame’s foot and released above the text', () => {
+    // Full width, and anchored to the *foot* of the frame rather than its top: the
+    // text sits at the bottom now, so the wash is densest there and lets go upward.
     assert.equal(SCRIM.width, FRAME_WIDTH)
-    assert.equal(SCRIM.height, TEXT_SLOT.bottom)
+    assert.equal(SCRIM.top + SCRIM.height, FRAME_HEIGHT)
+    // Text is never drawn over an unwashed pixel: the wash is at full density by the
+    // slot's head, so both lines of a two-line hook sit on peak, and it runs past the
+    // slot's foot rather than letting go under the copy.
+    assert.ok(SCRIM.top + SCRIM.release <= TEXT_SLOT.top, 'the wash is still coming up under the copy')
+    assert.ok(SCRIM.top + SCRIM.height >= TEXT_SLOT.bottom, 'the wash lets go above the slot’s foot')
   })
 })
