@@ -20,6 +20,7 @@ import {
   pixelsNear,
   probe,
   reel,
+  withWorkspace,
   workspace,
 } from './helpers.ts'
 import type { Run, Workspace } from './helpers.ts'
@@ -83,6 +84,23 @@ export default defineSite({
 `
 }
 
+/** The same three beats, with the middle one fit — one page carrying one fit beat. */
+function fittedSite(url: string): string {
+  return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { text: "Spotless, it's every\\ntime you look." },
+  beats: [
+    { selector: '#hero' },
+    { selector: '#services', fit: true },
+    { selector: '#gallery', direction: 'diagonal' },
+  ],
+  cta: { credit: 'fixture.test' },
+})
+`
+}
+
 let fixture: FixtureSite
 let ws: Workspace
 let reelPath: string
@@ -139,7 +157,23 @@ describe('reel render', () => {
     // timeline's rather than a spinner's idea of how far along it is.
     assert.equal(firstRun.stdout.match(/^master \d\/4 /gm)?.length, 4)
     assert.equal(firstRun.stdout.match(/^shot {3}\d\/5 /gm)?.length, 5)
+    // And nothing else: a config naming `fit` nowhere measures nothing, so it prints
+    // no measurement line either (#78).
+    assert.doesNotMatch(firstRun.stdout, /^measure/m)
   })
+
+  test("a fit beat's measurement load is a phase line of its own", () =>
+    withWorkspace(async (fitWs) => {
+      // #services is 2400px, so the beat is fit — which costs a page load and settle
+      // at the base viewport before the capture pass knows what viewport to load at.
+      // Its own workspace: a render wipes out/, and the run above is still asserted.
+      await fitWs.site('fitted', fittedSite(fixture.url))
+      const run = await reel(['render', 'fitted'], fitWs.root)
+      assert.equal(run.code, 0, run.output)
+      // Named for the section it was opened to read, in the same columns as the rest.
+      assert.match(run.stdout, /^measure {4}services {3}\d+\.\d+s$/m)
+      assert.equal(run.stdout.match(/^measure /gm)?.length, 1)
+    }))
 
   test('writes an mp4 in the container #1 requires', async () => {
     assert.ok(existsSync(reelPath), 'no mp4 at out/fixture-3beat.mp4')

@@ -230,7 +230,10 @@ and `check` refuses it for the reason it always did: too short for a frame.
 Two things follow. A fit beat sees a **different layout**: widening reflows the site,
 so its section is measured twice — once at the base viewport to learn the width, once
 after the reflow to frame the clip — and the second measurement is the one that is
-shot. The reflow moves the height either way and the width is not re-derived from it:
+shot. The first is a **measurement load**: a page load and settle of its own, before
+the capture pass knows what viewport to load at, and a render reports what it cost on
+a `measure` line — one per page carrying a fit beat, however many fit beats that is.
+The reflow moves the height either way and the width is not re-derived from it:
 a fit clip is one frame exactly, centred on the section, because a fit master that
 came back taller than a frame would be a fit beat quietly not fitting. And a fit beat
 **cannot share a page load** with a non-fit one: a page load is

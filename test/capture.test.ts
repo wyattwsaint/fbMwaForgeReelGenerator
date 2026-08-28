@@ -303,3 +303,60 @@ async function size(path: string): Promise<[number, number]> {
   const { width, height } = await probe(path, 'stream=width,height', 'v:0')
   return [Number(width), Number(height)]
 }
+
+/**
+ * A fit beat's first load — the one that measures its section at the base viewport —
+ * costs a full settle, and #78 is that it was charged to no phase line at all.
+ */
+describe('captureMasters, what the pass reports', () => {
+  test('reports the fit measurement once per URL measured, beside the masters', () =>
+    withWorkspace(async (ws) => {
+      const site: SiteConfig = {
+        url: fixture.url,
+        hook: { text: 'Spotless, every time.' },
+        beats: [
+          { selector: '#services', fit: true },
+          { selector: '#gallery', fit: true },
+          { selector: '#wordy', fit: true, url: `${fixture.url}/other.html` },
+        ],
+        cta: { credit: 'fixture.test' },
+      }
+      const events: { kind: string; subject: string }[] = []
+      await captureMasters(site, planReel(site), join(ws.root, 'out'), (event) => {
+        assert.ok(event.ms >= 0, 'a reported cost is not a duration')
+        events.push({ kind: event.kind, subject: shotName(event.shot) })
+      })
+
+      // Two URLs carry a fit beat, so two measurement loads — never one for the pass,
+      // and never one per fit beat: the two on the index page shared a load.
+      assert.deepEqual(
+        events.filter((event) => event.kind === 'measure'),
+        [
+          { kind: 'measure', subject: 'beat-0' },
+          { kind: 'measure', subject: 'beat-2' },
+        ],
+      )
+      // And every master that was taken is still reported as one.
+      assert.equal(events.filter((event) => event.kind === 'master').length, 4)
+    }))
+
+  test('reports nothing but masters when the config names fit nowhere', () =>
+    withWorkspace(async (ws) => {
+      const site: SiteConfig = {
+        url: fixture.url,
+        hook: { text: 'Spotless, every time.' },
+        beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#short' }],
+        cta: { credit: 'fixture.test' },
+      }
+      const kinds: string[] = []
+      await captureMasters(site, planReel(site), join(ws.root, 'out'), (event) =>
+        kinds.push(event.kind),
+      )
+      assert.deepEqual(kinds, ['master', 'master', 'master', 'master'])
+    }))
+})
+
+/** The name a master file is written under — how this suite says which shot it means. */
+function shotName(shot: Shot): string {
+  return shot.kind === 'beat' ? `beat-${shot.index}` : shot.kind
+}
