@@ -120,10 +120,19 @@ one session and is then discarded. It is never a build artifact, because a kept
 master is a photograph of a page that may no longer exist.
 
 **Settle** — the routine that puts the page into a deterministic state before a
-master is taken: fonts loaded, every image forced eager and decoded serially,
-videos paused and seeked to a fixed time with the page's own `play()` stubbed
-out, finite animations finished and infinite ones parked. A settled page
-captures bit-identically run to run.
+master is taken: **stabilise**, then **freeze**. A settled page captures
+bit-identically run to run.
+
+**Stabilise** — the half of settle every capture needs, whether or not it wants
+the page still: fonts loaded, every image forced eager and decoded serially. It
+step-scrolls the page and returns to 0 to trip the observers behind lazy images,
+so a reveal that only fires once has already fired by the time anything is
+recorded.
+
+**Freeze** — the half only a master needs: videos paused and seeked to a fixed
+time with the page's own `play()` stubbed out, finite animations finished and
+infinite ones parked. It is what makes two runs of one master identical, so it is
+exactly what a shot of the page's own motion must not have.
 
 **Punch-in** — cropping into a section so the master is larger than the frame.
 Sections are usually shorter than 1920px, so a pan only has room to travel if the

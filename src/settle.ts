@@ -8,8 +8,8 @@ import { DEFAULT_VIDEO_TIME } from './frame.ts'
  *
  * Two halves, because only one of them is about determinism: `stabilise` is the
  * preparation every capture needs, and `freeze` is the pinning only a master does
- * (#59). Settle is both, in that order, which is what every path did before the
- * split — so masters, `check` and the sections report are unchanged.
+ * (#59). Settle is both, in that order — so masters, `check` and the sections
+ * report see what they saw before the split.
  */
 export async function settle(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promise<void> {
   await stabilise(page)
@@ -56,7 +56,9 @@ export async function stabilise(page: Page): Promise<void> {
     }
   })
 
-  // 3. Fonts last: everything above can pull in a face.
+  // 3. Fonts, because everything above can pull in a face. Not the last word on
+  //    them: `freeze` finishes reveal animations, which can render glyphs nothing
+  //    has asked for yet, so it waits on fonts again at its end.
   await page.evaluate(async () => {
     await document.fonts.ready
   })
@@ -70,7 +72,7 @@ export async function stabilise(page: Page): Promise<void> {
  * Only meaningful on a stabilised page: an image that arrives after the freeze is
  * motion the freeze did not stop.
  */
-export async function freeze(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promise<void> {
+export async function freeze(page: Page, videoTime: number): Promise<void> {
   // 1. Videos. Stubbing `play()` first is the whole trick: a paused video that the
   //    page's own script re-plays lands the master on an arbitrary frame (#6, defect 2).
   await page.evaluate(async (t) => {
@@ -118,5 +120,13 @@ export async function freeze(page: Page, videoTime = DEFAULT_VIDEO_TIME): Promis
         }
       }
     }
+  })
+
+  // 3. Fonts again, and this time last. Finishing a reveal animation can render
+  //    text that was hidden at frame 0, and a `@font-face` is fetched when its
+  //    glyphs are first drawn — so `stabilise`'s wait has already resolved by the
+  //    time the face is asked for, and a master can land mid font-swap.
+  await page.evaluate(async () => {
+    await document.fonts.ready
   })
 }
