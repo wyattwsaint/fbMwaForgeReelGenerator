@@ -26,6 +26,12 @@ export default defineSite({
       selector: '#week',
       punchFactor: 1.8,
       direction: 'lateral',
+      // #week's own heading is 'Mornings here. Afternoons yours.' — the line the hook
+      // above deliberately does not use, because hearing it twice in the first 6.5s
+      // reads as a stutter. #62 would default this beat that exact line, so the label
+      // is what keeps the hook's decision from being undone by the page. It is also
+      // over budget at 32 characters, which is the smaller of the two reasons.
+      label: 'Monday, Wednesday, Thursday',
     },
     {
       // #teachers is 530px on its own, #costs 416 — either alone is short enough that
@@ -37,6 +43,11 @@ export default defineSite({
       selector: '#teachers',
       height: 1310,
       punchFactor: 1.5,
+      // The window spans both sections, so the heading #62 finds inside it is
+      // #teachers' alone — 'Alongside Homeschool Families', one character over budget
+      // and only half of what the shot shows. The label names the pair the window was
+      // opened for.
+      label: 'Teachers and tuition',
     },
     {
       // 810px, so the frame's height is what the punch buys — and then some. The
