@@ -27,6 +27,11 @@ export type Beat = {
   height?: number
   /** Default 1.0 — how far into this section the master is punched. */
   punchFactor?: number
+  /**
+   * Show the whole section in one frame by widening the capture viewport (#65).
+   * The other end of `punchFactor`, so naming both is a config error.
+   */
+  fit?: boolean
   /** Override; otherwise alternates from the hook. */
   move?: Move
   /** Override; otherwise the deterministic rotation. */

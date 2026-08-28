@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
+import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from './frame.ts'
 import { hookRect, sectionRects } from './page.ts'
 import type { Rect } from './page.ts'
 import { BEAT_MS, panTravelNeeded, punchFactorFor } from './plan.ts'
@@ -28,6 +28,12 @@ export type Section = {
   hook: boolean
   /** Absent on the hook, whose punch is the plan's rather than the config's. */
   punchFactor?: number
+  /**
+   * The capture viewport a `fit: true` beat would widen to, in CSS pixels — present
+   * only on the sections a punch cannot show whole, which is the sections taller than
+   * one frame. Absent on the hook, which is not a beat and takes no `fit`.
+   */
+  fitWidth?: number
 }
 
 /**
@@ -60,6 +66,7 @@ export async function sections(url: string): Promise<Section[]> {
         height: rounded,
         hook,
         ...(hook ? {} : { punchFactor: punchFor(rounded) }),
+        ...(hook || rounded <= FRAME_HEIGHT ? {} : { fitWidth: fitViewportWidth(rounded) }),
       }
     })
   } finally {
@@ -110,12 +117,17 @@ export function sectionLines(found: Section[]): string[] {
   const tallest = Math.max(...found.map((section) => section.height))
   const lines = found.map((section) => {
     const punch = section.punchFactor
+    const fit = section.fitWidth
     return [
       (section.hook ? 'hook' : '').padEnd(6),
       section.selector.padEnd(width + 2),
       `y ${String(section.y).padEnd(7)}`,
       `${String(section.height).padStart(String(tallest).length)}px`,
       punch === undefined ? '' : `   punchFactor ${punch.toFixed(2)}`,
+      // The two ways to shoot the section, side by side: punch in on part of it, or
+      // fit the whole of it by capturing this wide. A row with no fit column is a
+      // section already inside one frame, which has nothing to fit.
+      fit === undefined ? '' : `   fit ${fit}px`,
     ]
       .join('')
       .trimEnd()

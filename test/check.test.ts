@@ -242,6 +242,72 @@ export default defineSite({
       )
     }))
 
+  test('a beat naming both fit and punchFactor fails — they are opposite ends', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'both',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services', fit: true, punchFactor: 1.4 }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'both'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(
+        run.stdout,
+        /beats\[1\] names both fit and punchFactor; fit shows the whole section, punchFactor crops into it/,
+      )
+    }))
+
+  test('a fit beat too short for a frame is still refused — fit only pulls out', () =>
+    withWorkspace(async (ws) => {
+      // #short is 400px, and fit widens the viewport to shrink a section against the
+      // frame. There is nothing there for it to do: a section already inside one frame
+      // needs a punch, and narrowing to reach it would shoot the phone layout.
+      await ws.site(
+        'fitshort',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#short', fit: true }]`,
+        ),
+      )
+      const run = await reel(['check', 'fitshort'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /beats\[2\] '#short' is 400px tall; a punchFactor of 1 needs 1920px/)
+    }))
+
+  test('a fit beat taller than a frame passes, and is left unpunched', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'fitted',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services', fit: true }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'fitted'], ws.root)
+      assert.equal(run.code, 0, run.output)
+    }))
+
+  test('a fit beat asked to pan is refused — a fit section has nothing to travel', () =>
+    withWorkspace(async (ws) => {
+      await ws.site(
+        'fitpan',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services', fit: true, move: 'pan', direction: 'vertical' }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'fitpan'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      // #services is 2400px, so unfit it would have 480px of vertical travel — fit is
+      // what spends it, and the finding names fit rather than a punch to raise.
+      assert.match(
+        run.stdout,
+        /beats\[1\] '#services' — a vertical pan needs 210px of travel, a fit section is exactly one frame and leaves 0px \(drift it instead\)/,
+      )
+    }))
+
   test('music without a file fails by name', () =>
     withWorkspace(async (ws) => {
       await ws.site(

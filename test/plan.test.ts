@@ -14,6 +14,7 @@ import {
   panAxes,
   panTravelAvailable,
   panTravelNeeded,
+  panTravelProblems,
   planReel,
 } from '../src/plan.ts'
 import type { Shot, Timeline } from '../src/plan.ts'
@@ -367,6 +368,47 @@ describe('planReel', () => {
         planReel(config(3, { beats: config(3).beats.map((beat) => ({ ...beat, punchFactor: 1.05 })) })),
       )
       for (const shot of beats) assert.equal(shot.punchFactor, 1.05)
+    })
+
+    test('a fit beat is not punched, and drifts rather than panning nowhere', () => {
+      // Beat 2 is the diagonal in the rotation, so it is the beat the plan would
+      // otherwise punch for lateral room — a punch would crop back into the section
+      // fit exists to show whole.
+      const site = config(5)
+      const fit = config(5, {
+        beats: site.beats.map((beat, i) => (i === 2 ? { ...beat, fit: true } : beat)),
+      })
+      const [plain, fitted] = [beatShots(planReel(site))[2]!, beatShots(planReel(fit))[2]!]
+      assert.equal(plain.move, 'pan')
+      assert.equal(plain.punchFactor, DEFAULT_LATERAL_PUNCH_FACTOR)
+      assert.equal(fitted.move, 'drift')
+      assert.equal(fitted.punchFactor, 1)
+      assert.equal(fitted.fit, true)
+      // And it is still an override seeded on the index: the beats either side of it
+      // planned the same move, direction and zoom as they did without it.
+      assert.deepEqual(beatShots(planReel(fit))[1], beatShots(planReel(site))[1])
+      assert.deepEqual(beatShots(planReel(fit))[3], beatShots(planReel(site))[3])
+    })
+
+    test('a fit beat asked to pan is still asked to pan, and still reported', () => {
+      const site = config(3, {
+        beats: config(3).beats.map((beat, i) =>
+          i === 0 ? { ...beat, fit: true, move: 'pan' as const } : beat,
+        ),
+      })
+      const shot = beatShots(planReel(site))[0]!
+      assert.equal(shot.move, 'pan')
+      assert.equal(shot.direction, 'vertical')
+      // However tall the section measured, fit makes it one frame — so there is no
+      // travel, whatever the caller passes.
+      assert.deepEqual(panTravelProblems(shot, '#s0', 6000), [
+        `beats[0] '#s0' — a vertical pan needs 210px of travel, a fit section is ` +
+          'exactly one frame and leaves 0px (drift it instead)',
+      ])
+    })
+
+    test('a config naming fit nowhere carries no fit at all', () => {
+      for (const shot of planReel(config(5)).shots) assert.equal(shot.fit, undefined)
     })
 
     test('a vertical pan travels whatever the section has past one frame', () => {

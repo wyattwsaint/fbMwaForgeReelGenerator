@@ -67,6 +67,15 @@ export function configProblems(config: SiteConfig, root: string): string[] {
       if (beat?.punchFactor !== undefined && beat.punchFactor < DEFAULT_PUNCH_FACTOR) {
         problems.push(`beats[${i}].punchFactor is ${beat.punchFactor}; ${DEFAULT_PUNCH_FACTOR} is "no punch"`)
       }
+      // The two ends of the same axis: `fit` widens the capture viewport to show the
+      // whole section, `punchFactor` crops into it. A beat that names both has not
+      // said which of the two it wants, and there is no answer to guess at.
+      if (beat?.fit && beat.punchFactor !== undefined) {
+        problems.push(
+          `beats[${i}] names both fit and punchFactor; fit shows the whole section, ` +
+            'punchFactor crops into it',
+        )
+      }
       if (typeof beat?.label === 'string') {
         problems.push(...copyProblems(`beats[${i}].label`, beat.label, COPY_BUDGETS.label, 'label'))
       }

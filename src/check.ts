@@ -125,6 +125,9 @@ async function checkBeat(
   // shorter than the frame", stated in the section's own pixels.
   // The *planned* punch, not the config's: it is what capture will use, and the plan
   // punches a pan the config left flat rather than shooting a move that cannot move.
+  // `fit` is no exemption from this: it only ever widens the capture viewport, and
+  // widening cannot make a section that is already inside one frame fill it. A short
+  // section still needs a punch, or a taller subject.
   const punch = shot?.punchFactor ?? beat.punchFactor ?? DEFAULT_PUNCH_FACTOR
   const needed = punchedFrameHeight(punch)
   if (height < needed) {
