@@ -25,12 +25,19 @@ export type Move = 'drift' | 'pan'
  * `still` is the doctrine every shot was built on: one frozen master, with the camera
  * synthesised over it in post. `ambient` records the stabilised hero animating on its
  * own clock — a video background, a carousel, a parallax idle — for exactly the hook's
- * duration, which is the one thing the freeze was always throwing away.
+ * duration, which is the one thing the freeze was always throwing away. `scroll`
+ * records the same hero while a scripted scroll runs from the top of the page through
+ * it (#64), so the effects keyed to the viewport *moving* fire on camera too.
+ *
+ * The two live motions differ in what the page is doing, not in how it is captured:
+ * `ambient` waits for the page to move on its own, `scroll` makes it move. A `scroll`
+ * hook on a page whose reveals cannot re-fire degrades to `ambient`, and `check` says
+ * so — the scroll's pace and distance are house constants either way (`./scroll.ts`).
  *
  * The hook's alone. Beats stay master-based; if a section below the fold earns motion
  * later, ADR-0006 is the decision to extend rather than reverse.
  */
-export type HookMotion = 'still' | 'ambient'
+export type HookMotion = 'still' | 'ambient' | 'scroll'
 
 /**
  * A motion that is *recorded* rather than synthesised — every `HookMotion` but `still`.

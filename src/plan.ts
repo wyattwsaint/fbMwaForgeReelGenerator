@@ -34,7 +34,7 @@ export type Shot = {
   fit?: true
   /**
    * How this shot's site pixels are got. Absent is `still` — one frozen master, with
-   * the move synthesised over it — which is every shot but an `ambient` hook (#63).
+   * the move synthesised over it — which is every shot but a live hook (#63, #64).
    *
    * Present is the whole of what downstream needs: the input is a recording rather
    * than a screenshot, so the page was stabilised and never frozen, and the chain
@@ -49,8 +49,9 @@ export type Shot = {
  * Whether a shot is recorded rather than synthesised.
  *
  * A predicate rather than the field comparison spelled out at each call site: "is this
- * live" is the question `camera` and `compose` both ask, and `motion !== undefined` is
- * only the answer to it until a second live motion exists.
+ * live" is the question `camera` and `compose` both ask, and neither cares *which*
+ * live motion it is: an `ambient` hook and a `scroll` one differ in what the page is
+ * doing under the lens, and by the time either reaches a camera it is a recording.
  */
 export function isLive(shot: Shot): boolean {
   return shot.motion !== undefined

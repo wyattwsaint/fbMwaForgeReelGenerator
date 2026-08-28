@@ -186,9 +186,28 @@ describe('planReel', () => {
     })
 
     test("beats are never live — the motion is the hook's alone", () => {
-      for (const shot of planReel(withHook({ motion: 'ambient' })).shots.slice(1)) {
-        assert.equal(shot.motion, undefined, `${shot.kind} ${shot.index} is live`)
+      for (const motion of ['ambient', 'scroll'] as const) {
+        for (const shot of planReel(withHook({ motion })).shots.slice(1)) {
+          assert.equal(shot.motion, undefined, `${motion}: ${shot.kind} ${shot.index} is live`)
+        }
       }
+    })
+
+    test('a scroll hook plans the ambient hook, carrying its own motion', () => {
+      // #64: the two live motions differ in what the page is doing under the lens, and
+      // the plan is upstream of that entirely — it says "recorded", and the capture
+      // pass is where "while a scripted scroll runs" happens. So the timeline a scroll
+      // hook plans is the ambient one with a different word in it, and the scroll's own
+      // pace and distance appear nowhere in it, because they are house constants.
+      const walked = planReel(withHook({ motion: 'scroll' }))
+      const dwelt = planReel(withHook({ motion: 'ambient' }))
+      const hook = walked.shots[0] as Shot
+      assert.equal(hook.motion, 'scroll')
+      assert.equal(isLive(hook), true)
+      assert.deepEqual(
+        walked.shots.map((shot) => ({ ...shot, motion: undefined })),
+        dwelt.shots.map((shot) => ({ ...shot, motion: undefined })),
+      )
     })
   })
 

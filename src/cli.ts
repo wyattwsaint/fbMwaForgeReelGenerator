@@ -56,8 +56,9 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   const elapsed = seconds(Date.now() - started)
 
   // Notes first, and printed whether or not anything failed: a note is something the
-  // run *did* — a `fit` past the cap, panned instead (#66) — so it is read alongside
-  // the reel it describes, and it never changes the exit code.
+  // run *did* — a `fit` past the cap, panned instead (#66); a `scroll` hook recorded as
+  // ambient (#64) — so it is read alongside the reel it describes, and it never changes
+  // the exit code. Burying it under a list of selector problems is how it goes unread.
   for (const note of notes) console.log(`note  ${note}`)
 
   if (problems.length > 0) {

@@ -31,6 +31,12 @@
     object-fit: fill; background: #000; }
   #hero #lazy { position: absolute; top: 2200px; left: 0; width: 1080px; height: 400px; }
   #hero #throb { position: absolute; top: 1500px; left: 0; width: 1080px; background: #ff2ea6; }
+  /* Hazard 6 — a scroll-triggered reveal (#64). Below the fold at scroll 0 and
+     therefore invisible to every capture that never scrolls; painted after #throb so
+     it covers it where they overlap, and 50px clear of the 1920px fold so "hidden at
+     frame 0" does not turn on a rounding. */
+  #hero #reveal { position: absolute; top: 1850px; left: 0; width: 1080px; height: 400px;
+    background: #00e676; opacity: 0; }
   /* Textured on purpose: a drift over a flat field is a move nothing can see, and
      "every shot moves" has to be observable in the rendered frames. */
   #services { height: 2400px;
@@ -69,6 +75,8 @@
     <video src="hero.mp4" preload="none" autoplay muted loop playsinline></video>
     <div id="throb"></div>
     <img id="lazy" data-src="img/tile-5.svg" loading="lazy" alt="">
+    <!-- Hazard 6 — fires whenever it enters the viewport, and un-fires when it leaves. -->
+    <div id="reveal"></div>
   </section>
 
   <section id="services"><h2>Services</h2></section>
@@ -105,6 +113,14 @@
     }
   }, { rootMargin: '200px' })
   for (const img of document.querySelectorAll('img[data-src]')) lazy.observe(img)
+
+  // Hazard 6 — a scroll-triggered reveal that can re-fire. It never unobserves, so it
+  // comes back every time the element leaves and re-enters the viewport, which is what
+  // makes it recordable under #64's scripted scroll. `once.html` is the other half of
+  // this hazard: the same reveal, wired to fire exactly once.
+  new IntersectionObserver((entries) => {
+    for (const e of entries) e.target.style.opacity = e.isIntersecting ? '1' : '0'
+  }).observe(document.querySelector('#reveal'))
 </script>
 </body>
 </html>
