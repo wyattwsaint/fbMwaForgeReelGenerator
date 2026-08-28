@@ -321,19 +321,21 @@ describe('captureMasters, what the pass reports', () => {
         ],
         cta: { credit: 'fixture.test' },
       }
-      const events: { kind: string; subject: string }[] = []
+      const events: { kind: string; shots: string[] }[] = []
       await captureMasters(site, planReel(site), join(ws.root, 'out'), (event) => {
         assert.ok(event.ms >= 0, 'a reported cost is not a duration')
-        events.push({ kind: event.kind, subject: shotName(event.shot) })
+        const shots = event.kind === 'master' ? [event.shot] : event.shots
+        events.push({ kind: event.kind, shots: shots.map(shotName) })
       })
 
       // Two URLs carry a fit beat, so two measurement loads — never one for the pass,
-      // and never one per fit beat: the two on the index page shared a load.
+      // and never one per fit beat: the two on the index page shared a load, and the
+      // one line for it names both of them rather than the first answering for both.
       assert.deepEqual(
         events.filter((event) => event.kind === 'measure'),
         [
-          { kind: 'measure', subject: 'beat-0' },
-          { kind: 'measure', subject: 'beat-2' },
+          { kind: 'measure', shots: ['beat-0', 'beat-1'] },
+          { kind: 'measure', shots: ['beat-2'] },
         ],
       )
       // And every master that was taken is still reported as one.

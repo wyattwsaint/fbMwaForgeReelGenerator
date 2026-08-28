@@ -38,11 +38,16 @@ export type Master = { shot: Shot; path: string; size: MasterSize }
  * A `master` is the usual one: pixels landed, charged to the shot they are for. A
  * `measure` is a fit beat's first page load — the one that learns how far the capture
  * viewport has to widen (#65) — which is a full settle and belongs to no master at
- * all, so it is named rather than folded into some shot's line (#78). It is reported
- * once per URL measured and carries the first fit shot on that page, which is the one
- * whose section the load was opened to read.
+ * all, so it is named rather than folded into some shot's line (#78).
+ *
+ * Two kinds, two shapes, because a measurement is per *load* and a master is per
+ * shot: one load answers for every fit beat on its page, so it carries all of them
+ * rather than a representative. A single shot standing for several is how a line
+ * comes to name one of two sections it was really paid for.
  */
-export type CaptureEvent = { kind: 'master' | 'measure'; shot: Shot; ms: number }
+export type CaptureEvent =
+  | { kind: 'master'; shot: Shot; ms: number }
+  | { kind: 'measure'; shots: readonly Shot[]; ms: number }
 
 /** Called as each cost lands — `render` reports the pass (#18). */
 export type OnCapture = (event: CaptureEvent) => void
@@ -158,8 +163,9 @@ async function measureFitWidths(
         widths.set(shot, fitViewportWidth((await subjectRect(page, shot)).height))
       }
     })
-    // Per load, not per fit beat: two fit beats sharing a page shared this settle.
-    onCapture({ kind: 'measure', shot: shots[0] as Shot, ms: Date.now() - since })
+    // Per load, not per fit beat: two fit beats sharing a page shared this settle,
+    // and both are named on it rather than one of them answering for the other.
+    onCapture({ kind: 'measure', shots, ms: Date.now() - since })
   }
   return widths
 }

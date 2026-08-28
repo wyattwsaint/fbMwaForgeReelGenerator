@@ -101,16 +101,18 @@ export async function render(
   // A fit beat's measurement load is a phase of its own rather than a count off the
   // masters (#78): it is a full page settle that produced no pixels, and how many
   // there are is a property of the config's fit beats, not of the reel's shots.
-  const masters = await captureMasters(config, timeline, dir, ({ kind, shot, ms }) =>
+  const masters = await captureMasters(config, timeline, dir, (event) =>
     report(
-      kind === 'master'
+      event.kind === 'master'
         ? {
             name: 'master',
             count: { index: taken++, total: masterCount },
-            subject: subjectOf(shot),
-            ms,
+            subject: subjectOf(event.shot),
+            ms: event.ms,
           }
-        : { name: 'measure', subject: subjectOf(shot), ms },
+        : // Every fit section the load answered for, because one load serves all of
+          // them: a line naming only the first would under-state what it bought.
+          { name: 'measure', subject: event.shots.map(subjectOf).join(', '), ms: event.ms },
     ),
   )
   const byShot = new Map(masters.map((master) => [master.shot, master]))
