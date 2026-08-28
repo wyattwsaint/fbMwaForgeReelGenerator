@@ -36,20 +36,29 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   const slug = argument
   const started = Date.now()
   let problems: string[]
+  let notes: string[]
   let cut: Render | null = null
   try {
     const config = await loadSite(slug, root)
     if (command === 'check') {
-      problems = (await check(config, root)).problems
+      const checked = await check(config, root)
+      problems = checked.problems
+      notes = checked.notes
     } else {
       cut = await render(config, root, slug, (phase) => console.log(phaseLine(phase)))
       problems = cut.problems
+      notes = cut.notes
     }
   } catch (error) {
     console.error(`${command} ${slug} — ${error instanceof Error ? error.message : error}`)
     return 1
   }
   const elapsed = seconds(Date.now() - started)
+
+  // Notes first, and printed whether or not anything failed: a note is something the
+  // run *did* — a `fit` past the cap, panned instead (#66) — so it is read alongside
+  // the reel it describes, and it never changes the exit code.
+  for (const note of notes) console.log(`note  ${note}`)
 
   if (problems.length > 0) {
     // `render` has already printed its own `check failed` line; a standalone one has

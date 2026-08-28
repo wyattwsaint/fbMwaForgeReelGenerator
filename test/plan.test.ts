@@ -9,16 +9,20 @@ import {
   DEFAULT_TRACK,
   DIRECTIONS,
   envelopeOf,
+  fitCapFallback,
   FPS,
   frameCount,
   isLive,
+  MAX_FIT_SECTION_HEIGHT,
   panAxes,
+  pastFitCap,
   panTravelAvailable,
   panTravelNeeded,
   panTravelProblems,
   planReel,
 } from '../src/plan.ts'
 import type { Shot, Timeline } from '../src/plan.ts'
+import { MIN_FIT_SCALE } from '../src/house.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { snapshot } from './helpers.ts'
 
@@ -520,6 +524,87 @@ describe('planReel', () => {
 
     test('a config naming fit nowhere carries no fit at all', () => {
       for (const shot of planReel(config(5)).shots) assert.equal(shot.fit, undefined)
+    })
+
+    test('a fit beat inside the cap is the fit beat it was, measured or not', () => {
+      const site = config(5, {
+        beats: config(5).beats.map((beat, i) => (i === 2 ? { ...beat, fit: true } : beat)),
+      })
+      const heights = [null, null, MAX_FIT_SECTION_HEIGHT, null, null]
+      // At the cap exactly, and one pixel under it: the floor is what the section may
+      // be drawn *at*, not what it has to stay clear of.
+      assert.deepEqual(beatShots(planReel(site, [], heights))[2], beatShots(planReel(site))[2])
+      assert.deepEqual(
+        beatShots(planReel(site, [], [null, null, MAX_FIT_SECTION_HEIGHT - 1, null, null]))[2],
+        beatShots(planReel(site))[2],
+      )
+    })
+
+    test('a fit beat past the cap falls back to fit-to-width and a vertical pan', () => {
+      const site = config(5, {
+        beats: config(5).beats.map((beat, i) => (i === 2 ? { ...beat, fit: true } : beat)),
+      })
+      const tall = MAX_FIT_SECTION_HEIGHT + 1
+      const shot = beatShots(planReel(site, [], [null, null, tall, null, null]))[2]!
+      assert.equal(shot.fit, undefined)
+      assert.equal(shot.move, 'pan')
+      assert.equal(shot.direction, 'vertical')
+      // Fit to *width*: no punch, so the master is the page at frame width and the
+      // section's own height is what the pan travels across.
+      assert.equal(shot.punchFactor, 1)
+      assert.ok(panTravelAvailable('y', shot.punchFactor, tall) >= panTravelNeeded(shot.durationMs))
+      assert.deepEqual(panTravelProblems(shot, '#s2', tall), [])
+      // And the fallback is still one beat's business: its neighbours plan unchanged.
+      const plain = beatShots(planReel(config(5)))
+      assert.deepEqual(beatShots(planReel(site, [], [null, null, tall, null, null]))[1], plain[1])
+      assert.deepEqual(beatShots(planReel(site, [], [null, null, tall, null, null]))[3], plain[3])
+    })
+
+    test('the fallback names the beat and the section that was too tall', () => {
+      const beat: Beat = { selector: '#s2', fit: true }
+      assert.equal(fitCapFallback(2, beat, MAX_FIT_SECTION_HEIGHT), null)
+      assert.equal(fitCapFallback(2, { selector: '#s2' }, 9000), null, 'no fit, nothing to fall back')
+      assert.equal(
+        fitCapFallback(2, beat, 4400),
+        `beats[2] '#s2' is 4400px tall; fit pulls out to at most ${MAX_FIT_SECTION_HEIGHT}px, ` +
+          'so this beat is fit to width and panned vertically instead',
+      )
+    })
+
+    test('the cap is the legibility floor said as a height', () => {
+      // One constant, beside the type sizes it defends: half is the scale, so the
+      // tallest section a fit may pull out to is two frames.
+      assert.equal(MIN_FIT_SCALE, 0.5)
+      assert.equal(MAX_FIT_SECTION_HEIGHT, 3840)
+      assert.equal(pastFitCap(3840), false)
+      assert.equal(pastFitCap(3841), true)
+    })
+
+    test('the fallback pan is vertical even where the fit beat named a direction', () => {
+      // `direction` on a fit beat was a field the plan dropped, because fit drifts. The
+      // fallback must not cash it in: a lateral pan at no punch has no travel at all,
+      // which would fail `check` over a line the human wrote for a beat that drifted.
+      const site = config(3, {
+        beats: config(3).beats.map((beat, i) =>
+          i === 1 ? { ...beat, fit: true, direction: 'lateral' as const } : beat,
+        ),
+      })
+      const shot = beatShots(planReel(site, [], [null, 9000, null]))[1]!
+      assert.equal(shot.direction, 'vertical')
+      assert.deepEqual(panTravelProblems(shot, '#s1', 9000), [])
+    })
+
+    test('a fit beat past the cap still takes the move the config named', () => {
+      // The fallback supplies a move for a beat that named none. A beat that named one
+      // is the human's, exactly as it is for a fit beat inside the cap.
+      const site = config(3, {
+        beats: config(3).beats.map((beat, i) =>
+          i === 1 ? { ...beat, fit: true, move: 'drift' as const } : beat,
+        ),
+      })
+      const shot = beatShots(planReel(site, [], [null, 9000, null]))[1]!
+      assert.equal(shot.move, 'drift')
+      assert.equal(shot.fit, undefined)
     })
 
     test('a vertical pan travels whatever the section has past one frame', () => {

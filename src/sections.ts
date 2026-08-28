@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from './frame.ts'
 import { hookRect, sectionRects } from './page.ts'
 import type { Rect } from './page.ts'
-import { BEAT_MS, panTravelNeeded, punchFactorFor } from './plan.ts'
+import { BEAT_MS, panTravelNeeded, pastFitCap, punchFactorFor } from './plan.ts'
 import { settle } from './settle.ts'
 
 /**
@@ -32,6 +32,10 @@ export type Section = {
    * The capture viewport a `fit: true` beat would widen to, in CSS pixels — present
    * only on the sections a punch cannot show whole, which is the sections taller than
    * one frame. Absent on the hook, which is not a beat and takes no `fit`.
+   *
+   * Absent too on a section past the legibility cap (#66): `fit: true` on one of those
+   * is fit to width and panned instead, and a report that offered a width `check` will
+   * not honour would be a report disagreeing with `check`.
    */
   fitWidth?: number
   /**
@@ -75,7 +79,9 @@ export async function sections(url: string): Promise<Section[]> {
         height: rounded,
         hook,
         ...(hook ? {} : { punchFactor: punchFor(rounded) }),
-        ...(hook || rounded <= FRAME_HEIGHT ? {} : { fitWidth: fitViewportWidth(rounded) }),
+        ...(hook || rounded <= FRAME_HEIGHT || pastFitCap(rounded)
+          ? {}
+          : { fitWidth: fitViewportWidth(rounded) }),
         ...(heading === null ? {} : { heading }),
       }
     })

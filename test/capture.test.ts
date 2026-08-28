@@ -257,6 +257,28 @@ describe('captureMasters, fit', () => {
       assert.deepEqual(await size(join(dir, 'masters', 'hook.jpg')), [FRAME_WIDTH, 3000])
       assert.deepEqual(await size(join(dir, 'masters', 'beat-2.jpg')), [1296, 1920])
     }))
+
+  test('a fit beat past the cap is captured as the vertical pan it fell back to', () =>
+    withWorkspace(async (ws) => {
+      const site: SiteConfig = {
+        url: fixture.url,
+        hook: { text: 'Spotless, every time.' },
+        beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#tall', fit: true }],
+        cta: { credit: 'fixture.test' },
+      }
+      const dir = join(ws.root, 'out')
+      // The heights `check` measured, which is what the cap is read against (#66).
+      const timeline = planReel(site, [], [3000, 2400, 4400])
+      const masters = await captureMasters(site, timeline, dir)
+
+      const fell = masters.find((master) => master.shot.kind === 'beat' && master.shot.index === 2)
+      assert.ok(fell)
+      // No widened viewport: the master is the page at frame width, the section's own
+      // 4400px tall — which is a vertical pan's travel, not a fit.
+      assert.equal(fell.shot.fit, undefined)
+      assert.equal(fell.shot.move, 'pan')
+      assert.deepEqual(await size(fell.path), [FRAME_WIDTH, 4400])
+    }))
 })
 
 async function size(path: string): Promise<[number, number]> {

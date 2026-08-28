@@ -10,7 +10,8 @@
  */
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
-import type { Direction, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
+import { MIN_FIT_SCALE } from './house.ts'
+import type { Beat, Direction, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
 
@@ -198,6 +199,43 @@ export function punchFactorFor(axis: 'x' | 'y', needed: number, sectionHeight: n
  */
 export const DEFAULT_LATERAL_PUNCH_FACTOR = lateralPunchFor(panTravelNeeded(BEAT_MS))
 
+/**
+ * The tallest section **fit** may pull out to, in the base viewport's own pixels.
+ *
+ * `MIN_FIT_SCALE` said as a height, because a height is what a section is measured in:
+ * fitting a section of `h` draws the page at `FRAME_HEIGHT / h` of its own size, so the
+ * floor on that scale is a ceiling on that height (#66).
+ *
+ * Here rather than in `frame.ts` beside `fitViewportWidth`, which is the geometry it
+ * caps: the floor itself belongs beside the type sizes it defends, and `frame.ts` is
+ * what `house.ts` is built out of. So the cap lives with the other findings a beat is
+ * held to once its section has actually been measured.
+ */
+export const MAX_FIT_SECTION_HEIGHT = Math.floor(FRAME_HEIGHT / MIN_FIT_SCALE)
+
+/** Whether a section this tall is past the floor a **fit** may not draw the page under. */
+export function pastFitCap(sectionHeight: number): boolean {
+  return sectionHeight > MAX_FIT_SECTION_HEIGHT
+}
+
+/**
+ * A `fit: true` that did not fit, named with the section that was too tall — or null
+ * where the beat asked for no fit, or asked for one it is entitled to.
+ *
+ * A note rather than a problem: the beat still renders, so refusing the reel over it
+ * would be the pipeline declining to do the thing it just decided to do. What it must
+ * not be is silent — the human wrote `fit: true` and is getting a pan, and finding
+ * that out in the render is finding it out too late.
+ */
+export function fitCapFallback(index: number, beat: Beat, sectionHeight: number): string | null {
+  if (!beat.fit || !pastFitCap(sectionHeight)) return null
+  return (
+    `beats[${index}] '${beat.selector}' is ${Math.round(sectionHeight)}px tall; fit pulls out ` +
+    `to at most ${MAX_FIT_SECTION_HEIGHT}px, so this beat is fit to width and panned ` +
+    'vertically instead'
+  )
+}
+
 /** Copy over budget, named with the budget it broke — or null when it fits. */
 export function copyProblem(field: string, content: string, budget: CopyBudget): string | null {
   const lines = content.split('\n')
@@ -265,10 +303,25 @@ function rotatedPushPull(index: number): PushPull {
 export type Headings = readonly (string | null)[]
 
 /**
+ * How tall the beats' own sections measured at the *base* viewport, in beat order —
+ * the other thing `check` learned while the page was open (#66).
+ *
+ * A parameter for the same reason the headings are: it is a fact about the page, and
+ * the plan is pure. Only `fit` reads it, and only to find the beat whose section is
+ * too tall to fit legibly. Absent — or null for a beat — every fit beat is planned as
+ * one, which is exactly the reel this planned before the cap existed.
+ */
+export type SectionHeights = readonly (number | null)[]
+
+/**
  * The reel's whole shape. Throws when the config cannot describe a reel at all —
  * `check` reports those by name before it ever gets here.
  */
-export function planReel(config: SiteConfig, headings: Headings = []): Timeline {
+export function planReel(
+  config: SiteConfig,
+  headings: Headings = [],
+  heights: SectionHeights = [],
+): Timeline {
   const beats = config.beats
   const n = beats.length
   if (n < MIN_BEATS || n > MAX_BEATS) {
@@ -299,20 +352,39 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
   ]
 
   beats.forEach((beat, index) => {
+    // The section measured past the legibility floor, so the fit it asked for is one
+    // nobody could read (#66). It falls back to what a beat this tall got before fit
+    // existed — fit to width, covered by a vertical pan, which is the move a section
+    // with this much height to spare is for. Unmeasured is uncapped: the plan only
+    // knows what it is handed, and `check` is what hands it a height.
+    const height = heights[index]
+    const capped = beat.fit === true && height != null && pastFitCap(height)
+    const fit = beat.fit === true && !capped
     // A fit section is exactly one frame, so there is nothing for a pan to travel
     // across — the same reasoning that makes the plan punch a lateral pan config left
     // flat, read the other way round. An explicit `move: 'pan'` is still the human's,
-    // and `check` still says what it leaves a pan to travel.
-    const move = beat.move ?? (beat.fit ? 'drift' : defaultMove(index))
+    // and `check` still says what it leaves a pan to travel. The fallback is that
+    // reasoning spent: the section stayed as tall as it measured, so it pans.
+    const move = beat.move ?? (fit ? 'drift' : capped ? 'pan' : defaultMove(index))
     const rotated = DIRECTIONS[rotationOrdinal(index) % DIRECTIONS.length] as Direction
-    const direction = move === 'pan' ? (beat.direction ?? rotated) : undefined
+    // The fallback's pan is vertical by name, not by rotation: it is the one direction
+    // a section too tall for one frame is guaranteed the travel for.
+    //
+    // And it is vertical whatever `direction` says, where the fallback is what supplied
+    // the move: a `direction` on a fit beat was a field the plan dropped — fit drifts —
+    // so honouring it now would turn a config that passed into a lateral pan at no
+    // punch, which is a `check` failure the human never wrote. A `move` the config
+    // *did* name is a pan they asked for, and their direction goes with it.
+    const fellBack = capped && beat.move === undefined
+    const direction =
+      move === 'pan' ? (fellBack ? 'vertical' : (beat.direction ?? rotated)) : undefined
     const pushPull = move === 'drift' ? (beat.pushPull ?? rotatedPushPull(index)) : undefined
     const lateral = direction !== undefined && panAxes(direction).includes('x')
     // The plan's lateral punch is not applied to a fit beat: a punch crops back into
     // the section fit just widened the viewport to show whole, so a fit beat that took
     // one would not be fit. `check` reports the pan it leaves no travel instead, which
     // is the finding rather than a silent half-fit.
-    const punchFactor = beat.fit
+    const punchFactor = fit
       ? DEFAULT_PUNCH_FACTOR
       : (beat.punchFactor ?? (lateral ? DEFAULT_LATERAL_PUNCH_FACTOR : DEFAULT_PUNCH_FACTOR))
     shots.push({
@@ -324,7 +396,7 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
       ...(direction ? { direction } : {}),
       ...(pushPull ? { pushPull } : {}),
       punchFactor,
-      ...(beat.fit ? { fit: true as const } : {}),
+      ...(fit ? { fit: true as const } : {}),
       source: {
         url: beat.url ?? config.url,
         selector: beat.selector,

@@ -9,8 +9,8 @@ import {
   MIN_BEATS,
   punchedFrameHeight,
 } from './frame.ts'
-import { COPY_BUDGETS, panTravelProblems, planReel } from './plan.ts'
-import type { Shot, Timeline } from './plan.ts'
+import { COPY_BUDGETS, fitCapFallback, panTravelProblems, planReel } from './plan.ts'
+import type { Shot } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { settle } from './settle.ts'
@@ -19,22 +19,35 @@ import type { Beat, SiteConfig } from './site.ts'
 export type { Rect } from './page.ts'
 
 /**
- * What one settle bought: everything wrong with the config, and the headings the page
- * gave up while it was open.
+ * What one settle bought: everything wrong with the config, and what the page gave up
+ * about itself while it was open.
  *
- * The headings ride along rather than being fetched again by the render, because they
- * are read off the *settled* page and settling it is the expensive thing `check` already
- * did — a render that loaded every page a second time to ask for its labels would pay
- * the whole preflight twice for text it had already been handed.
+ * The headings and the heights ride along rather than being fetched again by the
+ * render, because they are read off the *settled* page and settling it is the expensive
+ * thing `check` already did — a render that loaded every page a second time to ask for
+ * its labels would pay the whole preflight twice for facts it had already been handed.
  */
 export type Checked = {
   problems: string[]
+  /**
+   * Things the run did rather than things it refuses to do: a `fit: true` past the
+   * legibility cap, and whatever else the pipeline decides *for* a human who asked for
+   * something else (#66). Never a reason to refuse — a note that stopped the render
+   * would be a problem, and problems are the list above.
+   */
+  notes: string[]
   /**
    * In beat order. Null where the section has no heading, where the beat never
    * resolved, and where the config named a label — the plan draws that label whatever
    * the page says, so the heading it beats is not worth a round trip to read.
    */
   headings: (string | null)[]
+  /**
+   * In beat order, at the base viewport, null where the beat never resolved. What the
+   * plan needs to decide whether a `fit` beat can fit legibly (#66) — measured here
+   * because measuring it is what `check` is.
+   */
+  heights: (number | null)[]
 }
 
 /**
@@ -45,35 +58,53 @@ export type Checked = {
 export async function check(config: SiteConfig, root: string): Promise<Checked> {
   const problems = configProblems(config, root)
   if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
-    return { problems, headings: [] } // Nothing left to resolve against.
+    // Nothing left to resolve against.
+    return { problems, notes: [], headings: [], heights: [] }
   }
 
   // The plan says which beats pan and where, so it is what decides whether a punch
   // factor leaves one room to travel. A beat count the plan cannot describe is already
   // named above by `configProblems`, and the page checks still run without a plan.
   const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
-  const timeline: Timeline | null = plannable ? planReel(config) : null
 
   const browser = await chromium.launch()
   try {
-    const resolved = await resolveOnPages(browser, config, timeline)
-    return { problems: [...problems, ...resolved.problems], headings: resolved.headings }
+    const resolved = await resolveOnPages(browser, config, plannable)
+    return { ...resolved, problems: [...problems, ...resolved.problems] }
   } finally {
     await browser.close()
   }
+}
+
+/**
+ * The shot beat `index` is planned as, now that its own section has been measured.
+ *
+ * The whole reel re-planned around the one height, rather than a shot assembled here
+ * out of the same rules: a beat's move, direction and punch are the plan's to decide —
+ * and since #66 one of those decisions turns on a measurement, so a `check` that
+ * derived its own would be a second planner, free to disagree with the one the render
+ * uses. Every other beat's height is left null, which changes none of them: the cap
+ * reads a beat's own height and nothing else.
+ */
+function plannedBeat(config: SiteConfig, index: number, height: number): Shot | null {
+  const heights = config.beats.map((_, at) => (at === index ? height : null))
+  const shots = planReel(config, [], heights).shots
+  return shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
 }
 
 /** One load per distinct URL: beats that share a route share a page. */
 async function resolveOnPages(
   browser: Browser,
   config: SiteConfig,
-  timeline: Timeline | null,
+  plannable: boolean,
 ): Promise<Checked> {
   const problems: string[] = []
+  const notes: string[] = []
   // Beats are visited grouped by page rather than in reel order, so the headings are
   // filled in by index rather than pushed — a beat on another route would otherwise
   // caption the beat that happened to be resolved before it.
   const headings: (string | null)[] = config.beats.map(() => null)
+  const heights: (number | null)[] = config.beats.map(() => null)
   const byUrl = new Map<string, { index: number; beat: Beat }[]>()
   config.beats.forEach((beat, index) => {
     const url = beat.url ?? config.url
@@ -94,12 +125,14 @@ async function resolveOnPages(
       if (url === config.url) problems.push(...(await checkHook(page, config)))
       const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
       for (const { index, beat } of group) {
-        const shot =
-          timeline?.shots.find((planned) => planned.kind === 'beat' && planned.index === index) ??
-          null
-        const checked = await checkBeat(page, index, beat, pageHeight, shot)
+        // The plan reads the section's height, so the shot is planned once the page
+        // has been asked for it rather than before the browser opened (#66).
+        const shotFor = (height: number) => (plannable ? plannedBeat(config, index, height) : null)
+        const checked = await checkBeat(page, index, beat, pageHeight, shotFor)
         problems.push(...checked.problems)
+        notes.push(...checked.notes)
         headings[index] = checked.heading
+        heights[index] = checked.height
       }
     } catch (error) {
       // The page is gone, so none of its beats can be resolved. Name them, rather
@@ -111,7 +144,7 @@ async function resolveOnPages(
       await page.close()
     }
   }
-  return { problems, headings }
+  return { problems, notes, headings, heights }
 }
 
 async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {
@@ -122,21 +155,32 @@ async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {
     : ['hook — no hero found; name one with hook.selector']
 }
 
+type CheckedBeat = {
+  problems: string[]
+  notes: string[]
+  heading: string | null
+  /** At the base viewport, null where the selector did not resolve. */
+  height: number | null
+}
+
 async function checkBeat(
   page: Page,
   index: number,
   beat: Beat,
   pageHeight: number,
-  shot: Shot | null,
-): Promise<{ problems: string[]; heading: string | null }> {
+  shotFor: (height: number) => Shot | null,
+): Promise<CheckedBeat> {
   const rect = await rectOf(page, beat.selector)
   if (!rect) {
     return {
       problems: [`beats[${index}] selector '${beat.selector}' — no element matches`],
+      notes: [],
       heading: null,
+      height: null,
     }
   }
   const problems: string[] = []
+  const notes: string[] = []
 
   // Only asked when the config named no label: a config that did is what will be drawn,
   // `configProblems` has already measured it, and the heading it overrides is a line
@@ -159,6 +203,14 @@ async function checkBeat(
   // Both are page coordinates, the same space the master is clipped out of.
   const top = beat.y ?? rect.y
   const height = beat.height ?? rect.height
+  const shot = shotFor(height)
+
+  // A `fit: true` the cap turned into a pan, said out loud (#66). A note and not a
+  // problem: the beat renders, and what the human needs is to know it renders as
+  // something other than what they wrote.
+  const fallback = fitCapFallback(index, beat, height)
+  if (fallback) notes.push(fallback)
+
   if (top + height > pageHeight) {
     problems.push(
       `beats[${index}] '${beat.selector}' runs to ${Math.round(top + height)}px; ` +
@@ -183,12 +235,13 @@ async function checkBeat(
     )
     // The section does not fill the frame, so asking what a pan has left over on top
     // of that is the same defect said twice.
-    return { problems, heading }
+    return { problems, notes, heading, height }
   }
 
   // A pan only travels across what the punch left over, so #7 wants a punch that
-  // leaves none caught here rather than discovered as a still.
+  // leaves none caught here rather than discovered as a still. The fallback's pan is
+  // no exception: it is a vertical pan like any other, and it is held here like one.
   if (shot) problems.push(...panTravelProblems(shot, beat.selector, height))
-  return { problems, heading }
+  return { problems, notes, heading, height }
 }
 

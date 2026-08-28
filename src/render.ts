@@ -46,6 +46,8 @@ export type Render = {
   stills: string[]
   /** The reel's own length — what `done` reports, beside what the render cost. */
   durationMs: number
+  /** `check`'s own notes: what the run decided *for* the human, and did anyway (#66). */
+  notes: string[]
   problems: string[]
 }
 
@@ -79,17 +81,18 @@ export async function render(
   await mkdir(dir, { recursive: true })
 
   const checkedAt = Date.now()
-  const { problems, headings } = await check(config, root)
+  const { problems, notes, headings, heights } = await check(config, root)
   report({
     name: 'check',
     subject: problems.length === 0 ? 'ok' : 'failed',
     ms: Date.now() - checkedAt,
   })
-  if (problems.length > 0) return { path: '', stills: [], durationMs: 0, problems }
+  if (problems.length > 0) return { path: '', stills: [], durationMs: 0, notes, problems }
 
-  // The headings `check` already read off the settled pages: a beat that named no
-  // `label` draws the one its section leads with (#62).
-  const timeline = planReel(config, headings)
+  // What `check` already read off the settled pages: the heading a beat that named no
+  // `label` draws (#62), and the height that says whether a `fit` beat can fit legibly
+  // (#66). Planned once, here, so capture and compose read one timeline.
+  const timeline = planReel(config, headings, heights)
 
   // Masters are grouped by page and device scale rather than taken in reel order, so
   // the count runs in the order they are finished — which is the order they cost.
@@ -127,7 +130,7 @@ export async function render(
   // a still that is not read back off the file it describes is a still that can
   // disagree with what was shipped.
   const stills = await reviewStills(path, dir, slug, timeline)
-  return { path, stills, durationMs: timeline.durationMs, problems: [] }
+  return { path, stills, durationMs: timeline.durationMs, notes, problems: [] }
 }
 
 /** What a phase is *about*: the section a master frames, or the move a shot is. */

@@ -228,6 +228,18 @@ it — the same reasoning that punches a lateral pan config left flat, read the 
 way round. A beat that names `move: 'pan'` anyway gets one, and `check` says what it
 left the pan to travel.
 
+Fit has a floor, and it is a **legibility** one: a fit draws the client's whole page
+smaller, its body copy included, so past some scale a fit section is a section nobody
+can read. The floor is one house constant, sitting beside the type sizes it defends,
+and it is the copy **budget**'s doctrine applied to the site's own type — type never
+shrinks to fit. A floor on the scale is a **cap** on the height — a section is fit by
+being made proportionally shorter against the frame, so the two are one rule said from
+either end, and the code names both. Past it a fit beat falls back to what a section that
+tall got before fit existed: fit to width, covered by a vertical pan. The fallback is a **note** rather than
+a problem — the beat renders — and `check` names the beat and the section that was too
+tall, because a human who wrote `fit: true` and is getting a pan should hear it at the
+preflight rather than find it in the render.
+
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
 belongs to the page, not to a section. Capturing a master without scrolling the page
 keeps it out of every beat by construction: a clip carries chrome only where it
@@ -334,6 +346,12 @@ client drift in seconds rather than a full capture pass.
 A **preflight**, never a monitor: it is run when a new reel is about to be cut, and
 nothing schedules it or reacts to it on its own. A render runs it first and refuses on
 failure — it is the settle the render was going to do anyway.
+
+**Note** — something `check` says the run *did*, as against a problem, which is
+something it refuses to do. A **fit** past its legibility floor is the first: the beat
+is planned as a vertical pan instead and still renders, so refusing the reel over it
+would be the pipeline declining to do the thing it just decided to do. A note never
+changes an exit code, and it is printed whether or not anything else failed.
 
 **Sections report** — the page measured before a config exists: every **candidate
 section** with a selector that resolves, its height, the punch factor that height
