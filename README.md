@@ -158,10 +158,11 @@ play right *and* is the thumbnail right". Both stills are **scratch**: they stay
 `out/` and are never promoted, since the reel is the record and both are recoverable
 from it.
 
-Under all of it is the **bed** — the signature track, trimmed to the reel's length
-and faded out at the end. It is the default on every reel; `music.file` in a site's
-config swaps it and `music.offset` slides it. Nothing is timed to the music: a reel is
-exactly as long with a bed as it is without one.
+Under all of it is the **bed** — a checked-in track, trimmed to the reel's length and
+faded out at the end. A config that names none falls back to the signature track;
+`music.file` names another of the tracks in `audio/` and `music.offset` slides it.
+Nothing is timed to the music: a reel is exactly as long with a bed as it is without
+one.
 
 ### `reel keep out/<file>.mp4`
 

@@ -71,3 +71,37 @@ never a prompt or URL (#8) — so swapping it is a one-line config change and a
 re-render.
 
 Full findings: [`.wayfinder/research/004-suno-licence.md`](../.wayfinder/research/004-suno-licence.md)
+
+## quiet-confidence.mp3
+
+- **Title on Suno**: Quiet Confidence
+- **Source**: Suno (<https://suno.com>)
+- **Suno song id**: `be289bdc-3395-4baf-82b2-1aaaf87ac931`
+- **Suno account**: `wmsaint17`
+- **Generated**: 2026-08-26 (17:13:01 UTC, per the file's own `comment` tag) — one
+  minute before `mwaforge-signature.mp3`, in the same session
+- **Downloaded**: 2026-08-26
+- **Suno tier at generation**: Free
+- **Suno tier at download**: Free
+- **ToS in force at generation**: <https://suno.com/terms-of-service> (eff. 2026-03-26)
+- **Visibility**: unpublished
+- **File**: MP3, 48 kHz stereo, ~175 kbps, 1:00.0 (59.97 s), 1.25 MB, with an embedded
+  cover image. Longest reel is 22.7 s (#12), so the bed is trimmed and faded to length
+  at render (#8) — this track is short enough that an **offset** has to stay well
+  inside the first half of it.
+- **Prompt**: not recorded. The prompt is not the asset and a Suno generation is not
+  reproducible from one (#8); what makes this file findable again is the song id above.
+
+### Rights position
+
+Same account, same day, same session and the same free tier as
+`mwaforge-signature.mp3`, so this file inherits that track's position **exactly** —
+no commercial grant, no exclusivity, no indemnity, and the same knowingly accepted
+exposure decided in #8 and re-affirmed in #17. It is recorded here rather than
+restated: see [the signature track's rights position](#rights-position--read-this-before-reusing-the-track)
+above and the full findings in
+[`.wayfinder/research/004-suno-licence.md`](../.wayfinder/research/004-suno-licence.md).
+
+The exit is the same one, and two tracks rather than one does not double it: both were
+generated in the same session, so the one month of Suno Pro described above clears
+both.

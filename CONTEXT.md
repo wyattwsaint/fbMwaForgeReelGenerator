@@ -290,12 +290,14 @@ card is the exception, because its cut point is where its crossfade *starts* —
 taken there shows neither the beat being left nor the card, so the card's tile is the
 first frame it is alone on screen.
 
-**Signature track** — the one commissioned piece of music reused across MWA Forge's
-reels. Not reproducible from the prompt that made it, so the file itself is the asset.
-It is MWA Forge's, like the face and the mark, so it is found beside them in this repo
-rather than beside any site's config.
+**Signature track** — the piece of music a reel falls back to: the bed a config that
+names none is cut to. Not the only one — a config may name another track, and
+`quiet-confidence.mp3` is the second — but it is the one no config has to ask for.
+None of them is reproducible from the prompt that made it, so the file itself is the
+asset. They are MWA Forge's, like the face and the mark, so they are found beside them
+in this repo rather than beside any site's config.
 
-**Bed** — the signature track as it appears under one reel: slid by an **offset**,
+**Bed** — a track as it appears under one reel: slid by an **offset**,
 trimmed to the reel's length and faded out at the end, so the music ends *with* the
 reel rather than being cut off. It sits underneath and nothing is timed to it — no
 beat-locking, no BPM — so a reel is exactly as long with a bed as without. A track is
