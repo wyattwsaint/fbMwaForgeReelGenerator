@@ -24,11 +24,14 @@ export default defineSite({
 
 That is `brobst.ts`, whole — no `music`, because `music` is one of those overrides.
 Leave it out and the reel gets the signature track, which is the point of a signature
-track. Write it out, as `pharos.ts` does, and you get the same file — configs live in
-this repo, so `audio/…` resolves to the same place — which is how you hang an `offset`
-off the default bed, since the schema wants a `file` whenever you write a `music` block
-at all. `offset` is seconds into the track, sliding the bed against the hook. Every
-path here is resolved from the directory you run `reel` in.
+track. Write it out and you name a file in `audio/` — either a different track, as
+`mwaforge.ts` does, or the signature track itself, as `pharos.ts` does, which is how
+you hang an `offset` off the default bed, since the schema wants a `file` whenever you
+write a `music` block at all. `offset` is seconds into the track, sliding the bed
+against the hook. Every path here is resolved from the directory you run `reel` in.
+Nothing stops you pointing `music.file` outside `audio/`; ADR-0002 is why you should
+not — a bed that is not checked in beside its provenance entry is a reel that cannot
+be re-rendered.
 
 `hook.motion` is the one override that changes how a shot's pixels are *got* rather
 than what is done with them (ADR-0006). Leave it out — or write `still` — and the hook
@@ -62,6 +65,8 @@ smaller one is yours to try.
 
 The annotated examples in `7-site-config.md` are illustrative: their selectors were
 written from a reading of the sites, not measured against them, and none of them
-resolve today. The two configs beside this file were measured — `brobst.ts` is the
-minimum above and `pharos.ts` reaches for most of the hatches, each one commented with
-the page behaviour that forced it. Write a config, run `check`, fix what it names.
+resolve today. The three configs beside this file were measured — `brobst.ts` is the
+minimum above, `pharos.ts` reaches for most of the hatches, and `mwaforge.ts` is the
+short-sections case: every beat a `y`/`height` window, because a page whose sections
+run under 700px punches to a 300px column otherwise. Each hatch is commented with the
+page behaviour that forced it. Write a config, run `check`, fix what it names.
