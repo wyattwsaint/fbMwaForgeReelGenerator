@@ -11,6 +11,7 @@ import {
   envelopeOf,
   FPS,
   frameCount,
+  isLive,
   panAxes,
   panTravelAvailable,
   panTravelNeeded,
@@ -31,6 +32,12 @@ function config(n: number, overrides: Partial<SiteConfig> = {}): SiteConfig {
     cta: { credit: 'example.test' },
     ...overrides,
   }
+}
+
+/** The minimum config with the hook overridden — three beats, named only by selector. */
+function withHook(hook: Partial<SiteConfig['hook']>): SiteConfig {
+  const base = config(3)
+  return { ...base, hook: { ...base.hook, ...hook } }
 }
 
 function beatShots(timeline: Timeline) {
@@ -132,6 +139,53 @@ describe('planReel', () => {
         .map((shot) => shot.pushPull),
       ['push', 'pull', 'push', 'pull'],
     )
+  })
+
+  describe('hook.motion', () => {
+    // #63: a hook can be recorded from the running page instead of synthesised from a
+    // still. The default is the doctrine every reel before it was cut under, and the
+    // whole of ADR-0006's "nothing existing moves" is that the plan says so.
+    test('defaults to still, which the plan states by saying nothing', () => {
+      for (const n of [3, 4, 5]) {
+        const hook = planReel(config(n)).shots[0] as Shot
+        assert.equal(hook.motion, undefined)
+        assert.equal(isLive(hook), false)
+        assert.equal(hook.punchFactor, 1)
+      }
+      // Naming the default explicitly plans the same shot as leaving it out.
+      assert.deepEqual(
+        planReel(withHook({ motion: 'still' })).shots,
+        planReel(config(3)).shots,
+      )
+    })
+
+    test('an ambient hook is live, and is the still hook in every other respect', () => {
+      const live = planReel(withHook({ motion: 'ambient' })).shots[0] as Shot
+      const still = planReel(config(3)).shots[0] as Shot
+      assert.equal(live.motion, 'ambient')
+      assert.equal(isLive(live), true)
+      // The motion is the *only* difference: a recording is one frame of pixels, so a
+      // live hook is punched exactly as much as a still one, which is not at all.
+      assert.deepEqual({ ...live, motion: undefined }, { ...still, motion: undefined })
+    })
+
+    test('a live hook still drifts, still pushes, and still takes its turn', () => {
+      const live = planReel(withHook({ motion: 'ambient' }))
+      const still = planReel(config(3))
+      const hook = live.shots[0] as Shot
+      assert.equal(hook.move, 'drift')
+      // Frame 0 is the thumbnail whichever way the pixels were got (#5).
+      assert.equal(hook.pushPull, 'push')
+      // And the rotation is untouched: the hook is exempt from it, not outside it, so
+      // every beat and the card plan exactly as they did.
+      assert.deepEqual(live.shots.slice(1), still.shots.slice(1))
+    })
+
+    test("beats are never live — the motion is the hook's alone", () => {
+      for (const shot of planReel(withHook({ motion: 'ambient' })).shots.slice(1)) {
+        assert.equal(shot.motion, undefined, `${shot.kind} ${shot.index} is live`)
+      }
+    })
   })
 
   test('each move carries only its own parameter', () => {

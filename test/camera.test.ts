@@ -4,13 +4,14 @@ import {
   DRIFT_ZOOM,
   MAX_BLUR_SAMPLES,
   PAN_PX_PER_FRAME,
+  SUBTLE_ZOOM,
   cameraFor,
   masterSize,
 } from '../src/camera.ts'
 import { moveFilter } from '../src/compose.ts'
-import { BEAT_MS, DIRECTIONS, MIN_PAN_PX_PER_FRAME, panTravelNeeded } from '../src/plan.ts'
+import { BEAT_MS, DIRECTIONS, HOOK_MS, MIN_PAN_PX_PER_FRAME, panTravelNeeded } from '../src/plan.ts'
 import type { Shot } from '../src/plan.ts'
-import { FRAME_WIDTH } from '../src/frame.ts'
+import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 
 /** A pan of one beat, punched enough that a lateral axis has somewhere to go. */
 function panShot(direction: Shot['direction'], punchFactor = 1.2): Shot {
@@ -237,5 +238,64 @@ describe('camera', () => {
         assert.equal(covered, camera.to[axis] - camera.from[axis], `${direction} on ${axis}`)
       }
     }
+  })
+
+  describe('a live shot', () => {
+    /** #63's ambient hook, as the plan draws it: a drift, a push, at the breath's depth. */
+    function liveHook(): Shot {
+      return {
+        kind: 'hook',
+        index: 0,
+        startMs: 0,
+        durationMs: HOOK_MS,
+        move: 'drift',
+        pushPull: 'push',
+        punchFactor: 1,
+        motion: 'ambient',
+        source: { url: 'https://example.test/' },
+      }
+    }
+
+    test('is recorded at the frame, whatever the section under it is', () => {
+      // A recording is the viewport over time: there is no full-page screenshot to
+      // clip a taller window out of, so the section's height never enters.
+      const short = masterSize(liveHook(), 400)
+      const tall = masterSize(liveHook(), 6000)
+      assert.deepEqual(short, tall)
+      assert.deepEqual(short, { width: FRAME_WIDTH, height: FRAME_HEIGHT, over: 1 })
+    })
+
+    test("breathes at the card's 3% rather than drifting at a beat's 10%", () => {
+      // ADR-0006: the page's own motion is the shot, and a full drift over it competes.
+      const camera = cameraOver(liveHook(), 0)
+      assert.deepEqual(camera.zoom, { from: 1, to: SUBTLE_ZOOM })
+      assert.notEqual(SUBTLE_ZOOM, DRIFT_ZOOM)
+      // Under a pixel a frame at that depth, so there is nothing to blur — which is
+      // also what leaves the move chain no sub-frames to have stepped through.
+      assert.equal(camera.samples, 1)
+    })
+
+    test('softens less than a still hook, because it asks 3% of the pixels not 10%', () => {
+      // The recording is exactly one frame of pixels — a browser screencast is taken
+      // at the CSS viewport whatever device scale factor it is given, so there is no
+      // resolution headroom to be had and the breath upscales like any other zoom.
+      // What it does not do is upscale *more* than the still hook it replaces: the
+      // whole difference between the two is 3% against 10%.
+      const live = cameraOver(liveHook(), 0)
+      const still = cameraOver({ ...liveHook(), motion: undefined }, FRAME_HEIGHT)
+      assert.deepEqual(live.window, still.window)
+      assert.ok(
+        live.zoom.to < still.zoom.to,
+        `a live hook is upscaled as hard as a still one: ${live.zoom.to} vs ${still.zoom.to}`,
+      )
+    })
+
+    test('drops the loop stage: a recording is already a stream', () => {
+      const camera = cameraOver(liveHook(), 0)
+      const live = moveFilter(camera, true)
+      assert.ok(!live.includes('loop='), `the recording is looped in ${live}`)
+      // Dropped rather than reconfigured — the rest of the chain is what it was.
+      assert.equal(`loop=loop=-1:size=1:start=0,${live}`, moveFilter(camera))
+    })
   })
 })

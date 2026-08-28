@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { masterSize } from '../src/camera.ts'
-import { capturePlan, captureMasters } from '../src/capture.ts'
+import { capturePlan, captureMasters, trimRecording } from '../src/capture.ts'
+import { ffmpeg } from '../src/compose.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from '../src/frame.ts'
-import { planReel } from '../src/plan.ts'
+import { frameCount, planReel } from '../src/plan.ts'
 import type { Shot } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { startFixtureSite } from './fixture/server.ts'
@@ -23,6 +24,12 @@ function config(beats: Beat[]): SiteConfig {
     beats,
     cta: { credit: 'example.test' },
   }
+}
+
+/** The same three beats, with the hook recorded from the running page instead (#63). */
+function ambient(): SiteConfig {
+  const site = config([beat(), beat(), beat()])
+  return { ...site, hook: { ...site.hook, motion: 'ambient' } }
 }
 
 /** Drifting beats, so nothing but an explicit `punchFactor` moves the punch. */
@@ -154,6 +161,61 @@ describe('capturePlan', () => {
   test('the card is in no group — it has no site pixels in it', () => {
     const groups = planFor([beat(), beat(), beat()])
     assert.ok(!groups.some((group) => group.shots.some((shot) => shot.kind === 'cta')))
+  })
+
+  test('a live hook is its own load, even at the punch its beats share', () => {
+    // #63: a live load is stabilised and never frozen, so a beat that shared it would
+    // take its master off a page still moving. The scale is the same 1.0 on both, so
+    // the motion is the only thing that can split them — and it does.
+    const site = ambient()
+    const groups = capturePlan(site, planReel(site))
+    assert.equal(groups.length, 2)
+    assert.deepEqual(shotNames(groups[0]!), ['hook'])
+    assert.equal(groups[0]!.motion, 'ambient')
+    assert.deepEqual(shotNames(groups[1]!), ['beat-0', 'beat-1', 'beat-2'])
+    assert.equal(groups[1]!.motion, undefined)
+    assert.equal(groups[0]!.scale, groups[1]!.scale)
+    // And a recording is exactly one frame of pixels, whatever the hero's height.
+    assert.deepEqual(masterSize(groups[0]!.shots[0]!, 9000), {
+      width: FRAME_WIDTH,
+      height: FRAME_HEIGHT,
+      over: 1,
+    })
+  })
+})
+
+describe('trimRecording', () => {
+  /** The ambient hook as the plan draws it — the one shot that is ever recorded. */
+  const shot = planReel(ambient()).shots[0] as Shot
+  const size = masterSize(shot, FRAME_HEIGHT)
+
+  test('refuses a recording the browser never got to the end of', async () => {
+    // #63: a failed recording fails loudly. Half a second of file against a 3.4s
+    // window is a hook that would otherwise be padded out with black, and a reel is
+    // never cut from a black hook.
+    await withWorkspace(async (ws) => {
+      const raw = join(ws.root, 'short.mp4')
+      await ffmpeg(['-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=30:d=0.5', raw])
+      await assert.rejects(
+        () => trimRecording(raw, join(ws.root, 'hook.mp4'), shot, size, 3400),
+        /hook — the browser recorded 0\.5\ds of a 3\.40s window/,
+      )
+    })
+  })
+
+  test('cuts the shot out of the end of a recording that has one', async () => {
+    await withWorkspace(async (ws) => {
+      const raw = join(ws.root, 'long.mp4')
+      const output = join(ws.root, 'hook.mp4')
+      // Five seconds of it, of which the last 3.4 is the window the browser held open.
+      await ffmpeg(['-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=17:d=5', raw])
+      await trimRecording(raw, output, shot, size, 3400)
+      // Exactly the hook, at the timeline's own rate and the pixels the camera was
+      // planned over — whatever rate and size the browser happened to record at.
+      const stream = await probe(output, 'stream=nb_frames,width,height', 'v:0')
+      assert.equal(Number(stream.nb_frames), frameCount(shot.durationMs))
+      assert.deepEqual([Number(stream.width), Number(stream.height)], [size.width, size.height])
+    })
   })
 })
 

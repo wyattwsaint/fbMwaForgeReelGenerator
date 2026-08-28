@@ -10,7 +10,8 @@ implementation detail. See `docs/agents/domain.md`.
 
 **Hook** — the opening 3.0s. The client site's own hero section, drifting from
 frame 0, with an overlay line drawn on frame 0. A hook is a single shot: it is
-never cut.
+never cut. It is the one shot that may be a **live shot** rather than synthesised
+from a **master**.
 
 **Beat** — one section of the client's site (hero, services, gallery, pricing),
 named by a CSS selector in the site's config. 3.5s, **one shot**. The middle of
@@ -140,6 +141,30 @@ the constraint the viewer actually sees.
 
 ## Capture
 
+**Live shot** — a shot **recorded** from the running page over time instead of
+synthesised from a still. Config picks it per site, on the hook alone: `still` is
+today's behaviour and the default, and `ambient` dwells on the stabilised hero
+while its own animation runs — a video background, a carousel, a parallax idle.
+The trade is deliberate (ADR-0006): the page animates on a clock this pipeline
+does not own, so no two recordings are alike. Recording starts at a fixed
+post-stabilise moment, so **frame 0** is at least reproducible in *composition* —
+and the hook line is still drawn fully on it and still never animates in.
+
+A live shot's camera only breathes: the card's 3% zoom rather than a beat's 10%,
+because the page is already moving and a full drift on top of it competes with the
+shot. It still pushes and still takes its turn in the rotation. A recording is
+exactly one frame of pixels — a browser records its viewport at the size the page
+is laid out at, whatever resolution it is asked for — so a live shot cannot be
+**punched**, and its breath spends 3% of upscale where a beat's drift spends 10%.
+
+**Recording** — what a live shot is made of, as a master is what a still shot is
+made of: the viewport over the shot's own duration, at the reel's frame rate and
+the frame's own size.
+Run-scoped exactly like a master, discarded with them, never a build artifact and
+never promoted. It is the one capture that *scrolls* to its subject, because a
+recording is the viewport — so a live hook carries whatever page chrome sits over
+its hero.
+
 **Master** — the single static, high-resolution capture a shot's camera move is
 computed over. One master per beat, framed on that beat's section. Camera motion
 is never stepped in the browser; it is synthesised in post from the master. A
@@ -149,7 +174,7 @@ master is a photograph of a page that may no longer exist.
 
 **Settle** — the routine that puts the page into a deterministic state before a
 master is taken: **stabilise**, then **freeze**. A settled page captures
-bit-identically run to run.
+bit-identically run to run. A live shot is stabilised and never settled.
 
 **Stabilise** — the half of settle every capture needs, whether or not it wants
 the page still: fonts loaded, every image forced eager and decoded serially. It
@@ -278,7 +303,10 @@ rather than replacing it.
 
 **Reproducible vs. deterministic.** The pipeline is deterministic — one config plus one
 page state always gives one reel. It is not reproducible: the page state is the client's
-to change, so a reel can never be reconstructed, only re-cut into a new one.
+to change, so a reel can never be reconstructed, only re-cut into a new one. A **live
+shot** moves that same line inside a single run: the page animates on its own clock, so
+two renders of one config differ in the hook's pixels while still agreeing about its
+composition.
 
 **Frame 0** is the thumbnail Facebook shows in-feed. It is a constraint, not a
 by-product: hook text is fully drawn on it and may not animate in, and the hook
@@ -293,10 +321,10 @@ repo. The human's entire steering wheel: a URL, hook text, 3–5 beat selectors,
 CTA. Everything else in the file is an **override**.
 
 **Override** — a config field that exists because a real site broke a default. Move,
-pan direction, push / pull, punch factor, beat label and video pin are all overrides; a config that
-names none of them still renders. A beat label overrides the section's own
-**heading** rather than an absence, so a reel carries copy whether or not the config
-says a word. Timings are not overridable — 3.5s per beat is a finding, not a
+pan direction, push / pull, punch factor, beat label, video pin and hook motion are all
+overrides; a config that names none of them still renders. A beat label overrides the
+section's own **heading** rather than an absence, so a reel carries copy whether or not
+the config says a word. Timings are not overridable — 3.5s per beat is a finding, not a
 preference.
 
 **Check** — the render pipeline stopped after settle: resolves every beat's selector and

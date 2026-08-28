@@ -9,7 +9,7 @@
  */
 
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
-import { frameCount, panAxes } from './plan.ts'
+import { frameCount, isLive, panAxes } from './plan.ts'
 import type { Shot } from './plan.ts'
 import type { PushPull } from './site.ts'
 
@@ -35,15 +35,20 @@ export const PAN_PX_PER_FRAME = 7
 export const DRIFT_ZOOM = 1.1
 
 /**
- * How far the card drifts, and the reason it drifts at all: #12 found there is no rest
- * anywhere in this reel, and a static final 2.5s reads as the video having ended early.
- * 3% over 2.5s is a move a viewer registers without being able to point at it.
+ * The subtle drift: 3%, a move a viewer registers without being able to point at it.
  *
- * The depth stays 3% whichever way the card goes (#52). It is drawn rather than filmed
- * — the round trip renders it at `card.ts`'s own precision either way — so a pull costs
- * it no sharpness, which is why the card is in the rotation at all.
+ * Two shots ask for it. The card, because #12 found there is no rest anywhere in this
+ * reel and a static final 2.5s reads as the video having ended early — and the depth
+ * stays 3% whichever way the card goes (#52), since it is drawn rather than filmed and
+ * the round trip renders it at `card.ts`'s own precision either way, which is why the
+ * card is in the push/pull rotation at all. And a live shot (#63, ADR-0006), because
+ * the page under one is already moving and a beat's 10% on top of that competes with
+ * the shot rather than adding to it.
  */
-export const CARD_ZOOM = 1.03
+export const SUBTLE_ZOOM = 1.03
+
+/** The card's depth, under the name the card knows it by — it wanted it first. */
+export const CARD_ZOOM = SUBTLE_ZOOM
 
 /** #11: sub-frames averaged per output frame, derived and never a knob. */
 export const MAX_BLUR_SAMPLES = 32
@@ -130,7 +135,11 @@ export function masterScale(shot: Shot, viewportWidth: number = FRAME_WIDTH): nu
  *
  * `sectionHeight` is in the capture viewport's own CSS pixels, so a **fit** beat
  * passes the viewport it widened to and its section is scaled by the same factor the
- * page is rasterised at.
+ * page is rasterised at (#65).
+ *
+ * A live shot's is the frame's height whatever the section's, so `sectionHeight` is
+ * ignored for one: a recording is the viewport over time, not a clip out of a
+ * full-page screenshot, so there is no taller window to have taken (#63).
  */
 export function masterSize(
   shot: Shot,
@@ -140,7 +149,9 @@ export function masterSize(
   const over = oversampleOf(shot)
   return {
     width: Math.round(FRAME_WIDTH * shot.punchFactor * over),
-    height: Math.round(sectionHeight * masterScale(shot, viewportWidth)),
+    height: Math.round(
+      (isLive(shot) ? FRAME_HEIGHT : sectionHeight) * masterScale(shot, viewportWidth),
+    ),
     over,
   }
 }
@@ -221,8 +232,14 @@ function pan(shot: Shot, master: MasterSize, frames: number, steps: number): Cam
  * Which is also why a pull is free (#52): both directions ramp inside the window
  * `drift` already crops, so pulling costs no extra captured pixels and asks nothing
  * of the punch — unlike a lateral pan, which needs room the punch has to buy.
+ *
+ * A live shot only *breathes*: `SUBTLE_ZOOM` rather than `DRIFT_ZOOM`, because the page
+ * is already moving and a beat's depth on top of that competes with the shot
+ * (ADR-0006). Same window either way — a recording is exactly one frame of pixels, so
+ * a live shot's breath spends 3% of upscale where a beat's drift spends 10%.
  */
 function drift(shot: Shot, master: MasterSize, frames: number, steps: number): Camera {
+  const depth = isLive(shot) ? SUBTLE_ZOOM : DRIFT_ZOOM
   const window = { width: FRAME_WIDTH, height: FRAME_HEIGHT }
   const centre = {
     x: Math.round((master.width - window.width) / 2),
@@ -230,12 +247,12 @@ function drift(shot: Shot, master: MasterSize, frames: number, steps: number): C
   }
   // A zoom's fastest pixel is a frame corner, so that is what the blur is derived from.
   // The corner covers the same distance either way round, so direction never enters.
-  const peak = (Math.hypot(FRAME_WIDTH, FRAME_HEIGHT) / 2) * (DRIFT_ZOOM - 1) / steps
+  const peak = (Math.hypot(FRAME_WIDTH, FRAME_HEIGHT) / 2) * (depth - 1) / steps
   return {
     window,
     from: centre,
     to: centre,
-    zoom: zoomRamp(DRIFT_ZOOM, shot.pushPull),
+    zoom: zoomRamp(depth, shot.pushPull),
     frames,
     samples: blurSamples(peak),
   }

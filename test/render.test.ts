@@ -4,7 +4,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
-import { FRAME_WIDTH } from '../src/frame.ts'
+import { RECORD_START_MS } from '../src/capture.ts'
+import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 import { SAFE_ZONE, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
 import { AUDIO_FADE_OUT_MS, FRAME_MS, HOOK_FADE_OUT_MS, HOOK_MS, frameCount } from '../src/plan.ts'
 import { SHEET_TILE, sheetSize } from '../src/review.ts'
@@ -555,6 +556,187 @@ export default defineSite({
     } finally {
       await dying.dispose()
     }
+  })
+})
+
+/**
+ * The live hook (#63, ADR-0006) — a reel whose opening 3.0s is *recorded* from the
+ * running page rather than synthesised from one frozen screenshot.
+ *
+ * Its own render, because the claim is about a whole pass: the hook load is stabilised
+ * and never frozen while the beat loads still are, and the difference is only visible in
+ * the mp4 the two of them end up in together. In *this* file rather than a file of its
+ * own, because a second full render running alongside this one saturates the machine —
+ * `settle`'s "check completes in seconds" is a wall-clock budget and it is the first
+ * thing to go. Beside the still reel is also where it reads: the still hook above is the
+ * thing every assertion here is a difference from.
+ *
+ * The control for "the page moved" is inside the ambient reel rather than in a second
+ * render of it: beat 0 is the *same* `#hero` section, frozen, under a drift three times
+ * deeper than the hook's breath. If the hook's frames still change far more than that
+ * beat's, the motion is the page's own and not the camera's — and the control having the
+ * *more* active camera is what makes that a one-way argument.
+ */
+describe('an ambient hook', () => {
+  /**
+   * The band both hooks are read in: 70 rows of the fixture's `<video>`, and nothing else.
+   *
+   * Chosen rather than the whole frame, because a whole-frame difference is three claims
+   * at once. This band is above the scrim's release, so no wash attenuates it; it is near
+   * enough the frame's centre that neither the hook's 3% breath nor the beat's 10% drift
+   * moves its content more than a pixel or two; and the *same element* falls in it either
+   * way — the hero video, playing in the recording and pinned in the master. What is left
+   * in the number is whether the page was moving.
+   */
+  const VIDEO_BAND = [700, 770] as const
+  const HOOK_FRAMES = frameCount(HOOK_MS)
+
+  /**
+   * Beat 0 is `#hero` again and overridden to drift, so it is the still hook's shot in
+   * all but name: same section, same page, same kind of move, off a frozen master.
+   */
+  function ambientSite(url: string): string {
+    return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { motion: 'ambient', text: "It moves.\\nSo does this." },
+  beats: [
+    { selector: '#hero', move: 'drift' },
+    { selector: '#services' },
+    { selector: '#gallery' },
+  ],
+  cta: { credit: 'fixture.test' },
+})
+`
+  }
+
+  let live: Workspace
+  let livePath: string
+  let liveMasters: string
+  let liveRun: Run
+
+  before(async () => {
+    live = await workspace()
+    await live.site('ambient', ambientSite(fixture.url))
+    livePath = join(live.root, 'out', 'ambient-3beat.mp4')
+    liveMasters = join(live.root, 'out', 'masters')
+    liveRun = await reel(['render', 'ambient'], live.root)
+    assert.equal(liveRun.code, 0, liveRun.output)
+  })
+
+  after(() => live.dispose())
+
+  /**
+   * How far the video band travels across a shot, sampled every half second.
+   *
+   * The sum along a chain rather than one pair's difference, because the fixture's hero
+   * video is a short loop of flat colours: any *given* pair of frames can land twice on
+   * one colour, and the recording starts wherever the page's own clock had got to. What
+   * cannot be small is the whole path — unless nothing moved at all.
+   */
+  async function bandTravel(from: number): Promise<number> {
+    const at = [5, 20, 35, 50, 65, 80].map((offset) => from + offset)
+    const frames = await Promise.all(at.map((index) => frame(livePath, index)))
+    const bands = frames.map((bytes) => rows(bytes, ...VIDEO_BAND))
+    return bands
+      .slice(1)
+      .reduce((total, band, i) => total + meanDiff(band, bands[i] as Buffer), 0)
+  }
+
+  test('records the hero instead of screenshotting it', () => {
+    // A recording, not a master — and it is where the masters are, so the line that
+    // wipes them wipes it. Never a build artifact, never promoted.
+    assert.ok(existsSync(join(liveMasters, 'hook.mp4')), 'no recording at out/masters/hook.mp4')
+    assert.ok(!existsSync(join(liveMasters, 'hook.jpg')), 'the hook was screenshotted as well')
+    // The browser's own raw capture is scratch even by scratch's standards.
+    assert.ok(!existsSync(join(liveMasters, 'recording')), 'the raw recording survived the pass')
+    // And the beats are still masters: they still take a screenshot of a frozen page.
+    for (const name of ['beat-0.jpg', 'beat-1.jpg', 'beat-2.jpg']) {
+      assert.ok(existsSync(join(liveMasters, name)), `no master at out/masters/${name}`)
+    }
+  })
+
+  test('is exactly the hook, at the timeline’s rate and the camera’s pixels', async () => {
+    const shot = await probe(join(liveMasters, 'hook.mp4'), 'stream=nb_frames,width,height', 'v:0')
+    assert.equal(Number(shot.nb_frames), HOOK_FRAMES)
+    // One frame of pixels: a screencast is taken at the CSS viewport whatever device
+    // scale factor it is handed, so a recording is the frame and never larger.
+    assert.deepEqual([Number(shot.width), Number(shot.height)], [FRAME_WIDTH, FRAME_HEIGHT])
+  })
+
+  test('costs what it cost, reported like every other shot', () => {
+    // #18: the reason to read this output is "which shot is slow", and a hook that dwells
+    // on the page for RECORD_START_MS before recording 3.0s of it is the slowest thing in
+    // the pass. It is counted and timed with the rest.
+    assert.match(liveRun.stdout, /^master 1\/4 hook {7}\d+\.\d+s$/m)
+    assert.equal(liveRun.stdout.match(/^master \d\/4 /gm)?.length, 4)
+    const seconds = Number(/^master 1\/4 hook {7}(\d+\.\d+)s$/m.exec(liveRun.stdout)?.[1])
+    assert.ok(
+      seconds > (RECORD_START_MS + HOOK_MS) / 1000,
+      `the hook was not dwelt on and recorded (${seconds}s)`,
+    )
+  })
+
+  test('moves because the page moves, not because the camera does', async () => {
+    // The whole of ADR-0006 as one comparison. Beat 0 is the same hero video, frozen,
+    // under a drift three times deeper than the hook's breath — so the camera is *more*
+    // active on the control than on the subject. Two frames sampled inside the hook still
+    // differ where the same two inside the beat do not, and the only thing that can
+    // account for that is the page's own clock.
+    const moving = await bandTravel(0)
+    const frozen = await bandTravel(CUTS[0] as number)
+    // The control is not perfectly still — its deeper drift drags the video's own bottom
+    // edge through the band — which is the point: even against that, the live hook moves
+    // an order of magnitude further.
+    assert.ok(
+      moving > frozen * 5 && moving > 100,
+      `the live hook is the same shot repeated: ${moving.toFixed(1)} against a frozen ` +
+        `${frozen.toFixed(1)}`,
+    )
+  })
+
+  test('carries the page chrome it scrolled under — the one capture that scrolls', async () => {
+    // A master is clipped out of a full-page screenshot and never scrolled to, which is
+    // what keeps sticky furniture out of a beat. A recording *is* the viewport, so it is
+    // scrolled to the hero and the fixture's sticky nav comes with it. That is
+    // `CONTEXT.md`'s "chrome is in the hook or in nothing at all", asserted from the side
+    // that had no way to happen before #63 — the still reel above asserts the other.
+    const first = await frame(livePath, 0)
+    assert.ok(
+      pixelsNear(rows(first, 0, 120), PAGE_CHROME) > 50_000,
+      'the recording is not the viewport scrolled to the hero',
+    )
+    // And still nowhere else: every beat is still clipped rather than scrolled to.
+    for (const index of [130, 235, 340]) {
+      const beat = await frame(livePath, index)
+      assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
+    }
+  })
+
+  test('draws its line fully on frame 0, and never animates it in', async () => {
+    // Frame 0 is the in-feed thumbnail whichever way the pixels underneath it were got:
+    // the line is at full alpha on it, in the slot, and stays there for the hold.
+    const first = await frame(livePath, 0)
+    const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
+    assert.ok(inSlot > 5_000, `the hook is not drawn on frame 0 (${inSlot}px of ink)`)
+    assert.equal(pixelsNear(first, INK) - inSlot, 0, 'the thumbnail draws ink outside the slot')
+
+    const held = pixelsNear(await frame(livePath, HOOK_HELD), INK)
+    assert.ok(
+      Math.abs(inSlot - held) < inSlot * 0.05,
+      `the hook’s alpha moves during its hold: ${inSlot} -> ${held}`,
+    )
+    // And it lets go before the cut, like a still hook's does (#24).
+    const cut = CUTS[0] as number
+    assert.equal(pixelsNear(await frame(livePath, cut - 1), INK), 0, 'the hook outlives its shot')
+  })
+
+  test('still cuts hard into a beat that is still a frozen master', async () => {
+    const cut = CUTS[0] as number
+    const within = meanDiff(await frame(livePath, cut - 2), await frame(livePath, cut - 1))
+    const across = meanDiff(await frame(livePath, cut - 1), await frame(livePath, cut))
+    assert.ok(across > within * 10, `the hook does not cut hard (${within} -> ${across})`)
   })
 })
 
