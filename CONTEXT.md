@@ -206,7 +206,8 @@ out in, so loading the page wider makes the section proportionally shorter again
 frame; the page is then rasterised back down so the master is still frame resolution.
 The other end of the punch, not a punch below 1.0 — a punch crops a narrower column
 out of a page already rendered at frame width, and asking for less than all of it asks
-for pixels that were never drawn. Per-beat, and mutually exclusive with a punch factor.
+for pixels that were never drawn (ADR-0007). Per-beat, and mutually exclusive with
+a punch factor.
 
 Fit only ever widens. A section already inside one frame has nothing to fit, and
 narrowing to reach it would shoot the site's phone layout, which is a different site
