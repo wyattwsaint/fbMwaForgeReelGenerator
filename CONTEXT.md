@@ -80,9 +80,23 @@ only card, and it is drawn in the house style — a card is never the client's.
 
 ## On-screen text
 
-**Overlay** — burned-in text over site pixels: the hook line, and a beat's
-optional label. It is what makes a muted reel watchable. Never captions: there is
-no spoken audio in a reel, so all text is editorial.
+**Overlay** — burned-in text over site pixels: the hook line, and a beat's label.
+It is what makes a muted reel watchable. Never captions: there is no spoken audio
+in a reel, so all text is editorial.
+
+**Label** — a beat's own line of overlay copy. Every beat can carry one without
+the human writing one: a beat whose config names no label takes its section's
+**heading**. Naming a label in config wins, so the editorial voice stays the
+human's, and naming it as an empty string means that shot carries no text at all.
+A section with no heading gives its beat no label, which is an unlabelled shot
+rather than a problem.
+
+**Heading** — the first heading inside a section, read off the settled page as one
+line. A **label**'s default, not a second kind of copy: it is held to the same
+**budget** and the same **slot overflow** check as a written line, and `check`
+fails on one that breaks either. So a page with a long heading fails until a human
+writes a shorter label — the pressure is the point, because type never shrinks to
+fit.
 
 **House style** — the one visual treatment every overlay and card uses, on every
 reel, for every client: MWA Forge's own display face, ink, ground, accent and
@@ -280,20 +294,25 @@ CTA. Everything else in the file is an **override**.
 
 **Override** — a config field that exists because a real site broke a default. Move,
 pan direction, push / pull, punch factor, beat label and video pin are all overrides; a config that
-names none of them still renders. Timings are not overridable — 3.5s per beat is a
-finding, not a preference.
+names none of them still renders. A beat label overrides the section's own
+**heading** rather than an absence, so a reel carries copy whether or not the config
+says a word. Timings are not overridable — 3.5s per beat is a finding, not a
+preference.
 
 **Check** — the render pipeline stopped after settle: resolves every beat's selector and
-reports missing selectors, sections shorter than the frame, and punch factors that leave
-a pan no room to travel. Catches client drift in seconds rather than a full capture pass.
+reports missing selectors, sections shorter than the frame, punch factors that leave
+a pan no room to travel, and **headings** that break a **label**'s budget. Catches
+client drift in seconds rather than a full capture pass.
 A **preflight**, never a monitor: it is run when a new reel is about to be cut, and
 nothing schedules it or reacts to it on its own. A render runs it first and refuses on
 failure — it is the settle the render was going to do anyway.
 
 **Sections report** — the page measured before a config exists: every **candidate
-section** with a selector that resolves, its height, and the punch factor that height
-needs. The other half of `check` — `check` can only say what is wrong with the
-selectors already guessed, and this says what is on the page. A report and never a
+section** with a selector that resolves, its height, the punch factor that height
+needs, and the **heading** it leads with — so the **labels** a config is about to
+get for free are visible before it is written. The other half of `check` — `check`
+can only say what is wrong with the selectors already guessed, and this says what is
+on the page. A report and never a
 proposal: it ranks nothing and writes nothing, because which sections become beats, in
 what order, is the human's whole job.
 

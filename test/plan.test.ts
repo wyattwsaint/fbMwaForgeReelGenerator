@@ -269,9 +269,61 @@ describe('planReel', () => {
       )
     })
 
-    test('labels are off by default — most reels are hook + CTA only', () => {
+    test('a plan given no headings labels nothing — the page is the only source', () => {
       const roles = planReel(config(4)).text.map((cue) => cue.role)
       assert.deepEqual(roles, ['hook', 'cta'])
+    })
+
+    test('a beat with no label takes its section’s heading as one', () => {
+      const timeline = planReel(config(3), ['Spotless bathrooms', 'What we do', 'Our work'])
+      const labels = timeline.text.filter((cue) => cue.role === 'label')
+      assert.deepEqual(
+        labels.map((cue) => [cue.shot, cue.content]),
+        [
+          [1, 'Spotless bathrooms'],
+          [2, 'What we do'],
+          [3, 'Our work'],
+        ],
+      )
+    })
+
+    test('a label in config wins over the heading — the voice stays the human’s', () => {
+      const timeline = planReel(
+        config(3, {
+          beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: 'Enrolling' } : beat)),
+        }),
+        ['Spotless bathrooms', 'What we do', 'Our work'],
+      )
+      const labels = timeline.text.filter((cue) => cue.role === 'label')
+      assert.deepEqual(labels.map((cue) => cue.content), ['Spotless bathrooms', 'Enrolling', 'Our work'])
+    })
+
+    test('an empty label suppresses the text on that shot', () => {
+      const timeline = planReel(
+        config(3, { beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: '' } : beat)) }),
+        ['Spotless bathrooms', 'What we do', 'Our work'],
+      )
+      const labels = timeline.text.filter((cue) => cue.role === 'label')
+      assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[1, 'Spotless bathrooms'], [3, 'Our work']])
+    })
+
+    test('a section with no heading leaves its beat unlabelled', () => {
+      const timeline = planReel(config(3), ['Spotless bathrooms', null, 'Our work'])
+      const labels = timeline.text.filter((cue) => cue.role === 'label')
+      assert.deepEqual(labels.map((cue) => cue.shot), [1, 3])
+    })
+
+    test('a defaulted label keeps the cue shape a written one has', () => {
+      const timeline = planReel(config(3), [null, 'What we do', null])
+      const label = timeline.text.find((cue) => cue.role === 'label')!
+      const shot = timeline.shots[2]!
+      assert.equal(label.startMs, shot.startMs + 200)
+      assert.equal(label.fadeInMs, 300)
+      assert.equal(label.fadeOutMs, 300)
+      assert.equal(
+        label.startMs + label.fadeInMs + label.holdMs + label.fadeOutMs,
+        shot.startMs + BEAT_MS - 200,
+      )
     })
 
     test('the CTA arrives on the crossfade and has no animation of its own', () => {
@@ -286,8 +338,13 @@ describe('planReel', () => {
 
     test('no cue is lit across a cut point, for any n', () => {
       for (const n of [3, 4, 5]) {
+        // Every beat labelled, half from config and half from the page: a defaulted
+        // label is the same cue, so it is held to the same cut point (#62).
         const timeline = planReel(
-          config(n, { beats: config(n).beats.map((beat, i) => ({ ...beat, label: `Beat ${i}` })) }),
+          config(n, {
+            beats: config(n).beats.map((beat, i) => (i % 2 === 0 ? { ...beat, label: `Beat ${i}` } : beat)),
+          }),
+          Array.from({ length: n }, (_, i) => `Heading ${i}`),
         )
         for (const cue of timeline.text) {
           for (const cut of timeline.cutPoints) {

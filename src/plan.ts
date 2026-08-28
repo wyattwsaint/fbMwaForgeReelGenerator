@@ -234,10 +234,21 @@ function rotatedPushPull(index: number): PushPull {
 }
 
 /**
+ * The headings the beats' own sections lead with, in beat order — what `check` read off
+ * the settled page. A beat naming no `label` takes its section's heading as one (#62).
+ *
+ * A parameter rather than something the plan goes and fetches, because the plan is pure:
+ * the page is the one thing about a reel that needs a browser, and a timeline that had
+ * to load one would stop being the value #22 made it. Absent, every beat is unlabelled
+ * unless its config says otherwise — which is what makes the plan assertable on its own.
+ */
+export type Headings = readonly (string | null)[]
+
+/**
  * The reel's whole shape. Throws when the config cannot describe a reel at all —
  * `check` reports those by name before it ever gets here.
  */
-export function planReel(config: SiteConfig): Timeline {
+export function planReel(config: SiteConfig, headings: Headings = []): Timeline {
   const beats = config.beats
   const n = beats.length
   if (n < MIN_BEATS || n > MAX_BEATS) {
@@ -337,7 +348,10 @@ export function planReel(config: SiteConfig): Timeline {
     },
   ]
   beats.forEach((beat, index) => {
-    if (!beat.label) return
+    // The config wins, and it wins even when it says nothing: `label: ''` is a human
+    // deciding this shot carries no text, which is not the same as never having said.
+    const content = beat.label ?? headings[index] ?? ''
+    if (!content) return
     const shot = shots[index + 1] as Shot
     const startMs = shot.startMs + LABEL_LEAD_IN_MS
     // Measured against the moment the reel moves on, not the beat's own end: for the
@@ -346,7 +360,7 @@ export function planReel(config: SiteConfig): Timeline {
     const doneMs = (cutPoints[index + 1] as number) - LABEL_TAIL_MS
     text.push({
       shot: index + 1,
-      content: beat.label,
+      content,
       role: 'label',
       startMs,
       fadeInMs: LABEL_FADE_MS,

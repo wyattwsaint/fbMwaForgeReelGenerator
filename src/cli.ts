@@ -40,7 +40,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
   try {
     const config = await loadSite(slug, root)
     if (command === 'check') {
-      problems = await check(config, root)
+      problems = (await check(config, root)).problems
     } else {
       cut = await render(config, root, slug, (phase) => console.log(phaseLine(phase)))
       problems = cut.problems

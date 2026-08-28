@@ -36,8 +36,9 @@ dates. `ffmpeg` and `ffprobe` have to be on PATH too — `render` shells out to 
 ### `reel sections <url>`
 
 Loads the page, settles it, and prints its candidate sections: a selector that
-resolves, where the section sits, how tall it is, and the punch factor that height
-needs. Enough to paste a first config out of, which `check` then corrects.
+resolves, where the section sits, how tall it is, the punch factor that height
+needs, and the heading it leads with. Enough to paste a first config out of, which
+`check` then corrects.
 
 A section taller than one frame also gets a `fit` column — the capture viewport width
 `fit: true` would load the page at to show the whole of it. Every section on this page
@@ -47,15 +48,19 @@ is already inside a frame, so none of them has one.
 $ reel sections https://brobstcleaning.com
 sections https://brobstcleaning.com  7.1s
 
-  hook  main           y 80      942px
-        #services      y 1022   1231px   punchFactor 1.74
-        #how-it-works  y 2253    267px   punchFactor 7.98
-        #about         y 2520    873px   punchFactor 2.44
-        #reviews       y 3392    965px   punchFactor 2.21
+  hook  main           y 80      942px                     "Spotless every time"
+        #services      y 1022   1231px   punchFactor 1.74  "What we clean"
+        #how-it-works  y 2253    267px   punchFactor 7.98  "How it works"
+        #about         y 2520    873px   punchFactor 2.44  "About Brobst"
+        #reviews       y 3392    965px   punchFactor 2.21  "What people say"
         #quote-cta     y 4357    730px   punchFactor 2.92
 
 6 sections.
 ```
+
+The heading is the line a beat written against that section draws for free, so the
+last column is the copy the config is about to inherit. A section with no heading —
+`#quote-cta` above — is a beat that simply carries no text.
 
 A candidate is a direct child of `main` that draws something. It is named by its own
 `id` where it has one, because an id is what makes a selector that survives the
@@ -93,6 +98,11 @@ check brobst  6.0s
 
 2 problems.
 ```
+
+A beat that names no `label` draws its section's heading, and that heading is held to
+exactly the budget a written line is — `beats[0] heading is 33 characters; the budget
+is 28` is the same failure as `beats[0].label` breaking it. The fix is a shorter
+`label` in the config; type never shrinks to fit.
 
 ### `reel render <site>`
 
