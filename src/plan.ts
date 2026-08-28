@@ -10,9 +10,9 @@
  */
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
-import type { Direction, Move, PushPull, SiteConfig } from './site.ts'
+import type { Direction, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
 
-export type { Move, PushPull } from './site.ts'
+export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
 
 export type Shot = {
   kind: 'hook' | 'beat' | 'cta'
@@ -25,8 +25,28 @@ export type Shot = {
   /** Which way a drift zooms. Absent on a pan, which has no zoom to point. */
   pushPull?: PushPull
   punchFactor: number
+  /**
+   * How this shot's site pixels are got. Absent is `still` — one frozen master, with
+   * the move synthesised over it — which is every shot but an `ambient` hook (#63).
+   *
+   * Present is the whole of what downstream needs: the input is a recording rather
+   * than a screenshot, so the page was stabilised and never frozen, and the chain
+   * that turns one image into a stream has nothing to do.
+   */
+  motion?: LiveMotion
   /** Absent on the card — it is the one shot with no site pixels in it. */
   source?: { url: string; selector?: string; y?: number; height?: number }
+}
+
+/**
+ * Whether a shot is recorded rather than synthesised.
+ *
+ * A predicate rather than the field comparison spelled out at each call site: "is this
+ * live" is the question `camera` and `compose` both ask, and `motion !== undefined` is
+ * only the answer to it until a second live motion exists.
+ */
+export function isLive(shot: Shot): boolean {
+  return shot.motion !== undefined
 }
 
 export type TextCue = {
@@ -250,6 +270,10 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
   }
 
   const hookSelector = config.hook?.selector
+  // `still` unless the config says otherwise, so a config that names no motion plans
+  // exactly the reel it planned before #63.
+  const hookMotion = config.hook?.motion ?? 'still'
+  const liveHook = hookMotion !== 'still'
   const shots: Shot[] = [
     {
       kind: 'hook',
@@ -263,6 +287,7 @@ export function planReel(config: SiteConfig, headings: Headings = []): Timeline 
       // in-feed viewer looks. A push spends it on the last frame, where nobody does.
       pushPull: 'push',
       punchFactor: DEFAULT_PUNCH_FACTOR,
+      ...(liveHook ? { motion: hookMotion } : {}),
       source: { url: config.url, ...(hookSelector ? { selector: hookSelector } : {}) },
     },
   ]

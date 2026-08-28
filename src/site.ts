@@ -19,6 +19,27 @@ export type PushPull = 'push' | 'pull'
 /** The whole deck (#12): both continuous, neither ever lands. */
 export type Move = 'drift' | 'pan'
 
+/**
+ * How a hook's site pixels are got (#63, ADR-0006).
+ *
+ * `still` is the doctrine every shot was built on: one frozen master, with the camera
+ * synthesised over it in post. `ambient` records the stabilised hero animating on its
+ * own clock — a video background, a carousel, a parallax idle — for exactly the hook's
+ * duration, which is the one thing the freeze was always throwing away.
+ *
+ * The hook's alone. Beats stay master-based; if a section below the fold earns motion
+ * later, ADR-0006 is the decision to extend rather than reverse.
+ */
+export type HookMotion = 'still' | 'ambient'
+
+/**
+ * A motion that is *recorded* rather than synthesised — every `HookMotion` but `still`.
+ *
+ * Written as the exclusion rather than as its own list so a third motion cannot be
+ * added to one and forgotten in the other.
+ */
+export type LiveMotion = Exclude<HookMotion, 'still'>
+
 export type Beat = {
   /** Required — resolved on the settled page. */
   selector: string
@@ -46,6 +67,8 @@ export type SiteConfig = {
     selector?: string
     /** Drawn fully on frame 0, never animates in. */
     text: string
+    /** Default `still` — whether the hook is synthesised from a master or recorded. */
+    motion?: HookMotion
     /** Default 2.0 — seek time for a <video> hero. */
     videoTime?: number
   }
