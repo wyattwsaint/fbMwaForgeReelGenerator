@@ -18,7 +18,7 @@ import { ffmpegColor, pad, rampFraction, stream, zoomStage } from './filtergraph
 import { GROUND } from './house.ts'
 import { drawnOverlays, overlayChains } from './overlay.ts'
 import type { Master } from './capture.ts'
-import { CROSSFADE_MS, FPS, frameCount } from './plan.ts'
+import { CROSSFADE_MS, FPS, frameCount, isLive } from './plan.ts'
 import type { Shot, TextCue, Timeline } from './plan.ts'
 
 /** #1's container, and #11 found no mud at this bitrate. */
@@ -69,7 +69,7 @@ export async function renderShot(
   const output = shotPath(shot, dir)
   const frames = frameCount(shot.durationMs)
 
-  const filter = master ? moveFilter(cameraFor(shot, master.size)) : null
+  const filter = master ? moveFilter(cameraFor(shot, master.size), isLive(shot)) : null
   await ffmpeg([
     ...(master ? ['-i', master.path] : ['-f', 'lavfi', '-i', groundSource()]),
     ...shotFilter(filter, shot, drawnOverlays(cues)),
@@ -136,7 +136,12 @@ function shotFilter(move: string | null, shot: Shot, cues: TextCue[]): string[] 
   return ['-filter_complex', graph, '-map', pad(overlaid)]
 }
 
-function intermediateEncode(): string[] {
+/**
+ * The encode every intermediate in the pipeline shares — near-lossless, so the one
+ * real encode is the last. Exported because a live shot's recording is an intermediate
+ * exactly like a shot file, and two encodes that had to match by hand would drift.
+ */
+export function intermediateEncode(): string[] {
   return [
     '-c:v', 'libx264',
     '-preset', 'veryfast',
@@ -155,15 +160,20 @@ function intermediateEncode(): string[] {
  * each sub-frame, and then averaged back down to the frame rate. The average *is* the
  * motion blur, which is why no sample-count knob exists to expose.
  *
+ * A live shot arrives as a recording instead, and a recording is already a stream: the
+ * loop is *dropped* rather than reconfigured (#63). Nothing else in the chain changes,
+ * because a live shot only ever breathes — 3% over 3.0s is well under a pixel a frame,
+ * so its `samples` is 1 and there are no sub-frames to have stepped through.
+ *
  * Exported for the tests: the crop offsets a move actually lands on are readable
  * straight out of the chain, which is how #51's staircase is measured without a render.
  */
-export function moveFilter(camera: Camera): string {
+export function moveFilter(camera: Camera, live = false): string {
   const { samples } = camera
   const subFps = FPS * samples
 
   const stages = [
-    `loop=loop=-1:size=1:start=0`,
+    ...(live ? [] : [`loop=loop=-1:size=1:start=0`]),
     `setpts=N/${subFps}/TB`,
     ...moveStages(camera, moveRamp(camera)),
     ...(samples > 1

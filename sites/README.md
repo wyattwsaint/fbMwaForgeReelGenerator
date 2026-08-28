@@ -30,6 +30,15 @@ off the default bed, since the schema wants a `file` whenever you write a `music
 at all. `offset` is seconds into the track, sliding the bed against the hook. Every
 path here is resolved from the directory you run `reel` in.
 
+`hook.motion` is the one override that changes how a shot's pixels are *got* rather
+than what is done with them (ADR-0006). Leave it out — or write `still` — and the hook
+is synthesised from one frozen screenshot, which is every reel cut so far. Write
+`ambient` and the hero is recorded while it runs, for exactly the hook's 3.0s: reach
+for it when the hero's whole point is motion a screenshot kills — a video background, a
+carousel, a parallax idle. The cost is that no two renders of it are alike, so a live
+hook is judged by eye off the review stills rather than by re-running it. Beats are
+always still; there is no `motion` on a beat.
+
 ## The loop
 
 ```
