@@ -82,8 +82,11 @@ frozen as constants in this repo. The client's brand reaches the viewer as site
 pixels; the overlay is the author's voice, not the subject's.
 
 **Slot** — the single fixed region overlay text occupies: left-aligned, in the
-upper band of the safe zone. It does not move per beat. A slot that shifts
-between cuts reads as sloppy, and a per-beat position is a hand-timed edit.
+lower band of the safe zone, its foot a breath clear of the boosted bottom
+boundary — that is where a Reels viewer is already looking. It does not move per
+beat. A slot that shifts between cuts reads as sloppy, and a per-beat position is
+a hand-timed edit. Hook line and beat labels alike draw here, top-down from the
+slot's head, and it is exactly deep enough for a two-line hook.
 
 **Safe zone** — the region of the 1080x1920 frame Meta's own UI does not cover:
 top 14%, sides 6%, bottom 35%. The bottom figure is the *boosted* one; reels are
@@ -97,7 +100,10 @@ never lit across a cut point.
 **Scrim** — the gradient wash behind overlay text that keeps it legible over an
 arbitrary screenshot. Constant colour, never sampled from the page, and it lives
 and dies with the text it serves: no text on screen, no scrim, because a
-permanent scrim dims the site the reel exists to show off.
+permanent scrim dims the site the reel exists to show off. It is anchored to the
+frame's foot, where the slot is: dense from the slot's head down, and spending
+its whole **release** — the stretch above the copy it takes to come up from
+nothing — easing the site into the wash rather than stopping at a line.
 
 **Budget** — the character allowance for a line of copy. Exceeding it fails
 loudly at `check`, like a missing selector. Type never shrinks to fit: a reel
