@@ -110,7 +110,7 @@ export function configProblems(config: SiteConfig, root: string): string[] {
  * being too long*, and naming the same rewrite twice is a report that reads as two
  * defects.
  */
-function copyProblems(
+export function copyProblems(
   field: string,
   content: string,
   budget: CopyBudget,

@@ -33,7 +33,30 @@ describe('reel sections', () => {
       // y 120, not 0: the fixture's sticky nav takes its 120px of flow above main.
       const hero = run.stdout.split(/\r?\n/).find((line) => line.includes('#hero'))
       assert.ok(hero, run.output)
-      assert.match(hero, /^\s+hook\s+#hero\s+y 120\s+3000px\s*$/)
+      assert.match(hero, /^\s+hook\s+#hero\s+y 120\s+3000px\s+"Fixture hero"$/)
+    }))
+
+  test('shows each section’s heading, and leaves the column empty where there is none', () =>
+    withWorkspace(async (ws) => {
+      const run = await reel(['sections', fixture.url], ws.root)
+      assert.equal(run.code, 0, run.output)
+      // The label a beat written against #services would inherit, visible before the
+      // config that inherits it is written (#62).
+      assert.match(run.stdout, /#services\s+y 3120\s+2400px\s+punchFactor 1\.20\s+"Services"/)
+      // #gallery is four images and no heading at all — an unlabelled beat, not a gap
+      // in the report.
+      const gallery = run.stdout.split(/\r?\n/).find((line) => line.includes('#gallery'))
+      assert.ok(gallery, run.output)
+      assert.doesNotMatch(gallery, /"/)
+    }))
+
+  test('starts the heading column where the hook’s row starts it, punch factor or not', () =>
+    withWorkspace(async (ws) => {
+      const run = await reel(['sections', fixture.url], ws.root)
+      assert.equal(run.code, 0, run.output)
+      const lines = run.stdout.split(/\r?\n/)
+      const quoteAt = (id: string) => lines.find((line) => line.includes(id))?.indexOf('"')
+      assert.equal(quoteAt('#hero'), quoteAt('#services'), run.output)
     }))
 
   test('measures the settled page, not the loaded one', () =>
@@ -52,6 +75,9 @@ describe('reel sections', () => {
       assert.equal(run.code, 0, run.output)
       assert.match(run.stdout, /main\s+y 2000\s+2000px\s+punchFactor 1\.2/)
       assert.match(run.stdout, /no id of its own/)
+      // A heading the page sets in two with a `<br>` is one line of copy, and it is
+      // the section's own — not the first heading in the `main` its row is named for.
+      assert.match(run.stdout, /hook\s+main\s+y 0\s+2000px\s+"First section"/)
     }))
 
   test('marks the candidate the hero sits inside, when the hero is wrapped', () =>

@@ -79,7 +79,7 @@ export async function render(
   await mkdir(dir, { recursive: true })
 
   const checkedAt = Date.now()
-  const problems = await check(config, root)
+  const { problems, headings } = await check(config, root)
   report({
     name: 'check',
     subject: problems.length === 0 ? 'ok' : 'failed',
@@ -87,7 +87,9 @@ export async function render(
   })
   if (problems.length > 0) return { path: '', stills: [], durationMs: 0, problems }
 
-  const timeline = planReel(config)
+  // The headings `check` already read off the settled pages: a beat that named no
+  // `label` draws the one its section leads with (#62).
+  const timeline = planReel(config, headings)
 
   // Masters are grouped by page and device scale rather than taken in reel order, so
   // the count runs in the order they are finished — which is the order they cost.

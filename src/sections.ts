@@ -28,12 +28,21 @@ export type Section = {
   hook: boolean
   /** Absent on the hook, whose punch is the plan's rather than the config's. */
   punchFactor?: number
+  /**
+   * The line this section leads with — the label a beat written against it inherits
+   * when its config names no `label` (#62). Absent where the section has no heading,
+   * which is a beat that simply carries no text.
+   */
+  heading?: string
 }
 
 /**
  * Walk a page's candidate sections and measure them — the half of the config loop
  * `check` cannot do, because `check` can only say what is wrong with the selectors
  * you already guessed (#53).
+ *
+ * Each row carries the heading its section leads with, so the labels a config is
+ * about to get for free are visible before it is written (#62).
  *
  * Measured against the **settled** page, in the viewport a master is taken in: a
  * section's height before its lazy images load is not the height the master is
@@ -47,7 +56,7 @@ export async function sections(url: string): Promise<Section[]> {
     await settle(page)
     const found = await sectionRects(page)
     const heroAt = heroIndex(found, await hookRect(page))
-    return found.map(({ selector, named, y, height }, index) => {
+    return found.map(({ selector, named, y, height, heading }, index) => {
       const hook = index === heroAt
       // Rounded once, here, and everything downstream reads the rounded number: a
       // report whose printed height and printed punch were computed from different
@@ -60,6 +69,7 @@ export async function sections(url: string): Promise<Section[]> {
         height: rounded,
         hook,
         ...(hook ? {} : { punchFactor: punchFor(rounded) }),
+        ...(heading === null ? {} : { heading }),
       }
     })
   } finally {
@@ -103,23 +113,34 @@ function punchFor(height: number): number {
  *
  * Fixed columns, like the render's phase lines: the heights and the punch factors are
  * read down the page as columns of numbers, which is the whole reason to print them.
+ * The heading is last and quoted, because it is the one column of arbitrary text: a
+ * heading with two spaces in it would otherwise read as two columns, and putting it
+ * anywhere but the end would push every number right by however long it happens to be.
  */
 export function sectionLines(found: Section[]): string[] {
   if (found.length === 0) return []
   const width = Math.max(...found.map((section) => section.selector.length))
   const tallest = Math.max(...found.map((section) => section.height))
-  const lines = found.map((section) => {
-    const punch = section.punchFactor
-    return [
+  // The hook has no punch factor, so its cell is padded to the width of the ones that
+  // do rather than dropped — a heading that slid left on that one row would stop the
+  // column being a column. Measured off the cells themselves, so the pad cannot drift
+  // from the format that wrote them.
+  const factors = found.map((section) =>
+    section.punchFactor === undefined ? '' : `   punchFactor ${section.punchFactor.toFixed(2)}`,
+  )
+  const factorWidth = Math.max(...factors.map((factor) => factor.length))
+  const lines = found.map((section, index) =>
+    [
       (section.hook ? 'hook' : '').padEnd(6),
       section.selector.padEnd(width + 2),
       `y ${String(section.y).padEnd(7)}`,
       `${String(section.height).padStart(String(tallest).length)}px`,
-      punch === undefined ? '' : `   punchFactor ${punch.toFixed(2)}`,
+      (factors[index] as string).padEnd(factorWidth),
+      section.heading === undefined ? '' : `  "${section.heading}"`,
     ]
       .join('')
-      .trimEnd()
-  })
+      .trimEnd(),
+  )
   if (found.some((section) => section.throughParent)) {
     lines.push('')
     lines.push('A row named for its parent has no id of its own — give that beat its y and height too.')

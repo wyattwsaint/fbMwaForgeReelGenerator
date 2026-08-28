@@ -204,6 +204,85 @@ export default defineSite({
       assert.match(run.stdout, /beats\[1\]\.label is 29 characters; the budget is 28/)
     }))
 
+  test('a heading over budget fails, naming the beat whose label it would be', () =>
+    withWorkspace(async (ws) => {
+      // #wordy leads with a 33-character heading, and a beat naming no label would
+      // draw it — so it is held to exactly the budget a written label is (#62).
+      await ws.site(
+        'inherited',
+        minimal(
+          fixture.url,
+          `[
+            { selector: '#hero' },
+            { selector: '#services' },
+            { selector: '#wordy', url: '${fixture.url}/other.html' },
+          ]`,
+        ),
+      )
+      const run = await reel(['check', 'inherited'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /beats\[2\] heading is 33 characters; the budget is 28/)
+    }))
+
+  test('a label of its own excuses a beat from its section’s long heading', () =>
+    withWorkspace(async (ws) => {
+      // The heading is never drawn, so it is never measured: what `check` weighs is
+      // the copy the reel will actually carry.
+      await ws.site(
+        'written',
+        minimal(
+          fixture.url,
+          `[
+            { selector: '#hero' },
+            { selector: '#services' },
+            { selector: '#wordy', url: '${fixture.url}/other.html', label: 'Enrolling now' },
+          ]`,
+        ),
+      )
+      const run = await reel(['check', 'written'], ws.root)
+      assert.equal(run.code, 0, run.output)
+    }))
+
+  test('a beat on #7’s y/height hatch takes the heading inside its own slice', () =>
+    withWorkspace(async (ws) => {
+      // Every section on noid.html is addressed through `main`, so all three beats
+      // resolve to the same element. The heading each one draws is the one inside its
+      // own window — beats[1] and beats[2] take the second section's 33-character line
+      // and are named for it; beats[0] takes "First section" and is not.
+      await ws.site(
+        'hatched',
+        minimal(
+          `${fixture.url}/noid.html`,
+          `[
+            { selector: 'main', y: 0, height: 2000, punchFactor: 1.2 },
+            { selector: 'main', y: 2000, height: 2000, punchFactor: 1.2 },
+            { selector: 'main', y: 2000, height: 2000, punchFactor: 1.2 },
+          ]`,
+        ),
+      )
+      const run = await reel(['check', 'hatched'], ws.root)
+      assert.equal(run.code, 1, run.output)
+      assert.match(run.stdout, /beats\[1\] heading is 33 characters; the budget is 28/)
+      assert.match(run.stdout, /beats\[2\] heading is 33 characters; the budget is 28/)
+      assert.doesNotMatch(run.stdout, /beats\[0\] heading/)
+    }))
+
+  test('a section with no heading is not a problem — that beat is unlabelled', () =>
+    withWorkspace(async (ws) => {
+      // #gallery is four images and nothing else. A beat written against it draws no
+      // text, which is a shot without a label rather than a config to fix.
+      await ws.site(
+        'quiet',
+        minimal(
+          fixture.url,
+          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
+        ),
+      )
+      const run = await reel(['check', 'quiet'], ws.root)
+      assert.equal(run.code, 0, run.output)
+      assert.doesNotMatch(run.stdout, /heading/)
+    }))
+
   test('a punchFactor that leaves a lateral pan no travel fails', () =>
     withWorkspace(async (ws) => {
       // Beat 2 pans laterally, and a section is exactly as wide as the frame, so all
