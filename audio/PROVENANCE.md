@@ -75,7 +75,7 @@ re-render.
 
 Full findings: [`.wayfinder/research/004-suno-licence.md`](../.wayfinder/research/004-suno-licence.md)
 
-## mwaforge-quiet-confidence.mp3
+## quiet-confidence.mp3
 
 MWA Forge's own bed, named by `sites/mwaforge.ts` (#67). The first track a config
 names for the sound of it rather than to hang an `offset` off the default — which

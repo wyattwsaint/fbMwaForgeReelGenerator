@@ -105,7 +105,7 @@ describe('sites/', () => {
     }
     assert.equal(
       planReel(await site('mwaforge')).audio.file,
-      'audio/mwaforge-quiet-confidence.mp3',
+      'audio/quiet-confidence.mp3',
     )
   })
 
