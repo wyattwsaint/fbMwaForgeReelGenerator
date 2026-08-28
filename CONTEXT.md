@@ -235,11 +235,11 @@ can read. The floor is one house constant, sitting beside the type sizes it defe
 and it is the copy **budget**'s doctrine applied to the site's own type — type never
 shrinks to fit. A floor on the scale is a **cap** on the height — a section is fit by
 being made proportionally shorter against the frame, so the two are one rule said from
-either end, and the code names both. Past it a fit beat falls back to what a section that
-tall got before fit existed: fit to width, covered by a vertical pan. The fallback is a **note** rather than
-a problem — the beat renders — and `check` names the beat and the section that was too
-tall, because a human who wrote `fit: true` and is getting a pan should hear it at the
-preflight rather than find it in the render.
+either end, and the code names both. Past it a fit beat falls back to what a section
+that tall got before fit existed: fit to width, covered by a vertical pan. The fallback
+is a **note** rather than a problem — the beat renders — and `check` names the beat and
+the section that was too tall, because a human who wrote `fit: true` and is getting a
+pan should hear it at the preflight rather than find it in the render.
 
 **Page chrome** — sticky and fixed page furniture (nav, announcement bars). It
 belongs to the page, not to a section. Capturing a master without scrolling the page
