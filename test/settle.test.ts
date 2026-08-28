@@ -144,7 +144,7 @@ describe('stabilise and freeze, separately', () => {
       // The same wait the settle test uses: it is what proves a video is playing
       // because nothing stopped it, rather than because the re-play race was won.
       await page.waitForTimeout(1500)
-      assert.equal(await paused(page), false, 'the hero is still playing after stabilise')
+      assert.equal((await pinned(page)).paused, false, 'the hero is still playing after stabilise')
 
       const first = await pulseHeight(page)
       await page.waitForTimeout(400)
@@ -152,6 +152,7 @@ describe('stabilise and freeze, separately', () => {
 
       await freeze(page, 2.0)
       assert.deepEqual(await pinned(page), { time: 2, paused: true })
+      // #pulse animates 1200px -> 2600px forever, so its first frame is 1200.
       assert.equal(await pulseHeight(page), 1200, '#pulse is parked at its first frame')
       await page.waitForTimeout(1500)
       assert.deepEqual(await pinned(page), { time: 2, paused: true }, 'and stays pinned')
@@ -166,8 +167,6 @@ const pinned = (page: Page) =>
     const video = document.querySelector('video')
     return { time: video?.currentTime, paused: video?.paused }
   })
-
-const paused = (page: Page) => page.evaluate(() => document.querySelector('video')?.paused)
 
 const pulseHeight = (page: Page) =>
   page.evaluate(() => document.querySelector('#pulse')?.getBoundingClientRect().height)
