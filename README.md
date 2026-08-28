@@ -119,7 +119,9 @@ a 1080x1920 H.264 mp4 at a constant 30fps with a 48kHz stereo AAC-LC bed.
 
 Progress is one checkpointed line per phase, with what that phase cost — plain
 appended lines rather than a redrawing bar, so the output still reads correctly when
-it is scrolled back through after a failure.
+it is scrolled back through after a failure. A config with a `fit` beat prints a
+`measure` line ahead of the masters as well — one per page a fit beat lives on, for
+the load that learns how wide that page has to be captured.
 
 ```
 $ reel render brobst

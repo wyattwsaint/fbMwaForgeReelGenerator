@@ -32,8 +32,25 @@ import type { LiveMotion, SiteConfig } from './site.ts'
 
 export type Master = { shot: Shot; path: string; size: MasterSize }
 
-/** Called as each master lands, with what it cost — `render` reports the pass (#18). */
-export type OnCapture = (shot: Shot, ms: number) => void
+/**
+ * One thing the capture pass just paid for, and what it cost.
+ *
+ * A `master` is the usual one: pixels landed, charged to the shot they are for. A
+ * `measure` is a fit beat's first page load — the one that learns how far the capture
+ * viewport has to widen (#65) — which is a full settle and belongs to no master at
+ * all, so it is named rather than folded into some shot's line (#78).
+ *
+ * Two kinds, two shapes, because a measurement is per *load* and a master is per
+ * shot: one load answers for every fit beat on its page, so it carries all of them
+ * rather than a representative. A single shot standing for several is how a line
+ * comes to name one of two sections it was really paid for.
+ */
+export type CaptureEvent =
+  | { kind: 'master'; shot: Shot; ms: number }
+  | { kind: 'measure'; shots: readonly Shot[]; ms: number }
+
+/** Called as each cost lands — `render` reports the pass (#18). */
+export type OnCapture = (event: CaptureEvent) => void
 
 /** #11: JPEG, not PNG — tens of milliseconds a shot rather than half a second. */
 const JPEG_QUALITY = 92
@@ -82,7 +99,7 @@ export async function captureMasters(
 
   const browser = await chromium.launch()
   try {
-    const fitWidths = await measureFitWidths(browser, config, timeline)
+    const fitWidths = await measureFitWidths(browser, config, timeline, onCapture)
     const masters: Master[] = []
     for (const group of capturePlan(config, timeline, fitWidths)) {
       masters.push(...(await captureGroup(browser, config, dir, group, onCapture)))
@@ -110,7 +127,9 @@ export type FitWidths = ReadonlyMap<Shot, number>
  * A page load of its own, because the width it computes is what decides which page
  * loads there are — the answer cannot come off a load that the answer chose. Only the
  * URLs that actually carry a fit shot are loaded, so a config naming `fit` nowhere
- * captures exactly the pages it captured before, in exactly the order it did.
+ * captures exactly the pages it captured before, in exactly the order it did — and
+ * reports exactly the lines it reported before, because a pass that measures nothing
+ * says nothing.
  *
  * The legibility cap is not re-applied here (#66). It is the plan's: a shot still
  * carrying `fit` is one the plan measured and let through, and a shot the cap caught is
@@ -124,6 +143,7 @@ async function measureFitWidths(
   browser: Browser,
   config: SiteConfig,
   timeline: Timeline,
+  onCapture: OnCapture,
 ): Promise<FitWidths> {
   const widths = new Map<Shot, number>()
   const byUrl = new Map<string, Shot[]>()
@@ -135,11 +155,17 @@ async function measureFitWidths(
   }
 
   for (const [url, shots] of byUrl) {
+    // The clock starts before the load, like a capture group's: the load and the
+    // settle are all but the whole of what a measurement costs.
+    const since = Date.now()
     await onSettledPage(browser, config, url, { width: FRAME_WIDTH, height: FRAME_HEIGHT }, 1, async (page) => {
       for (const shot of shots) {
         widths.set(shot, fitViewportWidth((await subjectRect(page, shot)).height))
       }
     })
+    // Per load, not per fit beat: two fit beats sharing a page shared this settle,
+    // and both are named on it rather than one of them answering for the other.
+    onCapture({ kind: 'measure', shots, ms: Date.now() - since })
   }
   return widths
 }
@@ -277,7 +303,7 @@ async function screenshotGroup(
       const path = join(dir, `${shotName(shot)}.jpg`)
       await page.screenshot({ path, type: 'jpeg', quality: JPEG_QUALITY, fullPage: true, clip })
       masters.push({ shot, path, size: masterSize(shot, clip.height, group.viewport.width) })
-      onCapture(shot, Date.now() - since)
+      onCapture({ kind: 'master', shot, ms: Date.now() - since })
       since = Date.now()
     }
     return masters
@@ -403,7 +429,7 @@ async function recordGroup(
   const path = join(dir, `${shotName(shot)}.mp4`)
   await trimRecording(raw, path, shot, size, recordedMs)
   await rm(raws, { recursive: true, force: true })
-  onCapture(shot, Date.now() - since)
+  onCapture({ kind: 'master', shot, ms: Date.now() - since })
   return [{ shot, path, size }]
 }
 

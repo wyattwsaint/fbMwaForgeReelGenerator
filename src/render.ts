@@ -30,7 +30,7 @@ import type { SiteConfig } from './site.ts'
  * what it just did, and it does not know it is being printed at all.
  */
 export type Phase = {
-  /** `check`, `master`, `shot`, `mux`. */
+  /** `check`, `measure`, `master`, `shot`, `mux`. */
   name: string
   /** Which of how many, when the phase is one of a countable pass. */
   count?: { index: number; total: number }
@@ -98,13 +98,22 @@ export async function render(
   // the count runs in the order they are finished — which is the order they cost.
   const masterCount = timeline.shots.filter((shot) => shot.source).length
   let taken = 0
-  const masters = await captureMasters(config, timeline, dir, (shot, ms) =>
-    report({
-      name: 'master',
-      count: { index: taken++, total: masterCount },
-      subject: subjectOf(shot),
-      ms,
-    }),
+  // A fit beat's measurement load is a phase of its own rather than a count off the
+  // masters (#78): it is a full page settle that produced no pixels, and how many
+  // there are is a property of the config's fit beats, not of the reel's shots.
+  const masters = await captureMasters(config, timeline, dir, (event) =>
+    report(
+      event.kind === 'master'
+        ? {
+            name: 'master',
+            count: { index: taken++, total: masterCount },
+            subject: subjectOf(event.shot),
+            ms: event.ms,
+          }
+        : // Every fit section the load answered for, because one load serves all of
+          // them: a line naming only the first would under-state what it bought.
+          { name: 'measure', subject: event.shots.map(subjectOf).join(', '), ms: event.ms },
+    ),
   )
   const byShot = new Map(masters.map((master) => [master.shot, master]))
 
