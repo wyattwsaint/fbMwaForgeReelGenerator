@@ -50,7 +50,21 @@ export type Checked = {
  * what that means. Nothing below this line imports Playwright.
  */
 export async function check(config: SiteConfig, root: string): Promise<Checked> {
-  const judged = verdict(config, await survey(config))
+  return judge(config, root, await survey(config))
+}
+
+/**
+ * The whole report over a survey somebody else took: what the config gets wrong on its
+ * own, then what it gets wrong against the pages.
+ *
+ * One composer rather than one per caller, because the order is a promise (#18): the
+ * config's own problems come first, since a config that names no music file is worth
+ * reading before a selector that did not match on page three. `render` takes the survey
+ * itself — it plans a timeline from the same value — and reaches the report through
+ * here, so there is one place that spells what a report is made of.
+ */
+export function judge(config: SiteConfig, root: string, taken: Survey): Checked {
+  const judged = verdict(config, taken)
   return { problems: [...configProblems(config, root), ...judged.problems], notes: judged.notes }
 }
 

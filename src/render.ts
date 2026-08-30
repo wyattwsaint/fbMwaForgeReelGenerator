@@ -15,8 +15,7 @@
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { captureMasters, mastersDir } from './capture.ts'
-import { verdict } from './check.ts'
-import { configProblems } from './config.ts'
+import { judge } from './check.ts'
 import { assemble, renderShot } from './compose.ts'
 import { trackPath } from './house.ts'
 import { planReel } from './plan.ts'
@@ -82,15 +81,14 @@ export async function render(
   await rm(dir, { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
 
-  // `check`'s two halves, taken here rather than behind it, because the value between
-  // them is what the timeline is planned from (ADR-0009): the survey the judgment read
-  // is the survey the plan reads, so there is no second set of page loads free to
-  // disagree with the preflight that passed.
+  // The survey taken here rather than behind `check`, because the value it produces is
+  // what the timeline is planned from (ADR-0009): the survey the judgment read is the
+  // survey the plan reads, so there is no second set of page loads free to disagree
+  // with the preflight that passed. `judge` is the report `check` would have returned,
+  // over the survey this caller is holding on to.
   const checkedAt = Date.now()
   const surveyed = await survey(config)
-  const judged = verdict(config, surveyed)
-  const problems = [...configProblems(config, root), ...judged.problems]
-  const notes = judged.notes
+  const { problems, notes } = judge(config, root, surveyed)
   report({
     name: 'check',
     subject: problems.length === 0 ? 'ok' : 'failed',

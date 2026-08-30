@@ -4,7 +4,7 @@ import { verdict } from '../src/check.ts'
 import { MAX_FIT_SECTION_HEIGHT } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { surveyed } from './helpers.ts'
-import type { PageFacts } from './helpers.ts'
+import type { BeatFacts, PageFacts } from './helpers.ts'
 
 /**
  * The judgment, over a survey a test wrote down (ADR-0009).
@@ -31,6 +31,11 @@ function config(n: number, beats: Partial<Beat>[] = []): SiteConfig {
  */
 const ROOMY = 2400
 
+/** Three sections no test is about, with whatever this one *is* about stated over them. */
+function sections(stated: Record<number, Partial<BeatFacts>> = {}): Partial<BeatFacts>[] {
+  return [0, 1, 2].map((i) => ({ height: ROOMY, ...stated[i] }))
+}
+
 /** What `check` would report, over a survey stating exactly these facts. */
 function report(site: SiteConfig, facts: PageFacts = {}) {
   return verdict(site, surveyed(site, facts))
@@ -40,7 +45,7 @@ describe('verdict', () => {
   test('a survey of three roomy sections reports nothing at all', () => {
     // The baseline every test below is a departure from — and the proof that what
     // those tests report is the fact they stated rather than the survey's defaults.
-    assert.deepEqual(report(config(3), { heights: [ROOMY, ROOMY, ROOMY] }), {
+    assert.deepEqual(report(config(3), { beats: sections() }), {
       problems: [],
       notes: [],
     })
@@ -48,7 +53,7 @@ describe('verdict', () => {
 
   test('a fit section past the legibility cap is noted as panned instead (#66)', () => {
     const site = config(3, [{}, {}, { fit: true }])
-    const { problems, notes } = report(site, { heights: [ROOMY, ROOMY, 4400] })
+    const { problems, notes } = report(site, { beats: sections({ 2: { height: 4400 } }) })
     assert.deepEqual(notes, [
       "beats[2] '#s2' is 4400px tall; fit pulls out to at most 3840px, so this beat is " +
         'fit to width and panned vertically instead',
@@ -60,7 +65,7 @@ describe('verdict', () => {
 
   test('a fit section inside the cap says nothing — the cap is not a new report', () => {
     const site = config(3, [{}, {}, { fit: true }])
-    assert.deepEqual(report(site, { heights: [ROOMY, ROOMY, MAX_FIT_SECTION_HEIGHT] }), {
+    assert.deepEqual(report(site, { beats: sections({ 2: { height: MAX_FIT_SECTION_HEIGHT } }) }), {
       problems: [],
       notes: [],
     })
@@ -69,8 +74,7 @@ describe('verdict', () => {
   test("a page's own heading is held to the label budget it would be drawn as (#62)", () => {
     const site = config(3)
     const { problems } = report(site, {
-      heights: [ROOMY, ROOMY, ROOMY],
-      headings: [null, 'Enrolling for Fall, apply now', null],
+      beats: sections({ 1: { heading: 'Enrolling for Fall, apply now' } }),
     })
     assert.deepEqual(problems, ['beats[1] heading is 29 characters; the budget is 28'])
   })
@@ -80,26 +84,16 @@ describe('verdict', () => {
     // admits can still run out of the safe box — measured, not counted (#9).
     const site = config(3)
     const { problems } = report(site, {
-      heights: [ROOMY, ROOMY, ROOMY],
-      headings: [null, 'WWWWWWWWWWWWWWWWWWWWWWWWWWWW', null],
+      beats: sections({ 1: { heading: 'WWWWWWWWWWWWWWWWWWWWWWWWWWWW' } }),
     })
-    assert.equal(problems.length, 1)
-    assert.match(
-      problems[0] as string,
-      /^beats\[1\] heading draws \d+px wide at \d+px; the safe box is 950px$/,
-    )
-  })
-
-  test('a heading a label overrides is never weighed — a survey never read it', () => {
-    // The survey leaves the heading null where the config named a label, so the copy
-    // `check` weighs is the copy the reel will actually carry.
-    const site = config(3, [{}, { label: 'Enrolling now' }, {}])
-    assert.deepEqual(report(site, { heights: [ROOMY, ROOMY, ROOMY] }), { problems: [], notes: [] })
+    assert.deepEqual(problems, [
+      'beats[1] heading draws 1106px wide at 44px; the safe box is 950px',
+    ])
   })
 
   test('a section shorter than the frame its punch captures is refused (#18)', () => {
     const site = config(3)
-    const { problems } = report(site, { heights: [ROOMY, 900, ROOMY] })
+    const { problems } = report(site, { beats: sections({ 1: { height: 900 } }) })
     assert.deepEqual(problems, ["beats[1] '#s1' is 900px tall; a punchFactor of 1 needs 1920px"])
   })
 
@@ -107,7 +101,7 @@ describe('verdict', () => {
     // A diagonal pan travels on both, so a punch that leaves neither enough is two
     // findings and not one: the fix is a number, and each axis has its own.
     const site = config(3, [{ move: 'pan', direction: 'diagonal', punchFactor: 1.05 }])
-    const { problems } = report(site, { heights: [1950, ROOMY, ROOMY] })
+    const { problems } = report(site, { beats: sections({ 0: { height: 1950 } }) })
     assert.deepEqual(problems, [
       "beats[0] '#s0' — a diagonal pan needs 210px of travel, a punchFactor of 1.05 " +
         'leaves 54px (needs 1.2)',
@@ -119,8 +113,7 @@ describe('verdict', () => {
   test('a beat running past the foot of its page is refused, with both numbers', () => {
     const site = config(3)
     const { problems } = report(site, {
-      heights: [ROOMY, ROOMY, ROOMY],
-      tops: [0, 0, 2000],
+      beats: sections({ 2: { top: 2000 } }),
       scrollHeight: 3000,
     })
     assert.deepEqual(problems, ["beats[2] '#s2' runs to 4400px; the page is 3000px tall"])
@@ -130,13 +123,13 @@ describe('verdict', () => {
     // Nothing measured is a section that was not there: the survey carries no rect and
     // no height for it, which is exactly what a page that has no `#s1` gives up.
     const site = config(3)
-    const { problems } = report(site, { heights: [ROOMY, null, ROOMY] })
+    const { problems } = report(site, { beats: [{ height: ROOMY }, {}, { height: ROOMY }] })
     assert.deepEqual(problems, ["beats[1] selector '#s1' — no element matches"])
   })
 
   test('a hero nothing found is a problem, named as the config named the hook', () => {
     const site = config(3)
-    const facts = { heights: [ROOMY, ROOMY, ROOMY], heroRect: null }
+    const facts = { beats: sections(), heroRect: null }
     assert.deepEqual(report(site, facts).problems, [
       'hook — no hero found; name one with hook.selector',
     ])
