@@ -56,12 +56,17 @@ describe('the house style is #9’s, frozen', () => {
     // hook sit on peak and neither ramp eats into the band.
     assert.ok(SCRIM.top + SCRIM.release <= TEXT_SLOT.top, 'the wash is still coming up under the copy')
     assert.ok(
-      SCRIM.top + SCRIM.height - SCRIM.fall >= TEXT_SLOT.bottom,
+      SCRIM.top + SCRIM.fallTop >= TEXT_SLOT.bottom,
       'the wash starts falling before the copy’s foot',
     )
     // And it lets go rather than stopping: the fall ends above the frame's foot, which
     // is the whole point — those pixels are the client's site.
-    assert.ok(SCRIM.top + SCRIM.height < FRAME_HEIGHT, 'the wash still runs to the frame’s foot')
+    assert.ok(
+      SCRIM.top + SCRIM.height < FRAME_HEIGHT,
+      'the wash still runs all the way to the frame’s foot',
+    )
+    // The fall is the wash's own last stretch, not a number `overlay` re-derives.
+    assert.equal(SCRIM.fallTop, SCRIM.height - SCRIM.fall)
   })
 
   test('the tagline is its own role, under the headline and over the credit', () => {

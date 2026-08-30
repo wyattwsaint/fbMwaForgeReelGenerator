@@ -192,13 +192,22 @@ export const SCRIM = {
   peak: 0.9,
   /** The ramp's exponent — higher reaches density sooner and leaves a longer thin tail. */
   falloff: 3,
-  /** Full width, from the release point down to the fall's end. */
+  /** Full width: the wash is bounded vertically, never horizontally. */
   width: FRAME_WIDTH,
   /** Where the wash begins, at zero alpha: one release above the slot's head. */
   top: SCRIM_TOP, // 776
+  /** How tall it is: from the release point down to the fall's end. */
   height: SCRIM_FOOT - SCRIM_TOP, // 584
   /** The stretch the wash takes to go from nothing to `peak`, ending at the slot's head. */
   release: SCRIM_RELEASE,
   /** The stretch it takes to go back to nothing, starting at the slot's foot. */
   fall: SCRIM_FALL,
+  /**
+   * Where the fall begins, in the wash's *own* coordinates rather than the frame's.
+   *
+   * Named here rather than derived at the filter, because the wash's geometry is this
+   * object's to own: `overlay` writes a gradient against it and should no more compute
+   * this than it computes `top`. It is the slot's foot, seen from the wash's head.
+   */
+  fallTop: SCRIM_FOOT - SCRIM_FALL - SCRIM_TOP, // 424
 }

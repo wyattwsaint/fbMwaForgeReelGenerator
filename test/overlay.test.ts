@@ -141,12 +141,11 @@ describe('what gets drawn', () => {
     // The alpha ramp is the only thing about it that varies, and it varies with Y —
     // clipped at both ends, so the wash is at peak across the text band, spends its
     // release above it and its fall below it, and is gone before the frame's foot.
-    const fallTop = SCRIM.height - SCRIM.fall
     assert.ok(
       hook.includes(
         `a=255*${SCRIM.peak}` +
           `*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release}\\,0\\,1)\\,${SCRIM.falloff}))` +
-          `*(1-pow(clip((Y-${fallTop})/${SCRIM.fall}\\,0\\,1)\\,${SCRIM.falloff}))`,
+          `*(1-pow(clip((Y-${SCRIM.fallTop})/${SCRIM.fall}\\,0\\,1)\\,${SCRIM.falloff}))`,
       ),
     )
   })

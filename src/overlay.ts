@@ -62,9 +62,8 @@ function scrimChain(envelope: Envelope, label: StreamLabel): string {
   // stretch rather than against `H`: `release` above the copy and `fall` below it, with
   // the band between them at peak. The two are the same cube mirrored, multiplied
   // together — each is 1 outside its own stretch, so neither touches the other's end.
-  const fallTop = SCRIM.height - SCRIM.fall
   const rise = `(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release},0,1),${SCRIM.falloff}))`
-  const fall = `(1-pow(clip((Y-${fallTop})/${SCRIM.fall},0,1),${SCRIM.falloff}))`
+  const fall = `(1-pow(clip((Y-${SCRIM.fallTop})/${SCRIM.fall},0,1),${SCRIM.falloff}))`
   const alpha = `255*${SCRIM.peak}*${rise}*${fall}`
   const { start, lit, held, dark } = envelopeFrames(envelope)
 

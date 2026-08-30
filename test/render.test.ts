@@ -46,11 +46,10 @@ const SCRIM_BAND = [SCRIM.top, SAFE_ZONE.bottom] as const
  * (#60), and the band is derived rather than restated so it follows the wash.
  */
 const ABOVE_THE_WASH = [0, SCRIM.top] as const
+
 /**
- * Everything below the wash — from the foot of its fall to the foot of the frame.
- * The scrim used to run all the way down here; it does not any more, and this band is
- * what that bought: the client's own site, undimmed, in the third of the frame a
- * boosted reel hides under Meta's UI and an organic one does not.
+ * The band under the wash's foot: the pixels the scrim used to cover and no longer
+ * does (#60, as amended). The client's own site, all the way to the frame's edge.
  */
 const BELOW_THE_WASH = [SCRIM.top + SCRIM.height, FRAME_HEIGHT] as const
 
@@ -359,17 +358,20 @@ describe('reel render', () => {
     )
   })
 
-  test('the wash lets go above the frame’s foot, and the site keeps those pixels', async () => {
-    // The mirror of the test above, read under the copy instead of over it. The hook
-    // is lit on one frame and gone on the other, and down here that makes no
-    // difference either: the fall has already spent itself before this band starts,
-    // so the site below the copy is the site, not a dimmed one.
+  test('the frame’s foot is the site’s, lit hook or not', async () => {
+    // The amendment to #60, in rendered pixels rather than in arithmetic: the same two
+    // frames read *below* the wash, where the scrim used to run at peak to the frame's
+    // edge. If it still reached down here the lit frame would be ~0.9 of the ground
+    // darker than the dark one; it is the same site either way.
     const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...BELOW_THE_WASH)
     const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...BELOW_THE_WASH)
     assert.ok(
       Math.abs(lit - dark) < dark * 0.05,
       `the wash still reaches the frame’s foot: ${lit} vs ${dark}`,
     )
+    // And it is a site down there rather than a wash of ground: a band this size that
+    // had been washed to peak would read far darker than the fixture's own pixels.
+    assert.ok(lit > 20, `the frame’s foot is washed out anyway: ${lit}`)
   })
 
   test('a label lives and dies inside its own shot', async () => {
@@ -922,12 +924,16 @@ export default defineSite({
   })
 
   test('fires the reveal on camera — the frames carry what no still could', async () => {
-    // Frame 0 is the top of the walk, where the reveal is still down at the fold and
-    // nowhere near the band. Read in the band rather than across the whole frame: the
-    // window the trim cuts opens a couple of hundred pixels into the walk, so the
-    // reveal's own top edge is already on screen at the foot before it has travelled
-    // anywhere. That was invisible until the scrim stopped running to the frame's
-    // foot and washing it out — the count, not the capture, is what changed.
+    // Frame 0 is the top of the document, where the reveal is not in the band.
+    //
+    // The band rather than the whole frame, because the reveal is only 50px clear of
+    // the fold and the walk is already running when the first frame is recorded — a
+    // couple of hundred milliseconds of it, under a loaded machine — so a strip of the
+    // reveal can be on the frame's last rows at frame 0 and it means nothing. That the
+    // whole-frame count used to be zero was the *scrim*: the wash ran to the foot of
+    // the frame and ate those rows. It stops above them now (#60, as amended), so the
+    // claim has to be the one this test was always making — the reveal travelled into
+    // the band — rather than one the wash was making for it.
     const first = await frame(walkedPath, 0)
     assert.equal(
       pixelsNear(rows(first, ...REVEAL_BAND), REVEAL),
