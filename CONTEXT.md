@@ -150,7 +150,9 @@ today's behaviour and the default, `ambient` dwells on the stabilised hero
 while its own animation runs — a video background, a carousel, a parallax idle —
 and `scroll` records the hero while a **scripted scroll** runs. The two live
 motions differ in what the page is doing, not in how it is filmed: `ambient`
-waits for the page to move, `scroll` makes it.
+waits for the page to move, `scroll` makes it. An `ambient` shot is only taken if
+the **motion probe** finds motion in the frame it would be shot in (ADR-0008);
+where it does not, the shot **records dead** and degrades to `still`.
 The trade is deliberate (ADR-0006): the page animates on a clock this pipeline
 does not own, so no two recordings are alike. Recording starts at a fixed
 post-stabilise moment, so **frame 0** is at least reproducible in *composition* —
@@ -180,6 +182,27 @@ edit wearing a config field. There is a limit stated rather than chased —
 **stabilise** has already walked the page, so a reveal wired to fire once has fired,
 and where it cannot fire again a `scroll` hook is an `ambient` one. That degradation
 is named by `check`, never silent.
+
+**Motion probe** — the question asked of an `ambient` **live shot** before it is
+recorded: framed exactly as the recording would frame it, at the shot's own viewport,
+does the hero actually move? Three samples over 2s, differenced per horizontal band;
+the highest band mean is the reading. It measures the *capture*, not the page, so it
+is blind to why a hook would record dead — and the eye cannot ask it, because a dead
+recording and a live one make the same review still.
+Asked by both `check` and the render, exactly as **scripted scroll**'s re-fire
+question is. `ambient` only: under a scroll the viewport moves, so every page passes.
+
+**Motion floor** — the reading a **motion probe** has to beat, and **house style**
+rather than config. It errs towards `still` — the inverse of the scroll question's
+bias, deliberately: a hook wrongly recorded is the dead one, and a hook wrongly
+stilled is the better shot.
+
+**Records dead** — what an `ambient` **live shot** does when its subject moves on the
+page but not in the frame. A 9:16 crop of a landscape hero keeps a narrow column of
+it, and a video background — the case ADR-0006 named first — is the likeliest to have
+its motion cropped away. Nothing fails: the count, the length and the render are all
+correct and the hook is frozen. It is a **note**, and the shot degrades — `scroll` to
+`ambient` to `still`, each step named.
 
 **Master** — the single static, high-resolution capture a shot's camera move is
 computed over. One master per beat, framed on that beat's section. Camera motion

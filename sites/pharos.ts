@@ -18,6 +18,11 @@ export default defineSite({
     // a per-site value because it is the one settle knob a page can break, and the
     // page that the default was measured on is this one.
     videoTime: 2.0,
+    // Not `motion: 'ambient'`, though the hero's subject is water that moves. It does
+    // not move *here*: hope-1920.mp4 is 16:9 under `object-fit: cover`, and covering a
+    // 1080x1920 frame renders it 3413px wide, so the hook sees 31.6% of the source and
+    // the moving water is almost all outside that column. Framed, the hero reads 1.46
+    // against a floor of 5 — it records dead, and ADR-0008 is the measurement.
   },
   beats: [
     {
