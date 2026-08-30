@@ -28,7 +28,11 @@ export type { Rect } from './page.ts'
 /** One page load, in the order the run made them. */
 export type SurveyedPage = {
   url: string
-  /** The page's own scroll height, null where the page never loaded. */
+  /**
+   * The page's own scroll height, null only where the failure landed before it could
+   * be read. A page that died after it was read keeps it: the height is a fact the
+   * survey already has, and the beats it had measured are still judged against it.
+   */
   scrollHeight: number | null
   /**
    * Why the page could not be surveyed, or null where it loaded. A page that carries
@@ -140,12 +144,13 @@ async function surveyPage(
   group: number[],
 ): Promise<SurveyedPage> {
   const page = await browser.newPage({ viewport: BASE_VIEWPORT })
+  let scrollHeight: number | null = null
   try {
     await page.goto(url, LOAD)
     await stabilise(page)
     if (url === config.url) await readLive(page, config, taken)
     await freeze(page, config.hook?.videoTime ?? DEFAULT_VIDEO_TIME)
-    const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+    scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight)
     for (const index of group) {
       const beat = config.beats[index]
       const surveyed = taken.beats[index]
@@ -168,7 +173,7 @@ async function surveyPage(
     // down rather than thrown, so the judgment can still name the beats it blocked.
     const failure =
       error instanceof Error ? (error.message.split('\n')[0] ?? error.message) : String(error)
-    return { url, scrollHeight: null, failure }
+    return { url, scrollHeight, failure }
   } finally {
     await page.close()
   }
