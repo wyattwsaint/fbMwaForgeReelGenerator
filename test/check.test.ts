@@ -2,9 +2,21 @@ import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { survey } from '../src/survey.ts'
+import type { SiteConfig } from '../src/site.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
 import { reel, withWorkspace } from './helpers.ts'
+
+/**
+ * What only a page can prove (ADR-0009).
+ *
+ * The judgment is pure and is asserted as one in `test/verdict.test.ts`, over a survey
+ * a test writes down. What a literal cannot say is that the survey itself measured a
+ * real page correctly — a survey that read the wrong height would make every pure test
+ * above it pass and every reel wrong. So the fixture site and its server stay, and what
+ * runs through them is the measuring rather than the judging.
+ */
 
 let fixture: FixtureSite
 
@@ -27,6 +39,84 @@ export default defineSite({
 })
 `
 }
+
+/** The same config as a value, for the tests that survey a page without the CLI. */
+function site(url: string, beats: SiteConfig['beats']): SiteConfig {
+  return {
+    url,
+    hook: { text: 'Spotless, every time.' },
+    beats,
+    cta: { credit: 'fixture.test' },
+  }
+}
+
+describe('survey', () => {
+  test('a section measures at the height the page lays it out at', async () => {
+    const taken = await survey(
+      site(fixture.url, [
+        { selector: '#hero' },
+        { selector: '#short' },
+        { selector: '#tall' },
+        { selector: '#gallery' },
+        { selector: '#gone' },
+      ]),
+    )
+    // The numbers every pure test states as a literal, read off the page that lays
+    // them out — and off the *settled* page: #gallery has no height of its own until
+    // its lazy images load, so 2800px is a measurement a load alone would not get.
+    assert.deepEqual(
+      taken.beats.map((beat) => beat.height),
+      [3000, 400, 4400, 2800, null],
+    )
+    // A selector that does not resolve is nothing measured, which is exactly what the
+    // judgment reads as "no element matches".
+    assert.equal(taken.beats[4]?.rect, null)
+    // y 120, not 0: the fixture's sticky nav takes its 120px of flow above main.
+    assert.deepEqual(taken.beats[0]?.rect, { x: 0, y: 120, width: 1080, height: 3000 })
+    // The hook names no selector, so the hero is the one the page's own shape gives
+    // up — the first candidate section, which is #hero.
+    assert.deepEqual(taken.heroRect, taken.beats[0]?.rect)
+    // 120 + 3000 + 2400 + 400 + 2800 + 1200 + 4400: the page's own height, which is
+    // what says whether a beat runs off the foot of it.
+    assert.deepEqual(
+      taken.pages.map((page) => [page.scrollHeight, page.failure]),
+      [[14_320, null]],
+    )
+  })
+
+  test('a heading is read as one line, from inside the beat’s own slice', async () => {
+    // Every section on noid.html is addressed through `main`, so all three beats
+    // resolve to the same element and the heading each one draws is the one inside its
+    // own y/height window — not the page's first, which is what an ancestor would
+    // otherwise hand every beat on the page (#7, #62).
+    const taken = await survey(
+      site(`${fixture.url}/noid.html`, [
+        { selector: 'main', y: 0, height: 2000 },
+        { selector: 'main', y: 2000, height: 2000 },
+        { selector: 'main', y: 2000, height: 2000, label: 'Enrolling now' },
+      ]),
+    )
+    assert.deepEqual(
+      taken.beats.map((beat) => beat.heading),
+      [
+        // Set in two by a `<br>` and carrying a line the page never paints: a heading
+        // is one line of the copy a viewer actually sees, so the break is a space and
+        // the hidden span is not there at all.
+        'First section',
+        'Enrolling now for the autumn term',
+        // A beat that names a label is drawing that label whatever the page says, so
+        // the heading it overrides is never read and never weighed.
+        null,
+      ],
+    )
+    // And the height is the window's, not the resolved element's: `main` is 4000px
+    // tall, and the hatch is what says which 2000px of it this beat is about.
+    assert.deepEqual(
+      taken.beats.map((beat) => beat.height),
+      [2000, 2000, 2000],
+    )
+  })
+})
 
 describe('reel check', () => {
   test('a config naming only URL, hook text, selectors and credit passes', () =>
@@ -72,50 +162,6 @@ export default defineSite({
       assert.match(run.stdout, /3 problems\./)
     }))
 
-  test('rejects a beat count outside 3..5 by name', async () => {
-    for (const beats of [
-      `[{ selector: '#hero' }, { selector: '#services' }]`,
-      `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' },
-        { selector: '#pulse' }, { selector: '#hero' }, { selector: '#services' }]`,
-    ]) {
-      await withWorkspace(async (ws) => {
-        await ws.site('count', minimal(fixture.url, beats))
-        const run = await reel(['check', 'count'], ws.root)
-        assert.equal(run.code, 1, run.output)
-        assert.match(run.stdout, /beats: a reel is 3-5 beats, this config has [26]/)
-      })
-    }
-  })
-
-  test('y/height is the escape hatch when no element wraps the subject', () =>
-    withWorkspace(async (ws) => {
-      // #short is 400px, so on its own it is too short for a frame. y/height carve
-      // a taller window out of the page around it instead.
-      await ws.site(
-        'hatch',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#short', y: 2400, height: 2000 }]`,
-        ),
-      )
-      const run = await reel(['check', 'hatch'], ws.root)
-      assert.equal(run.code, 0, run.output)
-    }))
-
-  test('a y/height window that runs off the end of the page fails', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'overrun',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#short', y: 99000, height: 2000 }]`,
-        ),
-      )
-      const run = await reel(['check', 'overrun'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /beats\[2\] '#short' runs to 101000px; the page is \d+px tall/)
-    }))
-
   test('a punch captures a narrower column, so a punched beat may be under 1920px', () =>
     withWorkspace(async (ws) => {
       // A punchFactor of 5 captures a 216px-wide column; a 9:16 frame out of that
@@ -145,182 +191,6 @@ export default defineSite({
       assert.match(run.stdout, /beats\[2\]\.punchFactor is 0\.7; 1 is "no punch"/)
     }))
 
-  test('a hook line over budget fails, naming the field and the budget', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'wordy',
-        `
-import { defineSite } from 'reel'
-export default defineSite({
-  url: '${fixture.url}',
-  hook: { text: 'Spotless, every single time, without exception, ever.' },
-  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
-  cta: { credit: 'fixture.test' },
-})
-`,
-      )
-      const run = await reel(['check', 'wordy'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /hook\.text is 53 characters; the budget is 42/)
-    }))
-
-  test('a hook inside the character budget still fails when it draws too wide', () =>
-    withWorkspace(async (ws) => {
-      // 23 characters against a 42-character budget — the count says yes and the
-      // slot says no, which is the whole reason the width is measured at all.
-      await ws.site(
-        'shouty',
-        `
-import { defineSite } from 'reel'
-export default defineSite({
-  url: '${fixture.url}',
-  hook: { text: 'CURB APPEAL, GUARANTEED' },
-  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
-  cta: { credit: 'fixture.test' },
-})
-`,
-      )
-      const run = await reel(['check', 'shouty'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /hook\.text draws 1007px wide at 76px; the safe box is 950px/)
-      assert.doesNotMatch(run.stdout, /characters/)
-    }))
-
-  test('a beat label over budget fails, naming the beat', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'labelled',
-        minimal(
-          fixture.url,
-          `[
-            { selector: '#hero' },
-            { selector: '#services', label: 'Enrolling for Fall, apply now' },
-            { selector: '#gallery' },
-          ]`,
-        ),
-      )
-      const run = await reel(['check', 'labelled'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /beats\[1\]\.label is 29 characters; the budget is 28/)
-    }))
-
-  test('a heading over budget fails, naming the beat whose label it would be', () =>
-    withWorkspace(async (ws) => {
-      // #wordy leads with a 33-character heading, and a beat naming no label would
-      // draw it — so it is held to exactly the budget a written label is (#62).
-      await ws.site(
-        'inherited',
-        minimal(
-          fixture.url,
-          `[
-            { selector: '#hero' },
-            { selector: '#services' },
-            { selector: '#wordy', url: '${fixture.url}/other.html' },
-          ]`,
-        ),
-      )
-      const run = await reel(['check', 'inherited'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /beats\[2\] heading is 33 characters; the budget is 28/)
-    }))
-
-  test('a label of its own excuses a beat from its section’s long heading', () =>
-    withWorkspace(async (ws) => {
-      // The heading is never drawn, so it is never measured: what `check` weighs is
-      // the copy the reel will actually carry.
-      await ws.site(
-        'written',
-        minimal(
-          fixture.url,
-          `[
-            { selector: '#hero' },
-            { selector: '#services' },
-            { selector: '#wordy', url: '${fixture.url}/other.html', label: 'Enrolling now' },
-          ]`,
-        ),
-      )
-      const run = await reel(['check', 'written'], ws.root)
-      assert.equal(run.code, 0, run.output)
-    }))
-
-  test('a beat on #7’s y/height hatch takes the heading inside its own slice', () =>
-    withWorkspace(async (ws) => {
-      // Every section on noid.html is addressed through `main`, so all three beats
-      // resolve to the same element. The heading each one draws is the one inside its
-      // own window — beats[1] and beats[2] take the second section's 33-character line
-      // and are named for it; beats[0] takes "First section" and is not.
-      await ws.site(
-        'hatched',
-        minimal(
-          `${fixture.url}/noid.html`,
-          `[
-            { selector: 'main', y: 0, height: 2000, punchFactor: 1.2 },
-            { selector: 'main', y: 2000, height: 2000, punchFactor: 1.2 },
-            { selector: 'main', y: 2000, height: 2000, punchFactor: 1.2 },
-          ]`,
-        ),
-      )
-      const run = await reel(['check', 'hatched'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /beats\[1\] heading is 33 characters; the budget is 28/)
-      assert.match(run.stdout, /beats\[2\] heading is 33 characters; the budget is 28/)
-      assert.doesNotMatch(run.stdout, /beats\[0\] heading/)
-    }))
-
-  test('a section with no heading is not a problem — that beat is unlabelled', () =>
-    withWorkspace(async (ws) => {
-      // #gallery is four images and nothing else. A beat written against it draws no
-      // text, which is a shot without a label rather than a config to fix.
-      await ws.site(
-        'quiet',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
-        ),
-      )
-      const run = await reel(['check', 'quiet'], ws.root)
-      assert.equal(run.code, 0, run.output)
-      assert.doesNotMatch(run.stdout, /heading/)
-    }))
-
-  test('a punchFactor that leaves a lateral pan no travel fails', () =>
-    withWorkspace(async (ws) => {
-      // Beat 2 pans laterally, and a section is exactly as wide as the frame, so all
-      // of a lateral pan's travel comes from the punch.
-      await ws.site(
-        'flat',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery', punchFactor: 1.05 }]`,
-        ),
-      )
-      const run = await reel(['check', 'flat'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(
-        run.stdout,
-        /beats\[2\] '#gallery' — a lateral pan needs 210px of travel, a punchFactor of 1\.05 leaves 54px \(needs 1\.2\)/,
-      )
-    }))
-
-  test('a vertical pan with nothing left over past the frame fails', () =>
-    withWorkspace(async (ws) => {
-      // Beat 0 pans vertically at no punch, so its travel is whatever the section has
-      // past one frame — 80px here, which is a stall, not a move.
-      await ws.site(
-        'notall',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero', y: 0, height: 2000 }, { selector: '#services' }, { selector: '#gallery' }]`,
-        ),
-      )
-      const run = await reel(['check', 'notall'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(
-        run.stdout,
-        /beats\[0\] '#hero' — a vertical pan needs 210px of travel, a punchFactor of 1 leaves 80px \(needs 1\.07\)/,
-      )
-    }))
-
   test('a beat naming both fit and punchFactor fails — they are opposite ends', () =>
     withWorkspace(async (ws) => {
       await ws.site(
@@ -335,92 +205,6 @@ export default defineSite({
       assert.match(
         run.stdout,
         /beats\[1\] names both fit and punchFactor; fit shows the whole section, punchFactor crops into it/,
-      )
-    }))
-
-  test('a fit beat too short for a frame is still refused — fit only pulls out', () =>
-    withWorkspace(async (ws) => {
-      // #short is 400px, and fit widens the viewport to shrink a section against the
-      // frame. There is nothing there for it to do: a section already inside one frame
-      // needs a punch, and narrowing to reach it would shoot the phone layout.
-      await ws.site(
-        'fitshort',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#short', fit: true }]`,
-        ),
-      )
-      const run = await reel(['check', 'fitshort'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      assert.match(run.stdout, /beats\[2\] '#short' is 400px tall; a punchFactor of 1 needs 1920px/)
-    }))
-
-  test('a fit beat taller than a frame passes, and is left unpunched', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'fitted',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services', fit: true }, { selector: '#gallery' }]`,
-        ),
-      )
-      const run = await reel(['check', 'fitted'], ws.root)
-      assert.equal(run.code, 0, run.output)
-    }))
-
-  test('a fit beat past the legibility cap is panned instead, and said so by name', () =>
-    withWorkspace(async (ws) => {
-      // #tall is 4400px, and a fit would draw the page at well under half its own size
-      // — a section nobody can read. So the beat is fit to width and panned, which is
-      // a decision the human hears about here rather than finding in the render.
-      await ws.site(
-        'fittall',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#tall', fit: true }]`,
-        ),
-      )
-      const run = await reel(['check', 'fittall'], ws.root)
-      assert.equal(run.code, 0, run.output)
-      assert.match(
-        run.stdout,
-        /note {2}beats\[2\] '#tall' is 4400px tall; fit pulls out to at most 3840px, so this beat is fit to width and panned vertically instead/,
-      )
-      // A note, not a problem: the reel still renders, and the report still says ok.
-      assert.match(run.stdout, /check ok {2}fittall/)
-      assert.doesNotMatch(run.stdout, /problem/)
-    }))
-
-  test('a fit beat inside the cap says nothing — the cap is not a new report', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'fitinside',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services', fit: true }, { selector: '#gallery' }]`,
-        ),
-      )
-      const run = await reel(['check', 'fitinside'], ws.root)
-      assert.equal(run.code, 0, run.output)
-      assert.doesNotMatch(run.stdout, /note/)
-    }))
-
-  test('a fit beat asked to pan is refused — a fit section has nothing to travel', () =>
-    withWorkspace(async (ws) => {
-      await ws.site(
-        'fitpan',
-        minimal(
-          fixture.url,
-          `[{ selector: '#hero' }, { selector: '#services', fit: true, move: 'pan', direction: 'vertical' }, { selector: '#gallery' }]`,
-        ),
-      )
-      const run = await reel(['check', 'fitpan'], ws.root)
-      assert.equal(run.code, 1, run.output)
-      // #services is 2400px, so unfit it would have 480px of vertical travel — fit is
-      // what spends it, and the finding names fit rather than a punch to raise.
-      assert.match(
-        run.stdout,
-        /beats\[1\] '#services' — a vertical pan needs 210px of travel, a fit section is exactly one frame and leaves 0px \(drift it instead\)/,
       )
     }))
 
@@ -507,151 +291,6 @@ export default defineSite({
       assert.equal(run.code, 1, run.output)
       assert.match(run.stdout, /gone\.html — .*\(unchecked: beats\[2\]\)/)
     }))
-
-  /**
-   * #64's known limit, reported rather than silent. A `scroll` hook is only worth the
-   * name where the page's scroll effects can fire again — `stabilise` has already
-   * walked the whole page by the time anything is recorded — so `check` says which
-   * hook the render will actually cut, and says it by name.
-   */
-  describe("a scroll hook's degradation", () => {
-    function scrolling(url: string): string {
-      return `
-import { defineSite } from 'reel'
-export default defineSite({
-  url: '${url}',
-  hook: { motion: 'scroll', text: 'Spotless, every time.' },
-  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
-  cta: { credit: 'fixture.test' },
-})
-`
-    }
-
-    test('a page whose reveals cannot re-fire is named as an ambient hook', () =>
-      withWorkspace(async (ws) => {
-        // `once.html`'s reveal unobserves itself the first time it fires, which
-        // `stabilise` has already made it do.
-        await ws.site('once', scrolling(`${fixture.url}/once.html`))
-        const run = await reel(['check', 'once'], ws.root)
-        // A note and not a problem: the reel still renders, and what it renders is a
-        // perfectly good ambient hook. A problem here would make the config
-        // permanently unrenderable, which is a worse answer than a line saying so.
-        assert.equal(run.code, 0, run.output)
-        assert.match(run.stdout, /check ok {2}once/)
-        assert.match(
-          run.stdout,
-          /^note {2}hook\.motion 'scroll' — this page's scroll effects do not re-fire, so the hook is recorded as 'ambient'$/m,
-        )
-        // And the whole chain, because `once.html` is deliberately still: the ambient
-        // hook it degraded to then faces the motion probe and degrades again (#88).
-        // Both steps are named — a human handed a still where they asked for a scroll
-        // reads why in two lines rather than inferring it from one.
-        assert.match(
-          run.stdout,
-          /^note {2}hook\.motion 'ambient' — this hero does not move in the frame it would be shot in, so the hook is captured as 'still'$/m,
-        )
-      }))
-
-    test('a page whose reveals do re-fire is not noted at all', () =>
-      withWorkspace(async (ws) => {
-        await ws.site('fires', scrolling(fixture.url))
-        const run = await reel(['check', 'fires'], ws.root)
-        assert.equal(run.code, 0, run.output)
-        assert.doesNotMatch(run.stdout, /^note/m)
-      }))
-
-    test('a scroll hook that keeps its scroll is never probed', () =>
-      withWorkspace(async (ws) => {
-        // The fixture's reveals do re-fire, so the hook stays a scroll — and a scroll
-        // is never handed to the motion probe (#88). Not an optimisation: under a
-        // scripted scroll the viewport itself moves, so every page on earth reads far
-        // above the floor and the probe would be measuring its own camera.
-        await ws.site('walked', scrolling(fixture.url))
-        const run = await reel(['check', 'walked'], ws.root)
-        assert.equal(run.code, 0, run.output)
-        assert.doesNotMatch(run.stdout, /^note/m)
-      }))
-
-    test('a still hook is never asked the question', () =>
-      withWorkspace(async (ws) => {
-        // `once.html` degrades only because a `scroll` hook was asked for. The same
-        // page under the default plans exactly the reel it always did.
-        await ws.site(
-          'stillonce',
-          minimal(
-            `${fixture.url}/once.html`,
-            `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
-          ),
-        )
-        const run = await reel(['check', 'stillonce'], ws.root)
-        assert.equal(run.code, 0, run.output)
-        assert.doesNotMatch(run.stdout, /^note/m)
-      }))
-  })
-
-  /**
-   * #88, ADR-0008. An `ambient` hook is only worth recording where the hero moves in
-   * the frame it would be shot in — a 9:16 crop of a landscape hero throws most of it
-   * away, and a video background is the case likeliest to have its motion cropped off
-   * with it. Nothing fails when it does: the count, the length and the render are all
-   * correct and the hook is simply frozen. So it is measured before it is shot, and
-   * `check` names the hook the render will actually cut.
-   */
-  describe("an ambient hook's degradation", () => {
-    function ambient(url: string): string {
-      return `
-import { defineSite } from 'reel'
-export default defineSite({
-  url: '${url}',
-  hook: { motion: 'ambient', text: 'Spotless, every time.' },
-  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
-  cta: { credit: 'fixture.test' },
-})
-`
-    }
-
-    test('a hero that moves outside the frame is named as a still hook', () =>
-      withWorkspace(async (ws) => {
-        // `cropped.html`'s hero animates forever 280px below the bottom of the frame a
-        // live shot would record. The page moves; the shot would not.
-        await ws.site('cropped', ambient(`${fixture.url}/cropped.html`))
-        const run = await reel(['check', 'cropped'], ws.root)
-        // A note and never a problem, like the scroll's — and for a better reason: the
-        // shot it degrades to is the *better* one, with a deterministic frame 0, the
-        // site's videoTime honoured and a beat's full drift.
-        assert.equal(run.code, 0, run.output)
-        assert.match(run.stdout, /check ok {2}cropped/)
-        assert.match(
-          run.stdout,
-          /^note {2}hook\.motion 'ambient' — this hero does not move in the frame it would be shot in, so the hook is captured as 'still'$/m,
-        )
-      }))
-
-    test('a hero that moves inside the frame is recorded, and not noted at all', () =>
-      withWorkspace(async (ws) => {
-        // The fixture hero plays a video and animates a block, both inside the first
-        // 1920px of it. Above the floor is the case that was already working, and the
-        // probe's job there is to say nothing.
-        await ws.site('moves', ambient(fixture.url))
-        const run = await reel(['check', 'moves'], ws.root)
-        assert.equal(run.code, 0, run.output)
-        assert.doesNotMatch(run.stdout, /^note/m)
-      }))
-
-    test('a still hook is never probed — there is no recording to refuse', () =>
-      withWorkspace(async (ws) => {
-        await ws.site(
-          'stillcropped',
-          minimal(
-            `${fixture.url}/cropped.html`,
-            `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
-          ),
-        )
-        const run = await reel(['check', 'stillcropped'], ws.root)
-        assert.equal(run.code, 0, run.output)
-        assert.doesNotMatch(run.stdout, /^note/m)
-      }))
-  })
 
   test('names the config file when there is none', () =>
     withWorkspace(async (ws) => {

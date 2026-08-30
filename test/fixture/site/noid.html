@@ -11,12 +11,16 @@
   * { box-sizing: border-box; margin: 0; }
   body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
   main > section { height: 2000px; padding: 40px 32px; }
+  /* A line the page never paints — the sort a template bolts onto a heading for a
+     screen reader. `textContent` hands it back and the reel would carry copy no
+     viewer ever saw; `innerText` reads what is shown, and does not. */
+  .sr-only { display: none; }
 </style>
 </head>
 <body>
 <main>
   <!-- Set in two by a `<br>`, which is one line of copy when it is read aloud. -->
-  <section><h2>First<br>section</h2></section>
+  <section><h2>First<br>section<span class="sr-only"> — jump to the first section</span></h2></section>
   <!-- Over a label's 28-character budget, and only reachable through `main` — so a
        beat that takes it has to be windowed by its own y and height to find it. -->
   <section><h2>Enrolling now for the autumn term</h2></section>
