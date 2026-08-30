@@ -1,5 +1,5 @@
 import { chromium } from 'playwright'
-import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from './frame.ts'
+import { BASE_VIEWPORT, FRAME_HEIGHT, LOAD, fitViewportWidth } from './frame.ts'
 import { hookRect, sectionRects } from './page.ts'
 import type { Rect } from './page.ts'
 import { BEAT_MS, panTravelNeeded, pastFitCap, punchFactorFor } from './plan.ts'
@@ -61,8 +61,8 @@ export type Section = {
 export async function sections(url: string): Promise<Section[]> {
   const browser = await chromium.launch()
   try {
-    const page = await browser.newPage({ viewport: { width: FRAME_WIDTH, height: FRAME_HEIGHT } })
-    await page.goto(url, { waitUntil: 'load', timeout: 60_000 })
+    const page = await browser.newPage({ viewport: BASE_VIEWPORT })
+    await page.goto(url, LOAD)
     await settle(page)
     const found = await sectionRects(page)
     const heroAt = heroIndex(found, await hookRect(page))

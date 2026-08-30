@@ -21,7 +21,14 @@ import type { Browser, Page } from 'playwright'
 import { masterScale, masterSize } from './camera.ts'
 import type { MasterSize } from './camera.ts'
 import { ffmpeg, ffprobe, intermediateEncode } from './compose.ts'
-import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth, punchedFrameHeight } from './frame.ts'
+import {
+  BASE_VIEWPORT,
+  FRAME_HEIGHT,
+  FRAME_WIDTH,
+  LOAD,
+  fitViewportWidth,
+  punchedFrameHeight,
+} from './frame.ts'
 import { frameAt } from './motion.ts'
 import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
@@ -159,7 +166,7 @@ async function measureFitWidths(
     // The clock starts before the load, like a capture group's: the load and the
     // settle are all but the whole of what a measurement costs.
     const since = Date.now()
-    await onSettledPage(browser, config, url, { width: FRAME_WIDTH, height: FRAME_HEIGHT }, 1, async (page) => {
+    await onSettledPage(browser, config, url, BASE_VIEWPORT, 1, async (page) => {
       for (const shot of shots) {
         widths.set(shot, fitViewportWidth((await subjectRect(page, shot)).height))
       }
@@ -189,7 +196,7 @@ async function onSettledPage<T>(
 ): Promise<T> {
   const page = await browser.newPage({ viewport, deviceScaleFactor })
   try {
-    await page.goto(url, { waitUntil: 'load', timeout: 60_000 })
+    await page.goto(url, LOAD)
     await settle(page, config.hook?.videoTime)
     return await body(page)
   } finally {
@@ -406,7 +413,7 @@ async function recordGroup(
   let recordedMs: number
   try {
     const page = await context.newPage()
-    await page.goto(group.url, { waitUntil: 'load', timeout: 60_000 })
+    await page.goto(group.url, LOAD)
     await stabilise(page)
     const walking = await framedForRecording(page, shot, group.motion as LiveMotion)
     await page.waitForTimeout(RECORD_START_MS)

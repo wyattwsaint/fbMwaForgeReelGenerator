@@ -9,6 +9,20 @@ export const MAX_BEATS = 5
 /** #6: a hero video's own fade-in is still running at t=0, so the pin sits past it. */
 export const DEFAULT_VIDEO_TIME = 2.0
 
+/**
+ * What a page is given before the run calls it a failure: the `load` event, within a
+ * minute. House policy, not local detail — every module that opens a browser passes
+ * this to `goto`, so a fifth caller agrees with the four by construction (#100).
+ */
+export const LOAD = { waitUntil: 'load', timeout: 60_000 } as const
+
+/**
+ * The viewport a page is *read* at — the one frame the reel is framed in. Distinct
+ * from the widened viewport a **fit** shot is captured at, which `fitViewportWidth`
+ * derives per section; everything measured for a decision is measured here (#100).
+ */
+export const BASE_VIEWPORT = { width: FRAME_WIDTH, height: FRAME_HEIGHT }
+
 /** #7: 1.0 is "no punch". */
 export const DEFAULT_PUNCH_FACTOR = 1.0
 

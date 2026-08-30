@@ -2,10 +2,10 @@ import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { configProblems, copyProblems } from './config.ts'
 import {
+  BASE_VIEWPORT,
   DEFAULT_PUNCH_FACTOR,
   DEFAULT_VIDEO_TIME,
-  FRAME_HEIGHT,
-  FRAME_WIDTH,
+  LOAD,
   MAX_BEATS,
   MIN_BEATS,
   punchedFrameHeight,
@@ -149,11 +149,9 @@ async function resolveOnPages(
   if (!byUrl.has(config.url)) byUrl.set(config.url, [])
 
   for (const [url, group] of byUrl) {
-    const page = await browser.newPage({
-      viewport: { width: FRAME_WIDTH, height: FRAME_HEIGHT },
-    })
+    const page = await browser.newPage({ viewport: BASE_VIEWPORT })
     try {
-      await page.goto(url, { waitUntil: 'load', timeout: 60_000 })
+      await page.goto(url, LOAD)
       // Settle, split at its seam (#64): the scroll probe has to read the page a live
       // hook is recorded from, which is stabilised and never frozen. Freezing first
       // parks the very animations the probe is asking about, so a `check` that settled
