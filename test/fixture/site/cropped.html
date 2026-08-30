@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — a hero whose motion is outside the frame</title>
+<!--
+  #88's hazard, and the one ADR-0008 is about: a hero that moves on the page and does
+  not move in the 9:16 frame it would be shot in.
+
+  The client case was a 1920x1080 video under `object-fit: cover`, where covering a
+  1080x1920 box scales the source 1.78x and keeps about a third of its width — and the
+  moving water was mostly in the two thirds thrown away. That is not reproducible from
+  a fixture without shipping a second video, and it is not the point either: the point
+  is that the *crop* decides, so the motion here is simply below the fold of the framed
+  viewport instead of outside it sideways. Same claim, one dimension over.
+
+  A live shot is framed by scrolling its hero to the top of the viewport, so the frame
+  is this hero's first 1920px. `#deep` animates forever at 2200px, which is 280px past
+  the bottom of it — near enough that a probe reading the whole page rather than the
+  frame would trip on it, far enough that no rounding puts it on screen.
+
+  Everything in the frame is flat and still on purpose: the reading this page is here
+  to produce is a *dead* one, and a hero carrying any other motion would be making the
+  claim about that instead.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  section { padding: 40px 32px; }
+
+  /* The same shape as index.html's hero, so a config written against one resolves
+     against the other. */
+  #hero { position: relative; height: 3000px; background: #253856; }
+
+  /* Absolutely positioned, so its own animation reflows nothing: a hero that grew and
+     shrank would move the sections under it, and the page would be moving even where
+     the hero was not. */
+  #hero #deep { position: absolute; top: 2200px; left: 0; width: 1080px; background: #ff2ea6; }
+  @keyframes deep { from { height: 200px; } to { height: 700px; } }
+  #deep { animation: deep 1700ms linear infinite alternate; }
+
+  #services { height: 2400px;
+    background: repeating-linear-gradient(45deg, #1d2b3a 0 40px, #24374b 40px 80px); }
+  #gallery { height: 2000px; background: #11151c; }
+</style>
+</head>
+<body>
+<main>
+  <section id="hero">
+    <h1>Fixture hero</h1>
+    <div id="deep"></div>
+  </section>
+
+  <section id="services"><h2>Services</h2></section>
+
+  <section id="gallery"><h2>Gallery</h2></section>
+</main>
+</body>
+</html>

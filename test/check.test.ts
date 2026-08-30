@@ -542,12 +542,32 @@ export default defineSite({
           run.stdout,
           /^note {2}hook\.motion 'scroll' — this page's scroll effects do not re-fire, so the hook is recorded as 'ambient'$/m,
         )
+        // And the whole chain, because `once.html` is deliberately still: the ambient
+        // hook it degraded to then faces the motion probe and degrades again (#88).
+        // Both steps are named — a human handed a still where they asked for a scroll
+        // reads why in two lines rather than inferring it from one.
+        assert.match(
+          run.stdout,
+          /^note {2}hook\.motion 'ambient' — this hero does not move in the frame it would be shot in, so the hook is captured as 'still'$/m,
+        )
       }))
 
     test('a page whose reveals do re-fire is not noted at all', () =>
       withWorkspace(async (ws) => {
         await ws.site('fires', scrolling(fixture.url))
         const run = await reel(['check', 'fires'], ws.root)
+        assert.equal(run.code, 0, run.output)
+        assert.doesNotMatch(run.stdout, /^note/m)
+      }))
+
+    test('a scroll hook that keeps its scroll is never probed', () =>
+      withWorkspace(async (ws) => {
+        // The fixture's reveals do re-fire, so the hook stays a scroll — and a scroll
+        // is never handed to the motion probe (#88). Not an optimisation: under a
+        // scripted scroll the viewport itself moves, so every page on earth reads far
+        // above the floor and the probe would be measuring its own camera.
+        await ws.site('walked', scrolling(fixture.url))
+        const run = await reel(['check', 'walked'], ws.root)
         assert.equal(run.code, 0, run.output)
         assert.doesNotMatch(run.stdout, /^note/m)
       }))
@@ -564,6 +584,70 @@ export default defineSite({
           ),
         )
         const run = await reel(['check', 'stillonce'], ws.root)
+        assert.equal(run.code, 0, run.output)
+        assert.doesNotMatch(run.stdout, /^note/m)
+      }))
+  })
+
+  /**
+   * #88, ADR-0008. An `ambient` hook is only worth recording where the hero moves in
+   * the frame it would be shot in — a 9:16 crop of a landscape hero throws most of it
+   * away, and a video background is the case likeliest to have its motion cropped off
+   * with it. Nothing fails when it does: the count, the length and the render are all
+   * correct and the hook is simply frozen. So it is measured before it is shot, and
+   * `check` names the hook the render will actually cut.
+   */
+  describe("an ambient hook's degradation", () => {
+    function ambient(url: string): string {
+      return `
+import { defineSite } from 'reel'
+export default defineSite({
+  url: '${url}',
+  hook: { motion: 'ambient', text: 'Spotless, every time.' },
+  beats: [{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }],
+  cta: { credit: 'fixture.test' },
+})
+`
+    }
+
+    test('a hero that moves outside the frame is named as a still hook', () =>
+      withWorkspace(async (ws) => {
+        // `cropped.html`'s hero animates forever 280px below the bottom of the frame a
+        // live shot would record. The page moves; the shot would not.
+        await ws.site('cropped', ambient(`${fixture.url}/cropped.html`))
+        const run = await reel(['check', 'cropped'], ws.root)
+        // A note and never a problem, like the scroll's — and for a better reason: the
+        // shot it degrades to is the *better* one, with a deterministic frame 0, the
+        // site's videoTime honoured and a beat's full drift.
+        assert.equal(run.code, 0, run.output)
+        assert.match(run.stdout, /check ok {2}cropped/)
+        assert.match(
+          run.stdout,
+          /^note {2}hook\.motion 'ambient' — this hero does not move in the frame it would be shot in, so the hook is captured as 'still'$/m,
+        )
+      }))
+
+    test('a hero that moves inside the frame is recorded, and not noted at all', () =>
+      withWorkspace(async (ws) => {
+        // The fixture hero plays a video and animates a block, both inside the first
+        // 1920px of it. Above the floor is the case that was already working, and the
+        // probe's job there is to say nothing.
+        await ws.site('moves', ambient(fixture.url))
+        const run = await reel(['check', 'moves'], ws.root)
+        assert.equal(run.code, 0, run.output)
+        assert.doesNotMatch(run.stdout, /^note/m)
+      }))
+
+    test('a still hook is never probed — there is no recording to refuse', () =>
+      withWorkspace(async (ws) => {
+        await ws.site(
+          'stillcropped',
+          minimal(
+            `${fixture.url}/cropped.html`,
+            `[{ selector: '#hero' }, { selector: '#services' }, { selector: '#gallery' }]`,
+          ),
+        )
+        const run = await reel(['check', 'stillcropped'], ws.root)
         assert.equal(run.code, 0, run.output)
         assert.doesNotMatch(run.stdout, /^note/m)
       }))

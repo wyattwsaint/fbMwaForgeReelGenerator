@@ -47,6 +47,19 @@ export type HookMotion = 'still' | 'ambient' | 'scroll'
  */
 export type LiveMotion = Exclude<HookMotion, 'still'>
 
+/**
+ * The motion this config asked for, before any page has been looked at.
+ *
+ * A function rather than four spellings of `config.hook?.motion ?? 'still'`, because
+ * the default is a decision — a config that names no motion plans exactly the reel it
+ * planned before #63 — and a decision spelled out at every reader is one that can be
+ * changed at three of them. What a *page* then does to it is `check`'s business
+ * (`./check.ts`); this is only the ask.
+ */
+export function configuredMotion(config: SiteConfig): HookMotion {
+  return config.hook?.motion ?? 'still'
+}
+
 export type Beat = {
   /** Required — resolved on the settled page. */
   selector: string

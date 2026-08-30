@@ -209,6 +209,22 @@ describe('planReel', () => {
         dwelt.shots.map((shot) => ({ ...shot, motion: undefined })),
       )
     })
+
+    test('a measured motion overrides the config, and plans the shot it names', () => {
+      // #64 and #88 both degrade the hook on evidence a pure plan cannot have: whether
+      // a page's reveals re-fire, and whether its hero moves in the frame it would be
+      // shot in. `check` measures both and hands the answer down, so the reel is
+      // planned as the hook that will actually be cut rather than as the one that was
+      // asked for. Unmeasured is the config's own answer, exactly as an unmeasured
+      // height is uncapped.
+      const asked = withHook({ motion: 'scroll' })
+      assert.equal((planReel(asked, [], [], 'ambient').shots[0] as Shot).motion, 'ambient')
+      // And a hook probed dead is the still hook whole — not a live shot with the word
+      // taken off it. A still hook is synthesised from one frozen master, so it drifts
+      // the full 10% rather than breathing 3% over a recording, and every downstream
+      // pass reads that off the plan alone.
+      assert.deepEqual(planReel(asked, [], [], 'still').shots, planReel(config(3)).shots)
+    })
   })
 
   test('each move carries only its own parameter', () => {
