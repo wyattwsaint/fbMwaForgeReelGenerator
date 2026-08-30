@@ -96,9 +96,10 @@ export function scriptedScroll(page: Page, durationMs: number): Promise<void> {
  * a parallax moves, and none of which a video background or a height animation touches.
  * A page that changes none of them across the walk changes nothing a scroll could show.
  *
- * Both callers ask this of a stabilised, unfrozen page — `check` splits its settle to
- * do so — because freezing parks the animations the question is about, and a preflight
- * that answered a different question than the render is worse than none.
+ * Asked of a stabilised, unfrozen page, because freezing parks the animations the
+ * question is about. Asked by `check` alone, which splits its settle to do so: the
+ * answer is a plan decision, and a capture pass that re-asked could fall back to an
+ * ambient dwell the motion probe never measured (#88).
  *
  * The comparison errs towards scrolling: an unrelated infinite transform animation
  * reads as an effect that re-fires, and what that buys is the scroll the config asked

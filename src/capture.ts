@@ -27,7 +27,7 @@ import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { FPS, frameCount } from './plan.ts'
 import type { Shot, Timeline } from './plan.ts'
-import { scriptedScroll, scrollEffectsRefire } from './scroll.ts'
+import { scriptedScroll } from './scroll.ts'
 import { settle, stabilise } from './settle.ts'
 import type { LiveMotion, SiteConfig } from './site.ts'
 
@@ -447,12 +447,20 @@ async function recordGroup(
  * The hero's rect is resolved either way, including on the `scroll` path that starts
  * at the top of the document and does not need it: a hook whose selector has drifted
  * fails by name here rather than quietly recording whatever the top of the page is.
+ *
+ * Whether the walk happens is the *plan's* answer and is not re-asked here (#88). This
+ * pass used to put `scrollEffectsRefire` a second time and quietly record an ambient
+ * hook where its own load disagreed with the preflight's — which is the one shot the
+ * motion probe never sees, since a `scroll` that passed in `check` is never probed. A
+ * pass holding a timeline cannot degrade anyway: it can stop walking, but it cannot
+ * turn the live shot it was handed into a still one, so all a second opinion could buy
+ * was an unmeasured dwell on a hero nobody measured. The remaining disagreement is the
+ * harmless direction — a page that would not re-fire today is still walked, and a
+ * viewport that moves is live footage whatever the reveals do.
  */
 async function framedForRecording(page: Page, shot: Shot, motion: LiveMotion): Promise<boolean> {
   const rect = await rectFor(page, shot)
-  // Asked before the page is moved, so the probe's own walk starts where `stabilise`
-  // left it and its "back to the top" is where a scroll shot begins anyway.
-  const walking = motion === 'scroll' && (await scrollEffectsRefire(page, shot.durationMs))
+  const walking = motion === 'scroll'
   // The same `y` escape hatch a master's clip honours, in the same page coordinates —
   // a scroll is what a clip is for a recording. A walk starts at the document's top,
   // which is where the effects it is there to re-fire are wound back to.

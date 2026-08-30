@@ -107,7 +107,7 @@ export async function movesAsFramed(page: Page): Promise<boolean> {
 
 /**
  * How much the frame this page is currently at moves, as one number: the highest band
- * mean over the widest-apart pair of samples.
+ * mean over every pair of samples.
  *
  * Screenshots rather than a recording, because this runs *before* the record window —
  * it is predictive, and it has to be, since the master's own encoder noise sits close

@@ -17,6 +17,7 @@ import type { Rect } from './page.ts'
 import { STILL_DEGRADATION, frameAt, movesAsFramed } from './motion.ts'
 import { AMBIENT_DEGRADATION, scrollEffectsRefire } from './scroll.ts'
 import { freeze, stabilise } from './settle.ts'
+import { configuredMotion } from './site.ts'
 import type { Beat, HookMotion, SiteConfig } from './site.ts'
 
 export type { Rect } from './page.ts'
@@ -82,8 +83,7 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
   const problems = configProblems(config, root)
   if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
     // Nothing left to resolve against.
-    const hookMotion = config.hook?.motion ?? 'still'
-    return { problems, notes: [], hookMotion, headings: [], heights: [] }
+    return { problems, notes: [], hookMotion: configuredMotion(config), headings: [], heights: [] }
   }
 
   // The plan says which beats pan and where, so it is what decides whether a punch
@@ -109,6 +109,11 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
  * derived its own would be a second planner, free to disagree with the one the render
  * uses. Every other beat's height is left null, which changes none of them: the cap
  * reads a beat's own height and nothing else.
+ *
+ * The hook's measured motion is not handed over, and cannot be: pages are visited in
+ * beat order, so a beat on another route is planned before the hook's own page has
+ * been opened. Nothing a beat is planned from reads it — `hookMotion` decides shot 0's
+ * `motion` and nothing else (#88), and shot 0 is not what this returns.
  */
 function plannedBeat(config: SiteConfig, index: number, height: number): Shot | null {
   const heights = config.beats.map((_, at) => (at === index ? height : null))
@@ -127,7 +132,7 @@ async function resolveOnPages(
   // What the config asked for until the hook's own page says otherwise. A URL that
   // never loads leaves it here, which is the config's own answer and the one the
   // render would have planned anyway — the load failure is already a problem.
-  let hookMotion: HookMotion = config.hook?.motion ?? 'still'
+  let hookMotion: HookMotion = configuredMotion(config)
   // Beats are visited grouped by page rather than in reel order, so the headings are
   // filled in by index rather than pushed — a beat on another route would otherwise
   // caption the beat that happened to be resolved before it.
@@ -214,7 +219,7 @@ async function resolveHookMotion(
   config: SiteConfig,
 ): Promise<{ motion: HookMotion; notes: string[] }> {
   const notes: string[] = []
-  let motion: HookMotion = config.hook?.motion ?? 'still'
+  let motion: HookMotion = configuredMotion(config)
   if (motion === 'scroll' && !(await scrollEffectsRefire(page, HOOK_MS))) {
     notes.push(AMBIENT_DEGRADATION)
     motion = 'ambient'

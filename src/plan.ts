@@ -11,6 +11,7 @@
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
+import { configuredMotion } from './site.ts'
 import type { Beat, Direction, HookMotion, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
@@ -342,7 +343,7 @@ export function planReel(
   // than planning a live hook and leaving capture to quietly shoot something else.
   // Unmeasured is what the config asked for, exactly as an unmeasured height is
   // uncapped: the plan only knows what it is handed.
-  const hookMotion = motion ?? config.hook?.motion ?? 'still'
+  const hookMotion = motion ?? configuredMotion(config)
   const liveHook = hookMotion !== 'still'
   const shots: Shot[] = [
     {

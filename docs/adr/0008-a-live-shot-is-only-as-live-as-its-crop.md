@@ -57,6 +57,14 @@ So the probe is asked once, in `check`, and its verdict rides back with the head
 and the heights (#66) into `planReel`. "Both ask and agree" becomes "the preflight
 decides and the render plans it", which is the same guarantee bought more cheaply.
 
+The scroll question had to move with it. Left where it was, a capture pass could still
+answer it differently from the preflight and fall back to an `ambient` dwell — and that
+hook is never probed, because a `scroll` that passes in `check` is deliberately not
+(under a scripted scroll every page reads live). So ADR-0006's second ask is gone too,
+and capture walks when the plan says `scroll`. What that gives up is the case where a
+page would not re-fire today; a walked viewport is live footage whatever the reveals
+do, so it gives up nothing this ADR is about.
+
 It measures the capture, not the page, and so is blind to *why* a hook records dead —
 a cropped hero, a genuinely static one, or a compositing hole of the kind this ADR
 looked for and did not find. That is the property worth having, given that the cause

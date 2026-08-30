@@ -189,12 +189,13 @@ does the hero actually move? Three samples over 2s, differenced per horizontal b
 the highest band mean is the reading. It measures the *capture*, not the page, so it
 is blind to why a hook would record dead — and the eye cannot ask it, because a dead
 recording and a live one make the same review still.
-Asked once, by `check`, and carried into the plan with the headings and the heights —
-unlike **scripted scroll**'s re-fire question, which both callers ask for themselves.
-The difference is that this one changes the plan and not just the capture: a hook that
-degrades is punched, drifts 10% and is synthesised from a frozen master, and none of
-that can be decided by a pass that is already holding a timeline. `ambient` only: under
-a scroll the viewport moves, so every page passes.
+Asked once, by `check`, and carried into the plan with the headings and the heights,
+because it changes the plan and not just the capture: a hook that degrades is punched,
+drifts 10% and is synthesised from a frozen master, and none of that can be decided by
+a pass that is already holding a timeline. **Scripted scroll**'s re-fire question moved
+with it — a capture pass that re-asked could fall back to an ambient dwell the probe
+never saw, which is this term's own defect one path down. `ambient` only: under a
+scroll the viewport moves, so every page passes.
 
 **Motion floor** — the reading a **motion probe** has to beat, and **house style**
 rather than config. It errs towards `still` — the inverse of the scroll question's
