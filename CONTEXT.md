@@ -191,7 +191,7 @@ does the hero actually move? Three samples over 2s, differenced per horizontal b
 the highest band mean is the reading. It measures the *capture*, not the page, so it
 is blind to why a hook would record dead — and the eye cannot ask it, because a dead
 recording and a live one make the same review still.
-Asked once, by `check`, and carried into the plan with the headings and the heights,
+Asked once, by the **survey**, and written down as a reading the plan reads,
 because it changes the plan and not just the capture: a hook that degrades is punched,
 drifts 10% and is synthesised from a frozen master, and none of that can be decided by
 a pass that is already holding a timeline. **Scripted scroll**'s re-fire question moved

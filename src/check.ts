@@ -80,32 +80,6 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
 }
 
 /**
- * The shot beat `index` is planned as, now that its own section has been measured.
- *
- * The whole reel re-planned around the one height, rather than a shot assembled here
- * out of the same rules: a beat's move, direction and punch are the plan's to decide —
- * and since #66 one of those decisions turns on a measurement, so a `check` that
- * derived its own would be a second planner, free to disagree with the one the render
- * uses. Every other beat's height is left null, which changes none of them: the cap
- * reads a beat's own height and nothing else.
- *
- * The live readings are not handed over, and cannot be: pages are visited in beat
- * order, so a beat on another route is planned before the hook's own page has been
- * opened. Nothing a beat is planned from reads them — the degradation chain decides
- * shot 0's `motion` and nothing else (#88), and shot 0 is not what this returns.
- */
-function plannedBeat(config: SiteConfig, index: number, height: number): Shot | null {
-  const beats = config.beats.map((beat, at) => ({
-    url: beat.url ?? config.url,
-    rect: null,
-    height: at === index ? height : null,
-    heading: null,
-  }))
-  const shots = planReel(config, { ...unsurveyed(), beats }).shots
-  return shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
-}
-
-/**
  * What a survey means: every problem the config has against the pages it names, and
  * every note about what the run will do instead.
  *
@@ -119,9 +93,17 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
   const hook = resolvedMotion(config, taken)
 
   // The plan says which beats pan and where, so it is what decides whether a punch
-  // factor leaves one room to travel. A beat count the plan cannot describe is already
-  // named by `configProblems`, and the page checks still run without a plan.
+  // factor leaves one room to travel — and since #66 one of those decisions turns on a
+  // measurement, so a `check` that derived its own would be a second planner, free to
+  // disagree with the one the render uses.
+  //
+  // Planned once, from the whole survey, and read beat by beat below: one call cannot
+  // disagree with itself. A beat count the plan cannot describe is already named by
+  // `configProblems`, and the page checks still run without a plan.
   const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
+  const shots = plannable ? planReel(config, taken).shots : []
+  const beatShot = (index: number): Shot | null =>
+    shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
 
   for (const page of taken.pages) {
     if (page.url === config.url) notes.push(...hook.notes)
@@ -136,7 +118,7 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
       if (page.failure !== null && surveyed.rect === null) return
       const beat = config.beats[index]
       if (!beat) return
-      const judged = judgeBeat(config, beat, index, surveyed, page.scrollHeight, plannable)
+      const judged = judgeBeat(beat, index, surveyed, page.scrollHeight, beatShot(index))
       problems.push(...judged.problems)
       notes.push(...judged.notes)
     })
@@ -173,12 +155,11 @@ function hookProblems(config: SiteConfig, taken: Survey): string[] {
 }
 
 function judgeBeat(
-  config: SiteConfig,
   beat: Beat,
   index: number,
   surveyed: SurveyedBeat,
   pageHeight: number | null,
-  plannable: boolean,
+  shot: Shot | null,
 ): { problems: string[]; notes: string[] } {
   if (!surveyed.rect || surveyed.height === null) {
     return {
@@ -203,9 +184,6 @@ function judgeBeat(
   // Both are page coordinates, the same space the master is clipped out of.
   const top = beat.y ?? surveyed.rect.y
   const height = surveyed.height
-  // The plan reads the section's height, so the shot is planned once the page has been
-  // asked for it rather than before the browser opened (#66).
-  const shot = plannable ? plannedBeat(config, index, height) : null
 
   // A `fit: true` the cap turned into a pan, said out loud (#66). A note and not a
   // problem: the beat renders, and what the human needs is to know it renders as

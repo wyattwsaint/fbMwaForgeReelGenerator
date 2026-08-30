@@ -221,13 +221,13 @@ describe('planReel', () => {
       // as the one that was asked for. Unmeasured is the config's own answer, exactly
       // as an unmeasured height is uncapped.
       const asked = withHook({ motion: 'scroll' })
-      const reveals = surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR })
+      const reveals = surveyed(asked, { scrollRefires: false, motionReading: MOTION_FLOOR })
       assert.equal((planReel(asked, reveals).shots[0] as Shot).motion, 'ambient')
       // And a hook probed dead is the still hook whole — not a live shot with the word
       // taken off it. A still hook is synthesised from one frozen master, so it drifts
       // the full 10% rather than breathing 3% over a recording, and every downstream
       // pass reads that off the plan alone.
-      const dead = surveyed({ scrollRefires: false, motionReading: 0 })
+      const dead = surveyed(asked, { scrollRefires: false, motionReading: 0 })
       assert.deepEqual(planReel(asked, dead).shots, planReel(config(3)).shots)
     })
   })
@@ -375,7 +375,7 @@ describe('planReel', () => {
     test('a beat with no label takes its section’s heading as one', () => {
       const timeline = planReel(
         config(3),
-        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
+        surveyed(config(3), { headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(
@@ -393,7 +393,7 @@ describe('planReel', () => {
         config(3, {
           beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: 'Enrolling' } : beat)),
         }),
-        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
+        surveyed(config(3), { headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => cue.content), ['Spotless bathrooms', 'Enrolling', 'Our work'])
@@ -402,20 +402,20 @@ describe('planReel', () => {
     test('an empty label suppresses the text on that shot', () => {
       const timeline = planReel(
         config(3, { beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: '' } : beat)) }),
-        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
+        surveyed(config(3), { headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[1, 'Spotless bathrooms'], [3, 'Our work']])
     })
 
     test('a section with no heading leaves its beat unlabelled', () => {
-      const timeline = planReel(config(3), surveyed({ headings: ['Spotless bathrooms', null, 'Our work'] }))
+      const timeline = planReel(config(3), surveyed(config(3), { headings: ['Spotless bathrooms', null, 'Our work'] }))
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => cue.shot), [1, 3])
     })
 
     test('a defaulted label keeps the cue shape a written one has', () => {
-      const timeline = planReel(config(3), surveyed({ headings: [null, 'What we do', null] }))
+      const timeline = planReel(config(3), surveyed(config(3), { headings: [null, 'What we do', null] }))
       const label = timeline.text.find((cue) => cue.role === 'label')!
       const shot = timeline.shots[2]!
       assert.equal(label.startMs, shot.startMs + 200)
@@ -445,7 +445,7 @@ describe('planReel', () => {
           config(n, {
             beats: config(n).beats.map((beat, i) => (i % 2 === 0 ? { ...beat, label: `Beat ${i}` } : beat)),
           }),
-          surveyed({ headings: Array.from({ length: n }, (_, i) => `Heading ${i}`) }),
+          surveyed(config(n), { headings: Array.from({ length: n }, (_, i) => `Heading ${i}`) }),
         )
         for (const cue of timeline.text) {
           for (const cut of timeline.cutPoints) {
@@ -576,8 +576,8 @@ describe('planReel', () => {
       const heights = [null, null, MAX_FIT_SECTION_HEIGHT, null, null]
       // At the cap exactly, and one pixel under it: the floor is what the section may
       // be drawn *at*, not what it has to stay clear of.
-      assert.deepEqual(beatShots(planReel(site, surveyed({ heights })))[2], beatShots(planReel(site))[2])
-      const under = surveyed({ heights: [null, null, MAX_FIT_SECTION_HEIGHT - 1, null, null] })
+      assert.deepEqual(beatShots(planReel(site, surveyed(site, { heights })))[2], beatShots(planReel(site))[2])
+      const under = surveyed(site, { heights: [null, null, MAX_FIT_SECTION_HEIGHT - 1, null, null] })
       assert.deepEqual(beatShots(planReel(site, under))[2], beatShots(planReel(site))[2])
     })
 
@@ -586,7 +586,7 @@ describe('planReel', () => {
         beats: config(5).beats.map((beat, i) => (i === 2 ? { ...beat, fit: true } : beat)),
       })
       const tall = MAX_FIT_SECTION_HEIGHT + 1
-      const shot = beatShots(planReel(site, surveyed({ heights: [null, null, tall, null, null] })))[2]!
+      const shot = beatShots(planReel(site, surveyed(site, { heights: [null, null, tall, null, null] })))[2]!
       assert.equal(shot.fit, undefined)
       assert.equal(shot.move, 'pan')
       assert.equal(shot.direction, 'vertical')
@@ -597,7 +597,7 @@ describe('planReel', () => {
       assert.deepEqual(panTravelProblems(shot, '#s2', tall), [])
       // And the fallback is still one beat's business: its neighbours plan unchanged.
       const plain = beatShots(planReel(config(5)))
-      const fallen = beatShots(planReel(site, surveyed({ heights: [null, null, tall, null, null] })))
+      const fallen = beatShots(planReel(site, surveyed(site, { heights: [null, null, tall, null, null] })))
       assert.deepEqual(fallen[1], plain[1])
       assert.deepEqual(fallen[3], plain[3])
     })
@@ -631,7 +631,7 @@ describe('planReel', () => {
           i === 1 ? { ...beat, fit: true, direction: 'lateral' as const } : beat,
         ),
       })
-      const shot = beatShots(planReel(site, surveyed({ heights: [null, 9000, null] })))[1]!
+      const shot = beatShots(planReel(site, surveyed(site, { heights: [null, 9000, null] })))[1]!
       assert.equal(shot.direction, 'vertical')
       assert.deepEqual(panTravelProblems(shot, '#s1', 9000), [])
     })
@@ -644,7 +644,7 @@ describe('planReel', () => {
           i === 1 ? { ...beat, fit: true, move: 'drift' as const } : beat,
         ),
       })
-      const shot = beatShots(planReel(site, surveyed({ heights: [null, 9000, null] })))[1]!
+      const shot = beatShots(planReel(site, surveyed(site, { heights: [null, 9000, null] })))[1]!
       assert.equal(shot.move, 'drift')
       assert.equal(shot.fit, undefined)
     })
@@ -677,7 +677,7 @@ describe('planReel', () => {
     // half: an empty one is the same "unmeasured is what the config asked for" that
     // leaving it out is, for every fact it could have carried.
     for (const n of [3, 4, 5]) {
-      assert.deepEqual(planReel(config(n), surveyed()), planReel(config(n)))
+      assert.deepEqual(planReel(config(n), surveyed(config(n))), planReel(config(n)))
     }
   })
 
@@ -718,7 +718,7 @@ describe('resolvedMotion', () => {
       assert.deepEqual(resolvedMotion(withHook({ motion })), { motion, notes: [] })
       // A page that would not load, or a hero nobody could find, reads as nothing
       // measured — and degrades nothing. Both are already problems in their own right.
-      assert.deepEqual(resolvedMotion(withHook({ motion }), surveyed()), {
+      assert.deepEqual(resolvedMotion(withHook({ motion }), surveyed(withHook({ motion }))), {
         motion,
         notes: [],
       })
@@ -731,7 +731,7 @@ describe('resolvedMotion', () => {
     assert.deepEqual(
       resolvedMotion(
         withHook({ motion: 'scroll' }),
-        surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR }),
+        surveyed(withHook({ motion: 'scroll' }), { scrollRefires: false, motionReading: MOTION_FLOOR }),
       ),
       { motion: 'ambient', notes: [AMBIENT_DEGRADATION] },
     )
@@ -743,14 +743,17 @@ describe('resolvedMotion', () => {
     assert.deepEqual(
       resolvedMotion(
         withHook({ motion: 'scroll' }),
-        surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR - 0.01 }),
+        surveyed(withHook({ motion: 'scroll' }), {
+          scrollRefires: false,
+          motionReading: MOTION_FLOOR - 0.01,
+        }),
       ),
       { motion: 'still', notes: [AMBIENT_DEGRADATION, STILL_DEGRADATION] },
     )
   })
 
   test('an ambient is degraded by the floor alone, from either side of it', () => {
-    const dead = surveyed({ motionReading: MOTION_FLOOR - 0.01 })
+    const dead = surveyed(withHook({ motion: 'ambient' }), { motionReading: MOTION_FLOOR - 0.01 })
     assert.deepEqual(resolvedMotion(withHook({ motion: 'ambient' }), dead), {
       motion: 'still',
       notes: [STILL_DEGRADATION],
@@ -758,7 +761,10 @@ describe('resolvedMotion', () => {
     // The floor itself passes: it is where the probe's calibration put "live", not the
     // first reading past it.
     assert.deepEqual(
-      resolvedMotion(withHook({ motion: 'ambient' }), surveyed({ motionReading: MOTION_FLOOR })),
+      resolvedMotion(
+        withHook({ motion: 'ambient' }),
+        surveyed(withHook({ motion: 'ambient' }), { motionReading: MOTION_FLOOR }),
+      ),
       { motion: 'ambient', notes: [] },
     )
   })
@@ -767,7 +773,10 @@ describe('resolvedMotion', () => {
     // The probe is not run for a scroll that stays a scroll, so there is no reading to
     // read — and a scroll is not the motion the still degradation is about anyway.
     assert.deepEqual(
-      resolvedMotion(withHook({ motion: 'scroll' }), surveyed({ scrollRefires: true })),
+      resolvedMotion(
+        withHook({ motion: 'scroll' }),
+        surveyed(withHook({ motion: 'scroll' }), { scrollRefires: true }),
+      ),
       { motion: 'scroll', notes: [] },
     )
   })
@@ -775,7 +784,7 @@ describe('resolvedMotion', () => {
   test('a still hook is asked neither question', () => {
     // The default config plans the reel it always did, whatever a page happened to say.
     assert.deepEqual(
-      resolvedMotion(config(3), surveyed({ scrollRefires: false, motionReading: 0 })),
+      resolvedMotion(config(3), surveyed(config(3), { scrollRefires: false, motionReading: 0 })),
       { motion: 'still', notes: [] },
     )
   })

@@ -5,7 +5,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FRAME_WIDTH } from '../src/frame.ts'
-import type { Survey } from '../src/plan.ts'
+import type { Survey, SurveyedBeat, SurveyedPage } from '../src/plan.ts'
+import type { SiteConfig } from '../src/site.ts'
 
 const REPO = fileURLToPath(new URL('../', import.meta.url))
 const BIN = join(REPO, 'bin', 'reel.mjs')
@@ -42,25 +43,37 @@ export type PageFacts = {
   scrollRefires?: boolean
   /** What the motion probe read in the hook's own frame; absent is a probe never run. */
   motionReading?: number
-  /** The url every surveyed beat was looked for on. */
-  url?: string
 }
 
 /**
- * A survey stating only the facts a test is about, and "nothing measured" everywhere
- * else — so a test about one section's height does not have to write down a whole page.
+ * A survey of *this config's* pages, stating only the facts a test is about and
+ * "nothing measured" everywhere else — so a test about one section's height does not
+ * have to write down a whole page.
+ *
+ * The config is the first argument rather than a url a test remembers to pass, because
+ * a survey's beats and pages are keyed by url and a judgment drops every beat whose url
+ * no page in the survey carries. A builder that invented its own url would hand a test
+ * a survey of somewhere else, and the verdict over it would report nothing however
+ * wrong the facts it stated were — a green test asserting an empty list.
  */
-export function surveyed(facts: PageFacts = {}): Survey {
-  const url = facts.url ?? 'https://example.test'
-  const n = Math.max(facts.headings?.length ?? 0, facts.heights?.length ?? 0)
+export function surveyed(config: SiteConfig, facts: PageFacts = {}): Survey {
+  const beats: SurveyedBeat[] = config.beats.map((beat, i) => ({
+    url: beat.url ?? config.url,
+    rect: null,
+    height: facts.heights?.[i] ?? null,
+    heading: facts.headings?.[i] ?? null,
+  }))
+  // One page per distinct url in the order the beats name them, plus the site's own —
+  // which a real survey always loads, because the hook lives there.
+  const urls = [config.url, ...beats.map((beat) => beat.url)]
+  const pages: SurveyedPage[] = [...new Set(urls)].map((url) => ({
+    url,
+    scrollHeight: null,
+    failure: null,
+  }))
   return {
-    pages: [],
-    beats: Array.from({ length: n }, (_, i) => ({
-      url,
-      rect: null,
-      height: facts.heights?.[i] ?? null,
-      heading: facts.headings?.[i] ?? null,
-    })),
+    pages,
+    beats,
     heroRect: null,
     scrollRefires: facts.scrollRefires ?? null,
     motionReading: facts.motionReading ?? null,

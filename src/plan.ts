@@ -28,7 +28,7 @@ import type {
 import type { Survey } from './survey.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
-export type { Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
+export type { Rect, Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
 export type Shot = {
   kind: 'hook' | 'beat' | 'cta'
