@@ -139,11 +139,13 @@ describe('what gets drawn', () => {
     assert.ok(hook.includes(`color=c=${ffmpegColor(GROUND)}:s=${SCRIM.width}x${SCRIM.height}`))
     assert.ok(hook.includes(`geq=r=${r}:g=${g}:b=${b}`))
     // The alpha ramp is the only thing about it that varies, and it varies with Y —
-    // clipped, so the wash is at peak from the copy's head all the way to the foot of
-    // the frame and spends its whole release above the band.
+    // clipped at both ends, so the wash is at peak across the text band, spends its
+    // release above it and its fall below it, and is gone before the frame's foot.
     assert.ok(
       hook.includes(
-        `a=255*${SCRIM.peak}*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release}\\,0\\,1)\\,${SCRIM.falloff}))`,
+        `a=255*${SCRIM.peak}` +
+          `*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release}\\,0\\,1)\\,${SCRIM.falloff}))` +
+          `*(1-pow(clip((Y-${SCRIM.fallTop})/${SCRIM.fall}\\,0\\,1)\\,${SCRIM.falloff}))`,
       ),
     )
   })

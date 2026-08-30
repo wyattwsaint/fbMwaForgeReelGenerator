@@ -127,9 +127,19 @@ never lit across a cut point.
 arbitrary screenshot. Constant colour, never sampled from the page, and it lives
 and dies with the text it serves: no text on screen, no scrim, because a
 permanent scrim dims the site the reel exists to show off. It is anchored to the
-frame's foot, where the slot is: dense from the slot's head down, and spending
-its whole **release** — the stretch above the copy it takes to come up from
-nothing — easing the site into the wash rather than stopping at a line.
+**copy** at both ends, not to the frame: dense across the slot, and no taller
+than the text needs. Above the copy it spends its **release** — the stretch it
+takes to come up from nothing — and below the copy its **fall**, the shorter
+stretch it takes to go back to nothing. Both ease the site into the wash rather
+than stopping at a line; the fall is shorter because the eye is not being led
+into anything below the copy, it is being let go.
+
+The scrim used to run from the release straight down to the frame's foot, on the
+argument that the last 35% of the frame is under Meta's UI once a reel is
+boosted and so there was nothing down there to fade towards. That is true of a
+boosted reel and false of an organic one, where it washed out ~720px of the
+client's own site to hold up nothing. The site is what the reel is selling, so
+it gets those pixels back.
 
 **Budget** — the character allowance for a line of copy. Exceeding it fails
 loudly at `check`, like a missing selector. Type never shrinks to fit: a reel
