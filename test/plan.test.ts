@@ -20,9 +20,12 @@ import {
   panTravelNeeded,
   panTravelProblems,
   planReel,
+  resolvedMotion,
 } from '../src/plan.ts'
 import type { Shot, Timeline } from '../src/plan.ts'
 import { MIN_FIT_SCALE } from '../src/house.ts'
+import { MOTION_FLOOR, STILL_DEGRADATION } from '../src/motion.ts'
+import { AMBIENT_DEGRADATION } from '../src/scroll.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { snapshot, surveyed } from './helpers.ts'
 
@@ -210,26 +213,22 @@ describe('planReel', () => {
       )
     })
 
-    test('a measured motion overrides the config, and plans the shot it names', () => {
+    test('a surveyed reading degrades the hook, and plans the shot it lands on', () => {
       // #64 and #88 both degrade the hook on evidence a pure plan cannot have: whether
       // a page's reveals re-fire, and whether its hero moves in the frame it would be
-      // shot in. `check` measures both and hands the answer down, so the reel is
-      // planned as the hook that will actually be cut rather than as the one that was
-      // asked for. Unmeasured is the config's own answer, exactly as an unmeasured
-      // height is uncapped.
+      // shot in. The survey carries both as readings and the plan reads the chain off
+      // them, so the reel is planned as the hook that will actually be cut rather than
+      // as the one that was asked for. Unmeasured is the config's own answer, exactly
+      // as an unmeasured height is uncapped.
       const asked = withHook({ motion: 'scroll' })
-      assert.equal(
-        (planReel(asked, surveyed({ hookMotion: 'ambient' })).shots[0] as Shot).motion,
-        'ambient',
-      )
+      const reveals = surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR })
+      assert.equal((planReel(asked, reveals).shots[0] as Shot).motion, 'ambient')
       // And a hook probed dead is the still hook whole — not a live shot with the word
       // taken off it. A still hook is synthesised from one frozen master, so it drifts
       // the full 10% rather than breathing 3% over a recording, and every downstream
       // pass reads that off the plan alone.
-      assert.deepEqual(
-        planReel(asked, surveyed({ hookMotion: 'still' })).shots,
-        planReel(config(3)).shots,
-      )
+      const dead = surveyed({ scrollRefires: false, motionReading: 0 })
+      assert.deepEqual(planReel(asked, dead).shots, planReel(config(3)).shots)
     })
   })
 
@@ -708,4 +707,76 @@ describe('planReel', () => {
       )
     })
   }
+})
+
+describe('resolvedMotion', () => {
+  // ADR-0008's chain, as a function of two numbers rather than of a page that animates
+  // (#96): a `scroll` whose reveals do not re-fire is an `ambient`, and an `ambient`
+  // that does not move in its own frame is a `still`.
+  test('an unsurveyed hook is the one the config asked for, and is noted as nothing', () => {
+    for (const motion of ['still', 'ambient', 'scroll'] as const) {
+      assert.deepEqual(resolvedMotion(withHook({ motion })), { motion, notes: [] })
+      // A page that would not load, or a hero nobody could find, reads as nothing
+      // measured — and degrades nothing. Both are already problems in their own right.
+      assert.deepEqual(resolvedMotion(withHook({ motion }), surveyed()), {
+        motion,
+        notes: [],
+      })
+    }
+  })
+
+  test('a scroll whose reveals do not re-fire is an ambient, and says so', () => {
+    // The probe read above the floor, so the ambient it degraded to is one worth
+    // recording and the chain stops after one step.
+    assert.deepEqual(
+      resolvedMotion(
+        withHook({ motion: 'scroll' }),
+        surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR }),
+      ),
+      { motion: 'ambient', notes: [AMBIENT_DEGRADATION] },
+    )
+  })
+
+  test('a scroll can degrade twice in one run, and both steps are named', () => {
+    // The whole chain, three deep: a human handed a still where they asked for a scroll
+    // reads why in two lines rather than inferring it from one.
+    assert.deepEqual(
+      resolvedMotion(
+        withHook({ motion: 'scroll' }),
+        surveyed({ scrollRefires: false, motionReading: MOTION_FLOOR - 0.01 }),
+      ),
+      { motion: 'still', notes: [AMBIENT_DEGRADATION, STILL_DEGRADATION] },
+    )
+  })
+
+  test('an ambient is degraded by the floor alone, from either side of it', () => {
+    const dead = surveyed({ motionReading: MOTION_FLOOR - 0.01 })
+    assert.deepEqual(resolvedMotion(withHook({ motion: 'ambient' }), dead), {
+      motion: 'still',
+      notes: [STILL_DEGRADATION],
+    })
+    // The floor itself passes: it is where the probe's calibration put "live", not the
+    // first reading past it.
+    assert.deepEqual(
+      resolvedMotion(withHook({ motion: 'ambient' }), surveyed({ motionReading: MOTION_FLOOR })),
+      { motion: 'ambient', notes: [] },
+    )
+  })
+
+  test('a scroll that keeps its scroll is never degraded by a reading it never took', () => {
+    // The probe is not run for a scroll that stays a scroll, so there is no reading to
+    // read — and a scroll is not the motion the still degradation is about anyway.
+    assert.deepEqual(
+      resolvedMotion(withHook({ motion: 'scroll' }), surveyed({ scrollRefires: true })),
+      { motion: 'scroll', notes: [] },
+    )
+  })
+
+  test('a still hook is asked neither question', () => {
+    // The default config plans the reel it always did, whatever a page happened to say.
+    assert.deepEqual(
+      resolvedMotion(config(3), surveyed({ scrollRefires: false, motionReading: 0 })),
+      { motion: 'still', notes: [] },
+    )
+  })
 })

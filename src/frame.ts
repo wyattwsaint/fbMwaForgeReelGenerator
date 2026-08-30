@@ -21,7 +21,7 @@ export const LOAD = { waitUntil: 'load', timeout: 60_000 } as const
  * from the widened viewport a **fit** shot is captured at, which `fitViewportWidth`
  * derives per section; everything measured for a decision is measured here (#100).
  */
-export const BASE_VIEWPORT = { width: FRAME_WIDTH, height: FRAME_HEIGHT }
+export const BASE_VIEWPORT = { width: FRAME_WIDTH, height: FRAME_HEIGHT } as const
 
 /** #7: 1.0 is "no punch". */
 export const DEFAULT_PUNCH_FACTOR = 1.0

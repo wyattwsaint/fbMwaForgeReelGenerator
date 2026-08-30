@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FRAME_WIDTH } from '../src/frame.ts'
-import type { HookMotion, Survey } from '../src/plan.ts'
+import type { Survey } from '../src/plan.ts'
 
 const REPO = fileURLToPath(new URL('../', import.meta.url))
 const BIN = join(REPO, 'bin', 'reel.mjs')
@@ -35,8 +35,13 @@ export type PageFacts = {
   headings?: readonly (string | null)[]
   /** In beat order, at the base viewport — null where the beat never resolved. */
   heights?: readonly (number | null)[]
-  /** The motion the hook is really shot in; absent is what the config asked for. */
-  hookMotion?: HookMotion
+  /**
+   * Whether the page's scroll effects re-fire under a scripted scroll; absent is a
+   * question nobody asked, which is what a hook that is not a `scroll` leaves behind.
+   */
+  scrollRefires?: boolean
+  /** What the motion probe read in the hook's own frame; absent is a probe never run. */
+  motionReading?: number
   /** The url every surveyed beat was looked for on. */
   url?: string
 }
@@ -57,9 +62,8 @@ export function surveyed(facts: PageFacts = {}): Survey {
       heading: facts.headings?.[i] ?? null,
     })),
     heroRect: null,
-    scrollRefires: null,
-    motionReading: null,
-    ...(facts.hookMotion ? { hookMotion: facts.hookMotion } : {}),
+    scrollRefires: facts.scrollRefires ?? null,
+    motionReading: facts.motionReading ?? null,
   }
 }
 

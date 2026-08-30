@@ -21,7 +21,7 @@ import { frameAt, framedMotion } from './motion.ts'
 import { scrollEffectsRefire } from './scroll.ts'
 import { freeze, stabilise } from './settle.ts'
 import { configuredMotion } from './site.ts'
-import type { HookMotion, SiteConfig } from './site.ts'
+import type { SiteConfig } from './site.ts'
 
 export type { Rect } from './page.ts'
 
@@ -75,17 +75,6 @@ export type Survey = {
    * that would not load.
    */
   motionReading: number | null
-  /**
-   * The motion the hook is really shot in, once the degradation chain has read the two
-   * readings above (#64, #88). Absent is what the config asked for.
-   *
-   * A survey carries facts and never verdicts, and this is a verdict — it is here
-   * because the chain that resolves it still lives in `check.ts`, and the plan needs
-   * the answer rather than the reasoning. `survey()` never writes it; `check` does, on
-   * its way out. #96 makes the chain a pure function of `scrollRefires` and
-   * `motionReading` and takes this field away again.
-   */
-  hookMotion?: HookMotion
 }
 
 /**

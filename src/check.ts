@@ -1,11 +1,14 @@
 import { configProblems, copyProblems } from './config.ts'
 import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS, punchedFrameHeight } from './frame.ts'
-import { COPY_BUDGETS, fitCapFallback, panTravelProblems, planReel } from './plan.ts'
+import {
+  COPY_BUDGETS,
+  fitCapFallback,
+  panTravelProblems,
+  planReel,
+  resolvedMotion,
+} from './plan.ts'
 import type { Shot } from './plan.ts'
-import { MOTION_FLOOR, STILL_DEGRADATION } from './motion.ts'
-import { AMBIENT_DEGRADATION } from './scroll.ts'
-import { configuredMotion } from './site.ts'
-import type { Beat, HookMotion, SiteConfig } from './site.ts'
+import type { Beat, SiteConfig } from './site.ts'
 import { survey } from './survey.ts'
 import type { Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
@@ -37,15 +40,17 @@ export type Checked = {
   notes: string[]
   /**
    * What the pages said, as the plan takes it (ADR-0009): every beat's heading and
-   * height, and — until #96 makes the chain pure — the motion the hook is really shot
-   * in after every degradation this preflight found (#64, #88).
+   * height, and the two readings the hook's degradation chain turns on (#64, #88).
    *
-   * Carried out rather than surveyed again because the facts change the *plan* and not
-   * just the capture — a still hook gets a deterministic frame 0, the site's
-   * `videoTime` and a beat's 10% drift where a live one gets a 3% breath, and a beat
-   * over the fit cap is planned as a vertical pan (#66) — and a plan is made before a
-   * browser is open. `check` is the settle the render was going to do anyway, so what
-   * it learned on those pages rides back rather than being learned again.
+   * Facts and never verdicts — `resolvedMotion` is the chain, and it lives in `plan.ts`
+   * where the other move decisions are, so the plan reads the readings rather than
+   * being handed an answer. Carried out rather than surveyed again because the facts
+   * change the *plan* and not just the capture — a still hook gets a deterministic
+   * frame 0, the site's `videoTime` and a beat's 10% drift where a live one gets a 3%
+   * breath, and a beat over the fit cap is planned as a vertical pan (#66) — and a plan
+   * is made before a browser is open. `check` is the settle the render was going to do
+   * anyway, so what it learned on those pages rides back rather than being learned
+   * again.
    */
   survey: Survey
 }
@@ -84,10 +89,10 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
  * uses. Every other beat's height is left null, which changes none of them: the cap
  * reads a beat's own height and nothing else.
  *
- * The hook's measured motion is not handed over, and cannot be: pages are visited in
- * beat order, so a beat on another route is planned before the hook's own page has
- * been opened. Nothing a beat is planned from reads it — `hookMotion` decides shot 0's
- * `motion` and nothing else (#88), and shot 0 is not what this returns.
+ * The live readings are not handed over, and cannot be: pages are visited in beat
+ * order, so a beat on another route is planned before the hook's own page has been
+ * opened. Nothing a beat is planned from reads them — the degradation chain decides
+ * shot 0's `motion` and nothing else (#88), and shot 0 is not what this returns.
  */
 function plannedBeat(config: SiteConfig, index: number, height: number): Shot | null {
   const beats = config.beats.map((beat, at) => ({
@@ -111,7 +116,7 @@ function plannedBeat(config: SiteConfig, index: number, height: number): Shot | 
 function verdict(config: SiteConfig, taken: Survey): Checked {
   const problems: string[] = []
   const notes: string[] = []
-  const hook = resolveHookMotion(config, taken)
+  const hook = resolvedMotion(config, taken)
 
   // The plan says which beats pan and where, so it is what decides whether a punch
   // factor leaves one room to travel. A beat count the plan cannot describe is already
@@ -120,75 +125,43 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
 
   for (const page of taken.pages) {
     if (page.url === config.url) notes.push(...hook.notes)
-    if (page.failure !== null) {
-      problems.push(blockedBy(page, taken))
-      continue
-    }
-    if (page.url === config.url) problems.push(...hookProblems(config, taken))
+    if (page.failure !== null) problems.push(blockedBy(page, taken))
+    else if (page.url === config.url) problems.push(...hookProblems(config, taken))
     taken.beats.forEach((surveyed, index) => {
       if (surveyed.url !== page.url) return
+      // A page that died mid-survey took its unresolved beats down with it, and they
+      // are named on the failure line rather than judged as selectors that did not
+      // match. Whatever it had already measured is still judged: a load failure should
+      // shrink the report by the beats it actually blocked and by nothing else.
+      if (page.failure !== null && surveyed.rect === null) return
       const beat = config.beats[index]
       if (!beat) return
-      const judged = judgeBeat(config, beat, index, surveyed, page.scrollHeight ?? 0, plannable)
+      const judged = judgeBeat(config, beat, index, surveyed, page.scrollHeight, plannable)
       problems.push(...judged.problems)
       notes.push(...judged.notes)
     })
   }
 
-  // The survey with the chain's answer written into it: what the page said, plus the
-  // one thing about the hook the plan cannot work out from it until #96 moves the
-  // chain into `plan.ts`.
-  return { problems, notes, survey: { ...taken, hookMotion: hook.motion } }
+  return { problems, notes, survey: taken }
 }
 
 /**
  * A page that would not load, and the beats it took down with it. Named rather than
  * quietly dropped: a load failure that only shrank the report would leave a human
  * reading a clean check of half a config.
+ *
+ * Only the beats it genuinely left unmeasured: a page that died after resolving two of
+ * its three sections blocked one beat, and naming the other two as unchecked would be
+ * a report that hid two judgments it had already made.
  */
 function blockedBy(page: SurveyedPage, taken: Survey): string {
   const blocked = taken.beats
-    .map((beat, index) => (beat.url === page.url ? `beats[${index}]` : null))
+    .map((beat, index) =>
+      beat.url === page.url && beat.rect === null ? `beats[${index}]` : null,
+    )
     .filter((named): named is string => named !== null)
     .join(', ')
   return `${page.url} — ${page.failure}${blocked ? ` (unchecked: ${blocked})` : ''}`
-}
-
-/**
- * How the hook is really shot, and what to say about the difference — the two
- * questions a live hook turns on, in the order the answers chain (#64, #88).
- *
- * Decided here rather than in the survey because a survey carries facts and never
- * verdicts (ADR-0009): what the page said is a boolean and a number, and the chain
- * that reads them is this.
- *
- * The chain runs one way and is three deep: a `scroll` whose reveals cannot re-fire
- * becomes an `ambient`, and an `ambient` that does not move in frame becomes a
- * `still`. So a `scroll` hook can degrade twice in one run, and both steps are named —
- * a human handed a still where they asked for a scroll should be able to read why in
- * two lines rather than infer it from one.
- *
- * An unread reading is what the config asked for: a page that would not load, or a
- * hero nobody could find, degrades nothing and is noted as nothing. The load failure
- * and the missing hero are already problems, and a note about either would be the same
- * defect said twice.
- */
-function resolveHookMotion(
-  config: SiteConfig,
-  taken: Survey,
-): { motion: HookMotion; notes: string[] } {
-  const notes: string[] = []
-  let motion: HookMotion = configuredMotion(config)
-  if (motion === 'scroll' && taken.scrollRefires === false) {
-    notes.push(AMBIENT_DEGRADATION)
-    motion = 'ambient'
-  }
-  if (motion !== 'ambient') return { motion, notes }
-  if (taken.motionReading === null || taken.motionReading >= MOTION_FLOOR) {
-    return { motion, notes }
-  }
-  notes.push(STILL_DEGRADATION)
-  return { motion: 'still', notes }
 }
 
 function hookProblems(config: SiteConfig, taken: Survey): string[] {
@@ -204,7 +177,7 @@ function judgeBeat(
   beat: Beat,
   index: number,
   surveyed: SurveyedBeat,
-  pageHeight: number,
+  pageHeight: number | null,
   plannable: boolean,
 ): { problems: string[]; notes: string[] } {
   if (!surveyed.rect || surveyed.height === null) {
@@ -240,7 +213,10 @@ function judgeBeat(
   const fallback = fitCapFallback(index, beat, height)
   if (fallback) notes.push(fallback)
 
-  if (top + height > pageHeight) {
+  // Null where the page died before it was asked its own height — a beat measured on a
+  // page that then failed is judged for everything but whether it runs off the bottom
+  // of a page nobody has a height for.
+  if (pageHeight !== null && top + height > pageHeight) {
     problems.push(
       `beats[${index}] '${beat.selector}' runs to ${Math.round(top + height)}px; ` +
         `the page is ${Math.round(pageHeight)}px tall`,
