@@ -1,24 +1,13 @@
-import { chromium } from 'playwright'
-import type { Browser, Page } from 'playwright'
 import { configProblems, copyProblems } from './config.ts'
-import {
-  BASE_VIEWPORT,
-  DEFAULT_PUNCH_FACTOR,
-  DEFAULT_VIDEO_TIME,
-  LOAD,
-  MAX_BEATS,
-  MIN_BEATS,
-  punchedFrameHeight,
-} from './frame.ts'
-import { COPY_BUDGETS, HOOK_MS, fitCapFallback, panTravelProblems, planReel } from './plan.ts'
+import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS, punchedFrameHeight } from './frame.ts'
+import { COPY_BUDGETS, fitCapFallback, panTravelProblems, planReel } from './plan.ts'
 import type { Shot } from './plan.ts'
-import { headingIn, hookRect, rectOf } from './page.ts'
-import type { Rect } from './page.ts'
-import { STILL_DEGRADATION, frameAt, movesAsFramed } from './motion.ts'
-import { AMBIENT_DEGRADATION, scrollEffectsRefire } from './scroll.ts'
-import { freeze, stabilise } from './settle.ts'
+import { MOTION_FLOOR, STILL_DEGRADATION } from './motion.ts'
+import { AMBIENT_DEGRADATION } from './scroll.ts'
 import { configuredMotion } from './site.ts'
 import type { Beat, HookMotion, SiteConfig } from './site.ts'
+import { survey } from './survey.ts'
+import type { Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
 export type { Rect } from './page.ts'
 
@@ -78,6 +67,10 @@ export type Checked = {
  * The render path stopped after settle. Reports *every* problem it finds — a
  * drifted site usually breaks several selectors at once, and fail-fast turns one
  * fix-and-rerun cycle into four.
+ *
+ * Two halves with a value between them (ADR-0009): `survey` opens the browser and
+ * writes down what the pages said, and `verdict` — which never opens one — decides
+ * what that means. Nothing below this line imports Playwright.
  */
 export async function check(config: SiteConfig, root: string): Promise<Checked> {
   const problems = configProblems(config, root)
@@ -85,19 +78,8 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
     // Nothing left to resolve against.
     return { problems, notes: [], hookMotion: configuredMotion(config), headings: [], heights: [] }
   }
-
-  // The plan says which beats pan and where, so it is what decides whether a punch
-  // factor leaves one room to travel. A beat count the plan cannot describe is already
-  // named above by `configProblems`, and the page checks still run without a plan.
-  const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
-
-  const browser = await chromium.launch()
-  try {
-    const resolved = await resolveOnPages(browser, config, plannable)
-    return { ...resolved, problems: [...problems, ...resolved.problems] }
-  } finally {
-    await browser.close()
-  }
+  const judged = verdict(config, await survey(config))
+  return { ...judged, problems: [...problems, ...judged.problems] }
 }
 
 /**
@@ -121,86 +103,70 @@ function plannedBeat(config: SiteConfig, index: number, height: number): Shot | 
   return shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
 }
 
-/** One load per distinct URL: beats that share a route share a page. */
-async function resolveOnPages(
-  browser: Browser,
-  config: SiteConfig,
-  plannable: boolean,
-): Promise<Checked> {
+/**
+ * What a survey means: every problem the config has against the pages it names, and
+ * every note about what the run will do instead.
+ *
+ * Walked page by page in the order the survey took them, because that is the order the
+ * report reads in — a beat's problems sit under the page they were found on, and the
+ * hook's sit at the top of the site's own page rather than at the top of the report.
+ */
+function verdict(config: SiteConfig, taken: Survey): Checked {
   const problems: string[] = []
   const notes: string[] = []
-  // What the config asked for until the hook's own page says otherwise. A URL that
-  // never loads leaves it here, which is the config's own answer and the one the
-  // render would have planned anyway — the load failure is already a problem.
-  let hookMotion: HookMotion = configuredMotion(config)
-  // Beats are visited grouped by page rather than in reel order, so the headings are
-  // filled in by index rather than pushed — a beat on another route would otherwise
-  // caption the beat that happened to be resolved before it.
-  const headings: (string | null)[] = config.beats.map(() => null)
-  const heights: (number | null)[] = config.beats.map(() => null)
-  const byUrl = new Map<string, { index: number; beat: Beat }[]>()
-  config.beats.forEach((beat, index) => {
-    const url = beat.url ?? config.url
-    const group = byUrl.get(url)
-    if (group) group.push({ index, beat })
-    else byUrl.set(url, [{ index, beat }])
-  })
-  // The hook always lives on the site's own URL, so that page is always loaded.
-  if (!byUrl.has(config.url)) byUrl.set(config.url, [])
+  const hook = resolveHookMotion(config, taken)
 
-  for (const [url, group] of byUrl) {
-    const page = await browser.newPage({ viewport: BASE_VIEWPORT })
-    try {
-      await page.goto(url, LOAD)
-      // Settle, split at its seam (#64): the scroll probe has to read the page a live
-      // hook is recorded from, which is stabilised and never frozen. Freezing first
-      // parks the very animations the probe is asking about, so a `check` that settled
-      // whole would answer a question capture never asks. Everything else here still
-      // reads the settled page it always did.
-      await stabilise(page)
-      if (url === config.url) {
-        const live = await resolveHookMotion(page, config)
-        hookMotion = live.motion
-        notes.push(...live.notes)
-      }
-      await freeze(page, config.hook?.videoTime ?? DEFAULT_VIDEO_TIME)
-      if (url === config.url) problems.push(...(await checkHook(page, config)))
-      const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
-      for (const { index, beat } of group) {
-        // The plan reads the section's height, so the shot is planned once the page
-        // has been asked for it rather than before the browser opened (#66).
-        const shotFor = (height: number) => (plannable ? plannedBeat(config, index, height) : null)
-        const checked = await checkBeat(page, index, beat, pageHeight, shotFor)
-        problems.push(...checked.problems)
-        notes.push(...checked.notes)
-        headings[index] = checked.heading
-        heights[index] = checked.height
-      }
-    } catch (error) {
-      // The page is gone, so none of its beats can be resolved. Name them, rather
-      // than letting a load failure quietly shrink the report.
-      const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
-      const blocked = group.map(({ index }) => `beats[${index}]`).join(', ')
-      problems.push(`${url} — ${reason}${blocked ? ` (unchecked: ${blocked})` : ''}`)
-    } finally {
-      await page.close()
+  // The plan says which beats pan and where, so it is what decides whether a punch
+  // factor leaves one room to travel. A beat count the plan cannot describe is already
+  // named by `configProblems`, and the page checks still run without a plan.
+  const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
+
+  for (const page of taken.pages) {
+    if (page.url === config.url) notes.push(...hook.notes)
+    if (page.failure !== null) {
+      problems.push(blockedBy(page, taken))
+      continue
     }
+    if (page.url === config.url) problems.push(...hookProblems(config, taken))
+    taken.beats.forEach((surveyed, index) => {
+      if (surveyed.url !== page.url) return
+      const beat = config.beats[index]
+      if (!beat) return
+      const judged = judgeBeat(config, beat, index, surveyed, page.scrollHeight ?? 0, plannable)
+      problems.push(...judged.problems)
+      notes.push(...judged.notes)
+    })
   }
-  return { problems, notes, hookMotion, headings, heights }
+
+  return {
+    problems,
+    notes,
+    hookMotion: hook.motion,
+    headings: taken.beats.map((beat) => beat.heading),
+    heights: taken.beats.map((beat) => beat.height),
+  }
+}
+
+/**
+ * A page that would not load, and the beats it took down with it. Named rather than
+ * quietly dropped: a load failure that only shrank the report would leave a human
+ * reading a clean check of half a config.
+ */
+function blockedBy(page: SurveyedPage, taken: Survey): string {
+  const blocked = taken.beats
+    .map((beat, index) => (beat.url === page.url ? `beats[${index}]` : null))
+    .filter((named): named is string => named !== null)
+    .join(', ')
+  return `${page.url} — ${page.failure}${blocked ? ` (unchecked: ${blocked})` : ''}`
 }
 
 /**
  * How the hook is really shot, and what to say about the difference — the two
- * questions `check` can ask about a live hook, in the order the answers chain (#64,
- * #88).
+ * questions a live hook turns on, in the order the answers chain (#64, #88).
  *
- * Asked here rather than left to the capture pass because this is the preflight — the
- * whole point of `check` is learning in seconds what a render would otherwise teach in
- * a minute, and "your hook is not the hook you configured" is exactly that kind of
- * finding. Both are asked of a stabilised, unfrozen page, which is the state a
- * recording starts in and the reason the settle above is split rather than taken
- * whole: freezing parks the very motion both questions are about, so a `check` that
- * settled first would answer a question capture never asks.
+ * Decided here rather than in the survey because a survey carries facts and never
+ * verdicts (ADR-0009): what the page said is a boolean and a number, and the chain
+ * that reads them is this.
  *
  * The chain runs one way and is three deep: a `scroll` whose reveals cannot re-fire
  * becomes an `ambient`, and an `ambient` that does not move in frame becomes a
@@ -208,95 +174,71 @@ async function resolveOnPages(
  * a human handed a still where they asked for a scroll should be able to read why in
  * two lines rather than infer it from one.
  *
- * A `scroll` that does *not* degrade is never probed, and that is not an optimisation:
- * under a scripted scroll the viewport itself moves, so every page on earth reads far
- * above the floor and the probe would be measuring its own camera.
+ * An unread reading is what the config asked for: a page that would not load, or a
+ * hero nobody could find, degrades nothing and is noted as nothing. The load failure
+ * and the missing hero are already problems, and a note about either would be the same
+ * defect said twice.
  */
-async function resolveHookMotion(
-  page: Page,
+function resolveHookMotion(
   config: SiteConfig,
-): Promise<{ motion: HookMotion; notes: string[] }> {
+  taken: Survey,
+): { motion: HookMotion; notes: string[] } {
   const notes: string[] = []
   let motion: HookMotion = configuredMotion(config)
-  if (motion === 'scroll' && !(await scrollEffectsRefire(page, HOOK_MS))) {
+  if (motion === 'scroll' && taken.scrollRefires === false) {
     notes.push(AMBIENT_DEGRADATION)
     motion = 'ambient'
   }
   if (motion !== 'ambient') return { motion, notes }
-
-  // Framed exactly as the recording frames it — the hero scrolled to the top of the
-  // viewport, at the viewport this page is already loaded at, which is the one a
-  // recording uses. A hook whose selector does not resolve is not probed and not
-  // noted: `checkHook` names that below, and a note about a hero nobody can find would
-  // be the same defect said twice.
-  const rect = await hookRect(page, config.hook?.selector)
-  if (!rect) return { motion, notes }
-  await frameAt(page, rect.y)
-  const moves = await movesAsFramed(page)
-  // Back to the top, where `stabilise` left it and where everything below expects it.
-  await frameAt(page, 0)
-  if (moves) return { motion, notes }
+  if (taken.motionReading === null || taken.motionReading >= MOTION_FLOOR) {
+    return { motion, notes }
+  }
   notes.push(STILL_DEGRADATION)
   return { motion: 'still', notes }
 }
 
-async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {
+function hookProblems(config: SiteConfig, taken: Survey): string[] {
   const selector = config.hook?.selector
-  if (await hookRect(page, selector)) return []
+  if (taken.heroRect) return []
   return selector
     ? [`hook.selector '${selector}' — no element matches`]
     : ['hook — no hero found; name one with hook.selector']
 }
 
-type CheckedBeat = {
-  problems: string[]
-  notes: string[]
-  heading: string | null
-  /** At the base viewport, null where the selector did not resolve. */
-  height: number | null
-}
-
-async function checkBeat(
-  page: Page,
-  index: number,
+function judgeBeat(
+  config: SiteConfig,
   beat: Beat,
+  index: number,
+  surveyed: SurveyedBeat,
   pageHeight: number,
-  shotFor: (height: number) => Shot | null,
-): Promise<CheckedBeat> {
-  const rect = await rectOf(page, beat.selector)
-  if (!rect) {
+  plannable: boolean,
+): { problems: string[]; notes: string[] } {
+  if (!surveyed.rect || surveyed.height === null) {
     return {
       problems: [`beats[${index}] selector '${beat.selector}' — no element matches`],
       notes: [],
-      heading: null,
-      height: null,
     }
   }
   const problems: string[] = []
   const notes: string[] = []
 
-  // Only asked when the config named no label: a config that did is what will be drawn,
-  // `configProblems` has already measured it, and the heading it overrides is a line
-  // this reel will never carry. Windowed by the beat's own `y`/`height` where it has
-  // them, because that hatch resolves to an ancestor and the heading wanted is the one
-  // inside the slice, not the first one on the page.
-  //
-  // A label the page wrote is then held to exactly the standard a label Wyatt wrote is
-  // held to: over the budget or over the width it draws, and `check` says so by name
-  // (#62). So a page with a long heading fails until a human writes a shorter line, and
-  // that pressure is the point — type never shrinks to fit (#9).
-  const heading =
-    beat.label === undefined ? await headingIn(page, beat.selector, beat) : null
-  if (heading !== null) {
-    problems.push(...copyProblems(`beats[${index}] heading`, heading, COPY_BUDGETS.label, 'label'))
+  // A label the page wrote is held to exactly the standard a label Wyatt wrote is held
+  // to: over the budget or over the width it draws, and `check` says so by name (#62).
+  // So a page with a long heading fails until a human writes a shorter line, and that
+  // pressure is the point — type never shrinks to fit (#9).
+  if (surveyed.heading !== null) {
+    const budget = COPY_BUDGETS.label
+    problems.push(...copyProblems(`beats[${index}] heading`, surveyed.heading, budget, 'label'))
   }
 
   // `y`/`height` is the escape hatch for when no element wraps the subject: the
   // selector still has to resolve, it just does not have to be the right shape.
   // Both are page coordinates, the same space the master is clipped out of.
-  const top = beat.y ?? rect.y
-  const height = beat.height ?? rect.height
-  const shot = shotFor(height)
+  const top = beat.y ?? surveyed.rect.y
+  const height = surveyed.height
+  // The plan reads the section's height, so the shot is planned once the page has been
+  // asked for it rather than before the browser opened (#66).
+  const shot = plannable ? plannedBeat(config, index, height) : null
 
   // A `fit: true` the cap turned into a pan, said out loud (#66). A note and not a
   // problem: the beat renders, and what the human needs is to know it renders as
@@ -328,13 +270,12 @@ async function checkBeat(
     )
     // The section does not fill the frame, so asking what a pan has left over on top
     // of that is the same defect said twice.
-    return { problems, notes, heading, height }
+    return { problems, notes }
   }
 
   // A pan only travels across what the punch left over, so #7 wants a punch that
   // leaves none caught here rather than discovered as a still. The fallback's pan is
   // no exception: it is a vertical pan like any other, and it is held here like one.
   if (shot) problems.push(...panTravelProblems(shot, beat.selector, height))
-  return { problems, notes, heading, height }
+  return { problems, notes }
 }
-
