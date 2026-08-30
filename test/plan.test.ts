@@ -24,7 +24,7 @@ import {
 import type { Shot, Timeline } from '../src/plan.ts'
 import { MIN_FIT_SCALE } from '../src/house.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
-import { snapshot } from './helpers.ts'
+import { snapshot, surveyed } from './helpers.ts'
 
 /** The minimum #7 allows, with `n` beats named only by selector. */
 function config(n: number, overrides: Partial<SiteConfig> = {}): SiteConfig {
@@ -218,12 +218,18 @@ describe('planReel', () => {
       // asked for. Unmeasured is the config's own answer, exactly as an unmeasured
       // height is uncapped.
       const asked = withHook({ motion: 'scroll' })
-      assert.equal((planReel(asked, [], [], 'ambient').shots[0] as Shot).motion, 'ambient')
+      assert.equal(
+        (planReel(asked, surveyed({ hookMotion: 'ambient' })).shots[0] as Shot).motion,
+        'ambient',
+      )
       // And a hook probed dead is the still hook whole — not a live shot with the word
       // taken off it. A still hook is synthesised from one frozen master, so it drifts
       // the full 10% rather than breathing 3% over a recording, and every downstream
       // pass reads that off the plan alone.
-      assert.deepEqual(planReel(asked, [], [], 'still').shots, planReel(config(3)).shots)
+      assert.deepEqual(
+        planReel(asked, surveyed({ hookMotion: 'still' })).shots,
+        planReel(config(3)).shots,
+      )
     })
   })
 
@@ -362,13 +368,16 @@ describe('planReel', () => {
       )
     })
 
-    test('a plan given no headings labels nothing — the page is the only source', () => {
+    test('a plan given no survey labels nothing — the page is the only source', () => {
       const roles = planReel(config(4)).text.map((cue) => cue.role)
       assert.deepEqual(roles, ['hook', 'cta'])
     })
 
     test('a beat with no label takes its section’s heading as one', () => {
-      const timeline = planReel(config(3), ['Spotless bathrooms', 'What we do', 'Our work'])
+      const timeline = planReel(
+        config(3),
+        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
+      )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(
         labels.map((cue) => [cue.shot, cue.content]),
@@ -385,7 +394,7 @@ describe('planReel', () => {
         config(3, {
           beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: 'Enrolling' } : beat)),
         }),
-        ['Spotless bathrooms', 'What we do', 'Our work'],
+        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => cue.content), ['Spotless bathrooms', 'Enrolling', 'Our work'])
@@ -394,20 +403,20 @@ describe('planReel', () => {
     test('an empty label suppresses the text on that shot', () => {
       const timeline = planReel(
         config(3, { beats: config(3).beats.map((beat, i) => (i === 1 ? { ...beat, label: '' } : beat)) }),
-        ['Spotless bathrooms', 'What we do', 'Our work'],
+        surveyed({ headings: ['Spotless bathrooms', 'What we do', 'Our work'] }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[1, 'Spotless bathrooms'], [3, 'Our work']])
     })
 
     test('a section with no heading leaves its beat unlabelled', () => {
-      const timeline = planReel(config(3), ['Spotless bathrooms', null, 'Our work'])
+      const timeline = planReel(config(3), surveyed({ headings: ['Spotless bathrooms', null, 'Our work'] }))
       const labels = timeline.text.filter((cue) => cue.role === 'label')
       assert.deepEqual(labels.map((cue) => cue.shot), [1, 3])
     })
 
     test('a defaulted label keeps the cue shape a written one has', () => {
-      const timeline = planReel(config(3), [null, 'What we do', null])
+      const timeline = planReel(config(3), surveyed({ headings: [null, 'What we do', null] }))
       const label = timeline.text.find((cue) => cue.role === 'label')!
       const shot = timeline.shots[2]!
       assert.equal(label.startMs, shot.startMs + 200)
@@ -437,7 +446,7 @@ describe('planReel', () => {
           config(n, {
             beats: config(n).beats.map((beat, i) => (i % 2 === 0 ? { ...beat, label: `Beat ${i}` } : beat)),
           }),
-          Array.from({ length: n }, (_, i) => `Heading ${i}`),
+          surveyed({ headings: Array.from({ length: n }, (_, i) => `Heading ${i}`) }),
         )
         for (const cue of timeline.text) {
           for (const cut of timeline.cutPoints) {
@@ -568,11 +577,9 @@ describe('planReel', () => {
       const heights = [null, null, MAX_FIT_SECTION_HEIGHT, null, null]
       // At the cap exactly, and one pixel under it: the floor is what the section may
       // be drawn *at*, not what it has to stay clear of.
-      assert.deepEqual(beatShots(planReel(site, [], heights))[2], beatShots(planReel(site))[2])
-      assert.deepEqual(
-        beatShots(planReel(site, [], [null, null, MAX_FIT_SECTION_HEIGHT - 1, null, null]))[2],
-        beatShots(planReel(site))[2],
-      )
+      assert.deepEqual(beatShots(planReel(site, surveyed({ heights })))[2], beatShots(planReel(site))[2])
+      const under = surveyed({ heights: [null, null, MAX_FIT_SECTION_HEIGHT - 1, null, null] })
+      assert.deepEqual(beatShots(planReel(site, under))[2], beatShots(planReel(site))[2])
     })
 
     test('a fit beat past the cap falls back to fit-to-width and a vertical pan', () => {
@@ -580,7 +587,7 @@ describe('planReel', () => {
         beats: config(5).beats.map((beat, i) => (i === 2 ? { ...beat, fit: true } : beat)),
       })
       const tall = MAX_FIT_SECTION_HEIGHT + 1
-      const shot = beatShots(planReel(site, [], [null, null, tall, null, null]))[2]!
+      const shot = beatShots(planReel(site, surveyed({ heights: [null, null, tall, null, null] })))[2]!
       assert.equal(shot.fit, undefined)
       assert.equal(shot.move, 'pan')
       assert.equal(shot.direction, 'vertical')
@@ -591,8 +598,9 @@ describe('planReel', () => {
       assert.deepEqual(panTravelProblems(shot, '#s2', tall), [])
       // And the fallback is still one beat's business: its neighbours plan unchanged.
       const plain = beatShots(planReel(config(5)))
-      assert.deepEqual(beatShots(planReel(site, [], [null, null, tall, null, null]))[1], plain[1])
-      assert.deepEqual(beatShots(planReel(site, [], [null, null, tall, null, null]))[3], plain[3])
+      const fallen = beatShots(planReel(site, surveyed({ heights: [null, null, tall, null, null] })))
+      assert.deepEqual(fallen[1], plain[1])
+      assert.deepEqual(fallen[3], plain[3])
     })
 
     test('the fallback names the beat and the section that was too tall', () => {
@@ -624,7 +632,7 @@ describe('planReel', () => {
           i === 1 ? { ...beat, fit: true, direction: 'lateral' as const } : beat,
         ),
       })
-      const shot = beatShots(planReel(site, [], [null, 9000, null]))[1]!
+      const shot = beatShots(planReel(site, surveyed({ heights: [null, 9000, null] })))[1]!
       assert.equal(shot.direction, 'vertical')
       assert.deepEqual(panTravelProblems(shot, '#s1', 9000), [])
     })
@@ -637,7 +645,7 @@ describe('planReel', () => {
           i === 1 ? { ...beat, fit: true, move: 'drift' as const } : beat,
         ),
       })
-      const shot = beatShots(planReel(site, [], [null, 9000, null]))[1]!
+      const shot = beatShots(planReel(site, surveyed({ heights: [null, 9000, null] })))[1]!
       assert.equal(shot.move, 'drift')
       assert.equal(shot.fit, undefined)
     })
@@ -663,6 +671,15 @@ describe('planReel', () => {
         fadeOutMs: 1000,
       })
     })
+  })
+
+  test('a survey that measured nothing plans the reel the config alone describes', () => {
+    // The survey is the page's half of the plan, and a page nobody asked about has no
+    // half: an empty one is the same "unmeasured is what the config asked for" that
+    // leaving it out is, for every fact it could have carried.
+    for (const n of [3, 4, 5]) {
+      assert.deepEqual(planReel(config(n), surveyed()), planReel(config(n)))
+    }
   })
 
   test('it is pure: the same config plans the same reel, twice', () => {

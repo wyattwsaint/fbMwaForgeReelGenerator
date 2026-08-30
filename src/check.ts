@@ -15,10 +15,10 @@ export type { Rect } from './page.ts'
  * What one settle bought: everything wrong with the config, and what the page gave up
  * about itself while it was open.
  *
- * The headings and the heights ride along rather than being fetched again by the
- * render, because they are read off the *settled* page and settling it is the expensive
- * thing `check` already did — a render that loaded every page a second time to ask for
- * its labels would pay the whole preflight twice for facts it had already been handed.
+ * The survey rides along rather than being taken again by the render, because it is
+ * read off the *settled* pages and settling them is the expensive thing `check` already
+ * did — a render that loaded every page a second time to ask for its labels would pay
+ * the whole preflight twice for facts it had already been handed.
  */
 export type Checked = {
   problems: string[]
@@ -36,31 +36,23 @@ export type Checked = {
    */
   notes: string[]
   /**
-   * The motion the hook is really shot in, after every degradation this preflight
-   * found: `scroll` to `ambient` where the page's reveals cannot re-fire (#64), and
-   * `ambient` to `still` where the hero does not move in the frame it would be shot in
-   * (#88). Each step is one of the notes above.
+   * What the pages said, as the plan takes it (ADR-0009): every beat's heading and
+   * height, and — until #96 makes the chain pure — the motion the hook is really shot
+   * in after every degradation this preflight found (#64, #88).
    *
-   * It is carried out rather than re-derived because the degradation changes the
-   * *plan* and not just the capture — a still hook gets a deterministic frame 0, the
-   * site's `videoTime` and a beat's 10% drift where a live one gets a 3% breath — and
-   * a plan is made before a browser is open. This is the same trade #66's heights
-   * make: `check` is the settle the render was going to do anyway, so what it learned
-   * on that page rides back rather than being learned again.
+   * Carried out rather than surveyed again because the facts change the *plan* and not
+   * just the capture — a still hook gets a deterministic frame 0, the site's
+   * `videoTime` and a beat's 10% drift where a live one gets a 3% breath, and a beat
+   * over the fit cap is planned as a vertical pan (#66) — and a plan is made before a
+   * browser is open. `check` is the settle the render was going to do anyway, so what
+   * it learned on those pages rides back rather than being learned again.
    */
-  hookMotion: HookMotion
-  /**
-   * In beat order. Null where the section has no heading, where the beat never
-   * resolved, and where the config named a label — the plan draws that label whatever
-   * the page says, so the heading it beats is not worth a round trip to read.
-   */
-  headings: (string | null)[]
-  /**
-   * In beat order, at the base viewport, null where the beat never resolved. What the
-   * plan needs to decide whether a `fit` beat can fit legibly (#66) — measured here
-   * because measuring it is what `check` is.
-   */
-  heights: (number | null)[]
+  survey: Survey
+}
+
+/** Nothing measured: what a run that never opened a browser knows about the pages. */
+function unsurveyed(): Survey {
+  return { pages: [], beats: [], heroRect: null, scrollRefires: null, motionReading: null }
 }
 
 /**
@@ -76,7 +68,7 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
   const problems = configProblems(config, root)
   if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
     // Nothing left to resolve against.
-    return { problems, notes: [], hookMotion: configuredMotion(config), headings: [], heights: [] }
+    return { problems, notes: [], survey: unsurveyed() }
   }
   const judged = verdict(config, await survey(config))
   return { ...judged, problems: [...problems, ...judged.problems] }
@@ -98,8 +90,13 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
  * `motion` and nothing else (#88), and shot 0 is not what this returns.
  */
 function plannedBeat(config: SiteConfig, index: number, height: number): Shot | null {
-  const heights = config.beats.map((_, at) => (at === index ? height : null))
-  const shots = planReel(config, [], heights).shots
+  const beats = config.beats.map((beat, at) => ({
+    url: beat.url ?? config.url,
+    rect: null,
+    height: at === index ? height : null,
+    heading: null,
+  }))
+  const shots = planReel(config, { ...unsurveyed(), beats }).shots
   return shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
 }
 
@@ -138,13 +135,10 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
     })
   }
 
-  return {
-    problems,
-    notes,
-    hookMotion: hook.motion,
-    headings: taken.beats.map((beat) => beat.heading),
-    heights: taken.beats.map((beat) => beat.height),
-  }
+  // The survey with the chain's answer written into it: what the page said, plus the
+  // one thing about the hook the plan cannot work out from it until #96 moves the
+  // chain into `plan.ts`.
+  return { problems, notes, survey: { ...taken, hookMotion: hook.motion } }
 }
 
 /**

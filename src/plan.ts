@@ -12,9 +12,13 @@
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
 import { configuredMotion } from './site.ts'
-import type { Beat, Direction, HookMotion, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
+import type { Beat, Direction, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
+// Type-only, and only ever type-only: `survey.ts` imports this module for real, so a
+// value import here would be a runtime cycle between the page and the plan of it.
+import type { Survey } from './survey.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
+export type { Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
 export type Shot = {
   kind: 'hook' | 'beat' | 'cta'
@@ -294,38 +298,24 @@ function rotatedPushPull(index: number): PushPull {
 }
 
 /**
- * The headings the beats' own sections lead with, in beat order — what `check` read off
- * the settled page. A beat naming no `label` takes its section's heading as one (#62).
+ * The reel's whole shape, from the config and what one settled page load said about it
+ * (ADR-0009). Throws when the config cannot describe a reel at all — `check` reports
+ * those by name before it ever gets here.
  *
- * A parameter rather than something the plan goes and fetches, because the plan is pure:
- * the page is the one thing about a reel that needs a browser, and a timeline that had
- * to load one would stop being the value #22 made it. Absent, every beat is unlabelled
- * unless its config says otherwise — which is what makes the plan assertable on its own.
+ * The survey is a value rather than a page, because the plan is pure: the page is the
+ * one thing about a reel that needs a browser, and a timeline that had to load one
+ * would stop being the value #22 made it. It is optional for the same reason it used
+ * to be three optional parameters — absent, the plan is exactly the reel the config
+ * asked for: every beat unlabelled unless its own config says otherwise (#62), every
+ * fit beat uncapped (#66), and the hook shot in the motion it was written with (#64,
+ * #88). The plan only knows what it is handed.
  */
-export type Headings = readonly (string | null)[]
-
-/**
- * How tall the beats' own sections measured at the *base* viewport, in beat order —
- * the other thing `check` learned while the page was open (#66).
- *
- * A parameter for the same reason the headings are: it is a fact about the page, and
- * the plan is pure. Only `fit` reads it, and only to find the beat whose section is
- * too tall to fit legibly. Absent — or null for a beat — every fit beat is planned as
- * one, which is exactly the reel this planned before the cap existed.
- */
-export type SectionHeights = readonly (number | null)[]
-
-/**
- * The reel's whole shape. Throws when the config cannot describe a reel at all —
- * `check` reports those by name before it ever gets here.
- */
-export function planReel(
-  config: SiteConfig,
-  headings: Headings = [],
-  heights: SectionHeights = [],
-  motion?: HookMotion,
-): Timeline {
+export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   const beats = config.beats
+  // Null where the survey said nothing, and null where it had nothing to say: a beat
+  // past the end of an empty survey is unmeasured in exactly the way a beat whose
+  // selector did not resolve is.
+  const surveyed = survey?.beats ?? []
   const n = beats.length
   if (n < MIN_BEATS || n > MAX_BEATS) {
     throw new Error(`a reel is ${MIN_BEATS}-${MAX_BEATS} beats, this config has ${n}`)
@@ -343,7 +333,7 @@ export function planReel(
   // than planning a live hook and leaving capture to quietly shoot something else.
   // Unmeasured is what the config asked for, exactly as an unmeasured height is
   // uncapped: the plan only knows what it is handed.
-  const hookMotion = motion ?? configuredMotion(config)
+  const hookMotion = survey?.hookMotion ?? configuredMotion(config)
   const liveHook = hookMotion !== 'still'
   const shots: Shot[] = [
     {
@@ -369,7 +359,7 @@ export function planReel(
     // existed — fit to width, covered by a vertical pan, which is the move a section
     // with this much height to spare is for. Unmeasured is uncapped: the plan only
     // knows what it is handed, and `check` is what hands it a height.
-    const height = heights[index]
+    const height = surveyed[index]?.height
     const capped = beat.fit === true && height != null && pastFitCap(height)
     const fit = beat.fit === true && !capped
     // A fit section is exactly one frame, so there is nothing for a pan to travel
@@ -459,7 +449,7 @@ export function planReel(
   beats.forEach((beat, index) => {
     // The config wins, and it wins even when it says nothing: `label: ''` is a human
     // deciding this shot carries no text, which is not the same as never having said.
-    const content = beat.label ?? headings[index] ?? ''
+    const content = beat.label ?? surveyed[index]?.heading ?? ''
     if (!content) return
     const shot = shots[index + 1] as Shot
     const startMs = shot.startMs + LABEL_LEAD_IN_MS

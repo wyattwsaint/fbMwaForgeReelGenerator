@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { FRAME_WIDTH } from '../src/frame.ts'
+import type { HookMotion, Survey } from '../src/plan.ts'
 
 const REPO = fileURLToPath(new URL('../', import.meta.url))
 const BIN = join(REPO, 'bin', 'reel.mjs')
@@ -26,6 +27,40 @@ export function snapshot(name: string, value: unknown): void {
     return
   }
   assert.equal(actual, readFileSync(path, 'utf8'), `${name} no longer matches test/snapshot/${name}.json`)
+}
+
+/** The page facts a test states, as fields rather than as positions. */
+export type PageFacts = {
+  /** In beat order — the heading each section leads with, null where it has none. */
+  headings?: readonly (string | null)[]
+  /** In beat order, at the base viewport — null where the beat never resolved. */
+  heights?: readonly (number | null)[]
+  /** The motion the hook is really shot in; absent is what the config asked for. */
+  hookMotion?: HookMotion
+  /** The url every surveyed beat was looked for on. */
+  url?: string
+}
+
+/**
+ * A survey stating only the facts a test is about, and "nothing measured" everywhere
+ * else — so a test about one section's height does not have to write down a whole page.
+ */
+export function surveyed(facts: PageFacts = {}): Survey {
+  const url = facts.url ?? 'https://example.test'
+  const n = Math.max(facts.headings?.length ?? 0, facts.heights?.length ?? 0)
+  return {
+    pages: [],
+    beats: Array.from({ length: n }, (_, i) => ({
+      url,
+      rect: null,
+      height: facts.heights?.[i] ?? null,
+      heading: facts.headings?.[i] ?? null,
+    })),
+    heroRect: null,
+    scrollRefires: null,
+    motionReading: null,
+    ...(facts.hookMotion ? { hookMotion: facts.hookMotion } : {}),
+  }
 }
 
 export type Workspace = {
