@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { verdict } from '../src/check.ts'
+import { fileURLToPath } from 'node:url'
+import { judge, verdict } from '../src/check.ts'
 import { MAX_FIT_SECTION_HEIGHT } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { surveyed } from './helpers.ts'
@@ -97,6 +98,17 @@ describe('verdict', () => {
     assert.deepEqual(problems, ["beats[1] '#s1' is 900px tall; a punchFactor of 1 needs 1920px"])
   })
 
+  test('fit is no exemption from the frame a section has to fill (#65, #18)', () => {
+    // `fit` only ever widens the capture viewport, and widening cannot make a section
+    // that already sits inside one frame fill it. So a short beat is refused in exactly
+    // the same words whether or not it asked to be fitted — the fix is a punch or a
+    // taller subject, and there is no flag that buys it out.
+    const site = config(3, [{}, {}, { fit: true }])
+    const { problems, notes } = report(site, { beats: sections({ 2: { height: 400 } }) })
+    assert.deepEqual(problems, ["beats[2] '#s2' is 400px tall; a punchFactor of 1 needs 1920px"])
+    assert.deepEqual(notes, [])
+  })
+
   test('a punch that leaves a pan no travel is named on each axis it fails (#7)', () => {
     // A diagonal pan travels on both, so a punch that leaves neither enough is two
     // findings and not one: the fix is a number, and each axis has its own.
@@ -136,6 +148,52 @@ describe('verdict', () => {
     const named = { ...site, hook: { ...site.hook, selector: '#hero' } }
     assert.deepEqual(verdict(named, surveyed(named, facts)).problems, [
       "hook.selector '#hero' — no element matches",
+    ])
+  })
+})
+
+/**
+ * The whole report, which is the config's own problems and then the page's — the one
+ * composition `check` performs once it has a survey.
+ *
+ * Asserted here and not only through `planReel`, because the two sites of a sentence
+ * are not one test: the plan *throws* over a beat count it cannot describe, and the
+ * judgment deliberately never reaches the plan when the count is out of range. A
+ * `configProblems` that stopped counting beats would leave `reel check` exiting 0 on a
+ * config no reel can be cut from, with every pure test over the throw still green.
+ */
+describe('judge', () => {
+  // The repo itself, so the signature track resolves and the only problems a config
+  // reports are the ones it was written to have.
+  const ROOT = fileURLToPath(new URL('../', import.meta.url))
+
+  /** Every beat roomy, so a count test reports the count and nothing else. */
+  function roomy(n: number): { beats: Partial<BeatFacts>[] } {
+    return { beats: Array.from({ length: n }, () => ({ height: ROOMY })) }
+  }
+
+  function reportOf(site: SiteConfig, n: number) {
+    return judge(site, ROOT, surveyed(site, roomy(n)))
+  }
+
+  test('a beat count no reel can be cut from is named by `check`, not only by the plan', () => {
+    for (const n of [2, 6]) {
+      assert.deepEqual(reportOf(config(n), n).problems, [
+        `beats: a reel is 3-5 beats, this config has ${n}`,
+      ])
+    }
+  })
+
+  test('a copy budget problem carries the field the human would go and edit', () => {
+    // What the template is handed, not just what it says: `copyProblem` is asserted
+    // over a field name a test passes it, so nothing else proves that the name reaching
+    // it is `hook.text` rather than `hook` — or `beats[1].label` rather than `label`.
+    const long = { ...config(3), hook: { text: 'x'.repeat(43) } }
+    assert.deepEqual(reportOf(long, 3).problems, ['hook.text is 43 characters; the budget is 42'])
+
+    const labelled = config(3, [{}, { label: 'y'.repeat(29) }])
+    assert.deepEqual(reportOf(labelled, 3).problems, [
+      'beats[1].label is 29 characters; the budget is 28',
     ])
   })
 })

@@ -11,9 +11,13 @@
   * { box-sizing: border-box; margin: 0; }
   body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
   main > section { height: 2000px; padding: 40px 32px; }
-  /* A line the page never paints — the sort a template bolts onto a heading for a
-     screen reader. `textContent` hands it back and the reel would carry copy no
-     viewer ever saw; `innerText` reads what is shown, and does not. */
+  /* A line the page never paints — the sort a template bolts onto a heading. What
+     this proves is exactly the `display: none` case: `textContent` hands the line
+     back and the reel would carry copy no viewer ever saw, and `innerText` reads
+     what is laid out, so it does not. It is not the whole of "hidden": the canonical
+     clipped sr-only pattern (1px, `clip: rect(0 0 0 0)`) *is* laid out, and
+     `innerText` returns it — a heading written that way still reaches the reel, and
+     the fix for one is a `label` rather than a smarter reader. */
   .sr-only { display: none; }
 </style>
 </head>
