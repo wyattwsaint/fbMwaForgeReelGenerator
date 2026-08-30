@@ -15,14 +15,4 @@ export { COPY_BUDGETS, planReel } from './plan.ts'
 // `Survey` and its parts come through `plan.ts` rather than from `survey.ts`, so the
 // public surface is the pure half: a caller planning a reel needs the shape of what a
 // page said, never the module that opens a browser to say it.
-export type {
-  CopyBudget,
-  Move,
-  Rect,
-  Shot,
-  Survey,
-  SurveyedBeat,
-  SurveyedPage,
-  TextCue,
-  Timeline,
-} from './plan.ts'
+export type { CopyBudget, Move, Shot, Survey, SurveyedBeat, SurveyedPage, TextCue, Timeline } from './plan.ts'

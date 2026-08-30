@@ -15,13 +15,13 @@ import type { Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 export type { Rect } from './page.ts'
 
 /**
- * What one settle bought: everything wrong with the config, and what the page gave up
- * about itself while it was open.
+ * What one settle bought: everything wrong with the config, and everything the run
+ * decided to do about a page rather than refuse over.
  *
- * The survey rides along rather than being taken again by the render, because it is
- * read off the *settled* pages and settling them is the expensive thing `check` already
- * did — a render that loaded every page a second time to ask for its labels would pay
- * the whole preflight twice for facts it had already been handed.
+ * Two lists and nothing else (ADR-0009). The survey the judgment read is not carried
+ * back, because the caller that needs it — the render, which plans a timeline from it
+ * — is the caller that took it: `check` is the thin composition of a survey and a
+ * verdict, and a value that only passed through it has no business in its result.
  */
 export type Checked = {
   problems: string[]
@@ -38,26 +38,6 @@ export type Checked = {
    * line saying so.
    */
   notes: string[]
-  /**
-   * What the pages said, as the plan takes it (ADR-0009): every beat's heading and
-   * height, and the two readings the hook's degradation chain turns on (#64, #88).
-   *
-   * Facts and never verdicts — `resolvedMotion` is the chain, and it lives in `plan.ts`
-   * where the other move decisions are, so the plan reads the readings rather than
-   * being handed an answer. Carried out rather than surveyed again because the facts
-   * change the *plan* and not just the capture — a still hook gets a deterministic
-   * frame 0, the site's `videoTime` and a beat's 10% drift where a live one gets a 3%
-   * breath, and a beat over the fit cap is planned as a vertical pan (#66) — and a plan
-   * is made before a browser is open. `check` is the settle the render was going to do
-   * anyway, so what it learned on those pages rides back rather than being learned
-   * again.
-   */
-  survey: Survey
-}
-
-/** Nothing measured: what a run that never opened a browser knows about the pages. */
-function unsurveyed(): Survey {
-  return { pages: [], beats: [], heroRect: null, scrollRefires: null, motionReading: null }
 }
 
 /**
@@ -70,13 +50,8 @@ function unsurveyed(): Survey {
  * what that means. Nothing below this line imports Playwright.
  */
 export async function check(config: SiteConfig, root: string): Promise<Checked> {
-  const problems = configProblems(config, root)
-  if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
-    // Nothing left to resolve against.
-    return { problems, notes: [], survey: unsurveyed() }
-  }
   const judged = verdict(config, await survey(config))
-  return { ...judged, problems: [...problems, ...judged.problems] }
+  return { problems: [...configProblems(config, root), ...judged.problems], notes: judged.notes }
 }
 
 /**
@@ -87,7 +62,7 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
  * report reads in — a beat's problems sit under the page they were found on, and the
  * hook's sit at the top of the site's own page rather than at the top of the report.
  */
-function verdict(config: SiteConfig, taken: Survey): Checked {
+export function verdict(config: SiteConfig, taken: Survey): Checked {
   const problems: string[] = []
   const notes: string[] = []
   const hook = resolvedMotion(config, taken)
@@ -100,7 +75,8 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
   // Planned once, from the whole survey, and read beat by beat below: one call cannot
   // disagree with itself. A beat count the plan cannot describe is already named by
   // `configProblems`, and the page checks still run without a plan.
-  const plannable = config.beats.length >= MIN_BEATS && config.beats.length <= MAX_BEATS
+  const count = Array.isArray(config.beats) ? config.beats.length : 0
+  const plannable = count >= MIN_BEATS && count <= MAX_BEATS
   const shots = plannable ? planReel(config, taken).shots : []
   const beatShot = (index: number): Shot | null =>
     shots.find((shot) => shot.kind === 'beat' && shot.index === index) ?? null
@@ -124,7 +100,7 @@ function verdict(config: SiteConfig, taken: Survey): Checked {
     })
   }
 
-  return { problems, notes, survey: taken }
+  return { problems, notes }
 }
 
 /**

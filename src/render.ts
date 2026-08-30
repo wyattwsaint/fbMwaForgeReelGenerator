@@ -15,13 +15,15 @@
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { captureMasters, mastersDir } from './capture.ts'
-import { check } from './check.ts'
+import { verdict } from './check.ts'
+import { configProblems } from './config.ts'
 import { assemble, renderShot } from './compose.ts'
 import { trackPath } from './house.ts'
 import { planReel } from './plan.ts'
 import type { Shot } from './plan.ts'
 import { reviewStills } from './review.ts'
 import type { SiteConfig } from './site.ts'
+import { survey } from './survey.ts'
 
 /**
  * One finished phase: what it was, what it was about, and what it cost.
@@ -80,8 +82,15 @@ export async function render(
   await rm(dir, { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
 
+  // `check`'s two halves, taken here rather than behind it, because the value between
+  // them is what the timeline is planned from (ADR-0009): the survey the judgment read
+  // is the survey the plan reads, so there is no second set of page loads free to
+  // disagree with the preflight that passed.
   const checkedAt = Date.now()
-  const { problems, notes, survey } = await check(config, root)
+  const surveyed = await survey(config)
+  const judged = verdict(config, surveyed)
+  const problems = [...configProblems(config, root), ...judged.problems]
+  const notes = judged.notes
   report({
     name: 'check',
     subject: problems.length === 0 ? 'ok' : 'failed',
@@ -89,13 +98,12 @@ export async function render(
   })
   if (problems.length > 0) return { path: '', stills: [], durationMs: 0, notes, problems }
 
-  // The survey `check` already took off the settled pages: the heading a beat that
-  // named no `label` draws (#62), the height that says whether a `fit` beat can fit
-  // legibly (#66), and how the hook is really shot after the two degradations `check`
-  // measured (#64, #88). Planned once, here, so capture and compose read one timeline
-  // — and planned from the preflight's own survey rather than from a second set of page
-  // loads free to disagree with it.
-  const timeline = planReel(config, survey)
+  // The survey taken off the settled pages above: the heading a beat that named no
+  // `label` draws (#62), the height that says whether a `fit` beat can fit legibly
+  // (#66), and the two readings that say how the hook is really shot after its
+  // degradations (#64, #88). Planned once, here, so capture and compose read one
+  // timeline.
+  const timeline = planReel(config, surveyed)
 
   // Masters are grouped by page and device scale rather than taken in reel order, so
   // the count runs in the order they are finished — which is the order they cost.

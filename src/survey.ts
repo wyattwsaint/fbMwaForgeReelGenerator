@@ -31,7 +31,7 @@ export type SurveyedPage = {
   /**
    * The page's own scroll height, null only where the failure landed before it could
    * be read. A page that died after it was read keeps it: the height is a fact the
-   * survey already has, and the beats it had measured are still judged against it.
+   * survey already has.
    */
   scrollHeight: number | null
   /**
@@ -88,6 +88,13 @@ export type Survey = {
  * url is always loaded because the hook always lives there.
  */
 export async function survey(config: SiteConfig): Promise<Survey> {
+  // A config that names no url, or no beats, describes no page to open. Nothing
+  // measured is the honest answer and the judgment already has the words for it —
+  // `configProblems` names the missing field — so this is a browser not launched
+  // rather than a load failure invented for a config that never asked for one.
+  if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
+    return unsurveyed()
+  }
   const beats: SurveyedBeat[] = config.beats.map((beat) => ({
     url: beat.url ?? config.url,
     rect: null,
@@ -122,6 +129,11 @@ export async function survey(config: SiteConfig): Promise<Survey> {
     await browser.close()
   }
   return taken
+}
+
+/** Nothing measured: what a run that never opened a browser knows about the pages. */
+function unsurveyed(): Survey {
+  return { pages: [], beats: [], heroRect: null, scrollRefires: null, motionReading: null }
 }
 
 /**
