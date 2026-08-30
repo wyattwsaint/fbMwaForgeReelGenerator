@@ -42,8 +42,20 @@ the stabilised page — framed exactly as the recording would frame it, at the s
 own viewport — is sampled three times over 2s and the samples differenced per
 horizontal band. If the highest band mean is below the **motion floor**, the shot is
 not recorded; it degrades to `still` and `check` says so. This is the **motion
-probe**, and both `check` and the render ask it, as both already ask
-`scrollEffectsRefire`.
+probe**.
+
+*Amended on implementation.* This paragraph originally had `check` and the render each
+ask the probe on their own page, the way both already ask `scrollEffectsRefire`. That
+cannot be built, and the reason is worth keeping: the scroll question changes only how
+the recording is driven, so two callers can answer it independently and neither has to
+tell the other. This one changes the **plan** — a `still` hook is punched from a frozen
+master and drifts 10% where a live one breathes 3% over a recording — and the plan is
+made before a browser is open. A capture pass that probed for itself could stop
+recording but could not turn the shot it was handed back into a still one, so it would
+land a frozen master under a live shot's camera: the dead hook again, one layer down.
+So the probe is asked once, in `check`, and its verdict rides back with the headings
+and the heights (#66) into `planReel`. "Both ask and agree" becomes "the preflight
+decides and the render plans it", which is the same guarantee bought more cheaply.
 
 It measures the capture, not the page, and so is blind to *why* a hook records dead —
 a cropped hero, a genuinely static one, or a compositing hole of the kind this ADR

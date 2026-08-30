@@ -81,7 +81,7 @@ export async function render(
   await mkdir(dir, { recursive: true })
 
   const checkedAt = Date.now()
-  const { problems, notes, headings, heights } = await check(config, root)
+  const { problems, notes, hookMotion, headings, heights } = await check(config, root)
   report({
     name: 'check',
     subject: problems.length === 0 ? 'ok' : 'failed',
@@ -92,7 +92,11 @@ export async function render(
   // What `check` already read off the settled pages: the heading a beat that named no
   // `label` draws (#62), and the height that says whether a `fit` beat can fit legibly
   // (#66). Planned once, here, so capture and compose read one timeline.
-  const timeline = planReel(config, headings, heights)
+  //
+  // And how the hook is really shot, after the two degradations `check` measured (#64,
+  // #88) — the preflight's verdict is the one the render acts on, rather than a
+  // question asked twice of two page loads that are free to disagree.
+  const timeline = planReel(config, headings, heights, hookMotion)
 
   // Masters are grouped by page and device scale rather than taken in reel order, so
   // the count runs in the order they are finished — which is the order they cost.

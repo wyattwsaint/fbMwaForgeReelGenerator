@@ -14,9 +14,10 @@ import { COPY_BUDGETS, HOOK_MS, fitCapFallback, panTravelProblems, planReel } fr
 import type { Shot } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
+import { STILL_DEGRADATION, frameAt, movesAsFramed } from './motion.ts'
 import { AMBIENT_DEGRADATION, scrollEffectsRefire } from './scroll.ts'
 import { freeze, stabilise } from './settle.ts'
-import type { Beat, SiteConfig } from './site.ts'
+import type { Beat, HookMotion, SiteConfig } from './site.ts'
 
 export type { Rect } from './page.ts'
 
@@ -34,8 +35,9 @@ export type Checked = {
   /**
    * Things the run did rather than things it refuses to do: a `fit: true` past the
    * legibility cap (#66), a `scroll` hook on a page whose reveals cannot re-fire and so
-   * renders as ambient (#64) — whatever the pipeline decides *for* a human who asked
-   * for something else.
+   * renders as ambient (#64), an `ambient` hook whose hero does not move in the frame
+   * and so is captured still (#88) — whatever the pipeline decides *for* a human who
+   * asked for something else.
    *
    * Never a reason to refuse — a note that stopped the render would be a problem, and
    * problems are the list above. A config that can only ever degrade would otherwise be
@@ -43,6 +45,20 @@ export type Checked = {
    * line saying so.
    */
   notes: string[]
+  /**
+   * The motion the hook is really shot in, after every degradation this preflight
+   * found: `scroll` to `ambient` where the page's reveals cannot re-fire (#64), and
+   * `ambient` to `still` where the hero does not move in the frame it would be shot in
+   * (#88). Each step is one of the notes above.
+   *
+   * It is carried out rather than re-derived because the degradation changes the
+   * *plan* and not just the capture — a still hook gets a deterministic frame 0, the
+   * site's `videoTime` and a beat's 10% drift where a live one gets a 3% breath — and
+   * a plan is made before a browser is open. This is the same trade #66's heights
+   * make: `check` is the settle the render was going to do anyway, so what it learned
+   * on that page rides back rather than being learned again.
+   */
+  hookMotion: HookMotion
   /**
    * In beat order. Null where the section has no heading, where the beat never
    * resolved, and where the config named a label — the plan draws that label whatever
@@ -66,7 +82,8 @@ export async function check(config: SiteConfig, root: string): Promise<Checked> 
   const problems = configProblems(config, root)
   if (typeof config.url !== 'string' || config.url === '' || !Array.isArray(config.beats)) {
     // Nothing left to resolve against.
-    return { problems, notes: [], headings: [], heights: [] }
+    const hookMotion = config.hook?.motion ?? 'still'
+    return { problems, notes: [], hookMotion, headings: [], heights: [] }
   }
 
   // The plan says which beats pan and where, so it is what decides whether a punch
@@ -107,6 +124,10 @@ async function resolveOnPages(
 ): Promise<Checked> {
   const problems: string[] = []
   const notes: string[] = []
+  // What the config asked for until the hook's own page says otherwise. A URL that
+  // never loads leaves it here, which is the config's own answer and the one the
+  // render would have planned anyway — the load failure is already a problem.
+  let hookMotion: HookMotion = config.hook?.motion ?? 'still'
   // Beats are visited grouped by page rather than in reel order, so the headings are
   // filled in by index rather than pushed — a beat on another route would otherwise
   // caption the beat that happened to be resolved before it.
@@ -134,7 +155,11 @@ async function resolveOnPages(
       // whole would answer a question capture never asks. Everything else here still
       // reads the settled page it always did.
       await stabilise(page)
-      if (url === config.url) notes.push(...(await noteHookMotion(page, config)))
+      if (url === config.url) {
+        const live = await resolveHookMotion(page, config)
+        hookMotion = live.motion
+        notes.push(...live.notes)
+      }
       await freeze(page, config.hook?.videoTime ?? DEFAULT_VIDEO_TIME)
       if (url === config.url) problems.push(...(await checkHook(page, config)))
       const pageHeight = await page.evaluate(() => document.documentElement.scrollHeight)
@@ -158,24 +183,58 @@ async function resolveOnPages(
       await page.close()
     }
   }
-  return { problems, notes, headings, heights }
+  return { problems, notes, hookMotion, headings, heights }
 }
 
 /**
- * The one thing `check` can say about a live hook: whether the `scroll` this config
- * asked for has anything left to re-fire (#64).
+ * How the hook is really shot, and what to say about the difference — the two
+ * questions `check` can ask about a live hook, in the order the answers chain (#64,
+ * #88).
  *
  * Asked here rather than left to the capture pass because this is the preflight — the
  * whole point of `check` is learning in seconds what a render would otherwise teach in
  * a minute, and "your hook is not the hook you configured" is exactly that kind of
- * finding. Capture asks the same question again on its own page and acts on it, and
- * the two agree because both ask it of a stabilised, unfrozen page — which is why the
- * settle above is split rather than taken whole.
+ * finding. Both are asked of a stabilised, unfrozen page, which is the state a
+ * recording starts in and the reason the settle above is split rather than taken
+ * whole: freezing parks the very motion both questions are about, so a `check` that
+ * settled first would answer a question capture never asks.
+ *
+ * The chain runs one way and is three deep: a `scroll` whose reveals cannot re-fire
+ * becomes an `ambient`, and an `ambient` that does not move in frame becomes a
+ * `still`. So a `scroll` hook can degrade twice in one run, and both steps are named —
+ * a human handed a still where they asked for a scroll should be able to read why in
+ * two lines rather than infer it from one.
+ *
+ * A `scroll` that does *not* degrade is never probed, and that is not an optimisation:
+ * under a scripted scroll the viewport itself moves, so every page on earth reads far
+ * above the floor and the probe would be measuring its own camera.
  */
-async function noteHookMotion(page: Page, config: SiteConfig): Promise<string[]> {
-  if (config.hook?.motion !== 'scroll') return []
-  if (await scrollEffectsRefire(page, HOOK_MS)) return []
-  return [AMBIENT_DEGRADATION]
+async function resolveHookMotion(
+  page: Page,
+  config: SiteConfig,
+): Promise<{ motion: HookMotion; notes: string[] }> {
+  const notes: string[] = []
+  let motion: HookMotion = config.hook?.motion ?? 'still'
+  if (motion === 'scroll' && !(await scrollEffectsRefire(page, HOOK_MS))) {
+    notes.push(AMBIENT_DEGRADATION)
+    motion = 'ambient'
+  }
+  if (motion !== 'ambient') return { motion, notes }
+
+  // Framed exactly as the recording frames it — the hero scrolled to the top of the
+  // viewport, at the viewport this page is already loaded at, which is the one a
+  // recording uses. A hook whose selector does not resolve is not probed and not
+  // noted: `checkHook` names that below, and a note about a hero nobody can find would
+  // be the same defect said twice.
+  const rect = await hookRect(page, config.hook?.selector)
+  if (!rect) return { motion, notes }
+  await frameAt(page, rect.y)
+  const moves = await movesAsFramed(page)
+  // Back to the top, where `stabilise` left it and where everything below expects it.
+  await frameAt(page, 0)
+  if (moves) return { motion, notes }
+  notes.push(STILL_DEGRADATION)
+  return { motion: 'still', notes }
 }
 
 async function checkHook(page: Page, config: SiteConfig): Promise<string[]> {

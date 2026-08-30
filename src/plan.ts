@@ -11,7 +11,7 @@
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
-import type { Beat, Direction, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
+import type { Beat, Direction, HookMotion, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
 
@@ -322,6 +322,7 @@ export function planReel(
   config: SiteConfig,
   headings: Headings = [],
   heights: SectionHeights = [],
+  motion?: HookMotion,
 ): Timeline {
   const beats = config.beats
   const n = beats.length
@@ -332,7 +333,16 @@ export function planReel(
   const hookSelector = config.hook?.selector
   // `still` unless the config says otherwise, so a config that names no motion plans
   // exactly the reel it planned before #63.
-  const hookMotion = config.hook?.motion ?? 'still'
+  //
+  // The override is `check`'s verdict, not a second opinion: a `scroll` whose reveals
+  // cannot re-fire is an `ambient` (#64), and an `ambient` whose hero does not move in
+  // the frame is a `still` (#88). Both are measured on a real page, and both change the
+  // *plan* — a still hook is punched, drifts 10% and is synthesised from one frozen
+  // master, where a live one breathes 3% over a recording. So the plan is told, rather
+  // than planning a live hook and leaving capture to quietly shoot something else.
+  // Unmeasured is what the config asked for, exactly as an unmeasured height is
+  // uncapped: the plan only knows what it is handed.
+  const hookMotion = motion ?? config.hook?.motion ?? 'still'
   const liveHook = hookMotion !== 'still'
   const shots: Shot[] = [
     {

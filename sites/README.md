@@ -38,9 +38,19 @@ than what is done with them (ADR-0006). Leave it out — or write `still` — an
 is synthesised from one frozen screenshot, which is every reel cut so far. Write
 `ambient` and the hero is recorded while it runs, for exactly the hook's 3.0s: reach
 for it when the hero's whole point is motion a screenshot kills — a video background, a
-carousel, a parallax idle. The cost is that no two renders of it are alike, so a live
-hook is judged by eye off the review stills rather than by re-running it. Beats are
-always still; there is no `motion` on a beat.
+carousel, a parallax idle. The cost is that no two renders of it are alike.
+
+Ask for it freely, and then read what `check` says back. The reel is 9:16 and a hero's
+motion often is not: a 1920x1080 video covering a 1080x1920 frame keeps about a third
+of its width, and the moving part is as likely to be in the two thirds thrown away —
+which is what `pharos.ts` did, and why it is back to `still` with a `videoTime`. So
+`check` measures the hero in the frame it would be shot in before anything is recorded
+(ADR-0008), and where it does not move there it says so and the hook is captured
+`still` instead. That is a note, not a refusal, and it is the only way to know: a hook
+that recorded dead and one that recorded live make the same review still, so the eye
+cannot tell them apart.
+
+Beats are always still; there is no `motion` on a beat.
 
 ## The loop
 

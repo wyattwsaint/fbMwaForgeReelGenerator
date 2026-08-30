@@ -22,6 +22,7 @@ import { masterScale, masterSize } from './camera.ts'
 import type { MasterSize } from './camera.ts'
 import { ffmpeg, ffprobe, intermediateEncode } from './compose.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth, punchedFrameHeight } from './frame.ts'
+import { frameAt } from './motion.ts'
 import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { FPS, frameCount } from './plan.ts'
@@ -455,10 +456,11 @@ async function framedForRecording(page: Page, shot: Shot, motion: LiveMotion): P
   // The same `y` escape hatch a master's clip honours, in the same page coordinates —
   // a scroll is what a clip is for a recording. A walk starts at the document's top,
   // which is where the effects it is there to re-fire are wound back to.
-  await page.evaluate((y) => window.scrollTo(0, y), walking ? 0 : (shot.source?.y ?? rect.y))
-  // One painted frame at the new scroll position, so the dwell is spent on a page that
-  // has already drawn where it was put rather than on the scroll itself.
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+  //
+  // Shared with the motion probe rather than spelled out here, because the probe's
+  // whole claim is that it measured *this* frame: a framing written twice is a probe
+  // that can drift a pixel off the shot it decided about (#88).
+  await frameAt(page, walking ? 0 : (shot.source?.y ?? rect.y))
   return walking
 }
 
