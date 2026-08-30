@@ -47,6 +47,12 @@ const SCRIM_BAND = [SCRIM.top, SAFE_ZONE.bottom] as const
  */
 const ABOVE_THE_WASH = [0, SCRIM.top] as const
 
+/**
+ * The band under the wash's foot: the pixels the scrim used to cover and no longer
+ * does (#60, as amended). The client's own site, all the way to the frame's edge.
+ */
+const BELOW_THE_WASH = [SCRIM.top + SCRIM.height, FRAME_HEIGHT] as const
+
 /** One band of a decoded frame, so a colour can be counted where it should be and not. */
 function rows(frameBytes: Buffer, top: number, bottom: number): Buffer {
   return frameBytes.subarray(top * FRAME_WIDTH * 3, bottom * FRAME_WIDTH * 3)
@@ -350,6 +356,22 @@ describe('reel render', () => {
       Math.abs(lit - dark) < dark * 0.05,
       `something is still drawn above the wash: ${lit} vs ${dark}`,
     )
+  })
+
+  test('the frame’s foot is the site’s, lit hook or not', async () => {
+    // The amendment to #60, in rendered pixels rather than in arithmetic: the same two
+    // frames read *below* the wash, where the scrim used to run at peak to the frame's
+    // edge. If it still reached down here the lit frame would be ~0.9 of the ground
+    // darker than the dark one; it is the same site either way.
+    const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...BELOW_THE_WASH)
+    const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...BELOW_THE_WASH)
+    assert.ok(
+      Math.abs(lit - dark) < dark * 0.05,
+      `the wash still reaches the frame’s foot: ${lit} vs ${dark}`,
+    )
+    // And it is a site down there rather than a wash of ground: a band this size that
+    // had been washed to peak would read far darker than the fixture's own pixels.
+    assert.ok(lit > 20, `the frame’s foot is washed out anyway: ${lit}`)
   })
 
   test('a label lives and dies inside its own shot', async () => {
@@ -902,10 +924,22 @@ export default defineSite({
   })
 
   test('fires the reveal on camera — the frames carry what no still could', async () => {
-    // Frame 0 is the top of the document, where the reveal is 50px below the fold: not
-    // in the band, and not anywhere else in the frame either.
+    // Frame 0 is the top of the document, where the reveal is not in the band.
+    //
+    // The band rather than the whole frame, because the reveal is only 50px clear of
+    // the fold and the walk is already running when the first frame is recorded — a
+    // couple of hundred milliseconds of it, under a loaded machine — so a strip of the
+    // reveal can be on the frame's last rows at frame 0 and it means nothing. That the
+    // whole-frame count used to be zero was the *scrim*: the wash ran to the foot of
+    // the frame and ate those rows. It stops above them now (#60, as amended), so the
+    // claim has to be the one this test was always making — the reveal travelled into
+    // the band — rather than one the wash was making for it.
     const first = await frame(walkedPath, 0)
-    assert.equal(pixelsNear(first, REVEAL), 0, 'the reveal is already on the thumbnail')
+    assert.equal(
+      pixelsNear(rows(first, ...REVEAL_BAND), REVEAL),
+      0,
+      'the reveal is already in the band on the thumbnail',
+    )
 
     // And by the last frame of the hook the walk has carried it up into the band.
     const last = await frame(walkedPath, (CUTS[0] as number) - 1)
