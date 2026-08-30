@@ -1,6 +1,6 @@
 # audio/ provenance
 
-## mwaforge-signature.mp3
+## quiet-confidence.mp3
 
 The default bed. A site that names no `music` gets this one (#8), which is what
 makes it the signature track rather than the only track.

@@ -38,7 +38,7 @@ export const WORDMARK_FILE = fileURLToPath(
  * travels with the renderer rather than with any site's config.
  */
 export const SIGNATURE_TRACK_FILE = fileURLToPath(
-  new URL('../audio/mwaforge-signature.mp3', import.meta.url),
+  new URL('../audio/quiet-confidence.mp3', import.meta.url),
 )
 
 /**

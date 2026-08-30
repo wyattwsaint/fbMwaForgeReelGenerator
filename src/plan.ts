@@ -115,7 +115,7 @@ export const HOOK_FADE_OUT_MS = 500
 export const FRAME_MS = Math.round(1000 / FPS)
 
 /** #8: the track a config names none; an override changes the file, never the terms. */
-export const DEFAULT_TRACK = 'audio/mwaforge-signature.mp3'
+export const DEFAULT_TRACK = 'audio/quiet-confidence.mp3'
 /** #8: the bed is trimmed and faded to length, so music ends with the reel. */
 export const AUDIO_FADE_OUT_MS = 1000
 

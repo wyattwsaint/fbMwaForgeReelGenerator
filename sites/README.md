@@ -24,10 +24,10 @@ export default defineSite({
 
 That is `brobst.ts`, whole — no `music`, because `music` is one of those overrides.
 Leave it out and the reel gets the signature track, which is the point of a signature
-track. Write it out and you name a file in `audio/` — either a different track, as
-`mwaforge.ts` does, or the signature track itself, as `pharos.ts` does, which is how
-you hang an `offset` off the default bed, since the schema wants a `file` whenever you
-write a `music` block at all. `offset` is seconds into the track, sliding the bed
+track. Write it out and you name a file in `audio/` — either a different track, or the
+signature track itself, as `pharos.ts` does, which is how you hang an `offset` off the
+default bed, since the schema wants a `file` whenever you write a `music` block at
+all. `offset` is seconds into the track, sliding the bed
 against the hook. Every path here is resolved from the directory you run `reel` in.
 Nothing stops you pointing `music.file` outside `audio/`; ADR-0002 is why you should
 not — a bed that is not checked in beside its provenance entry is a reel that cannot

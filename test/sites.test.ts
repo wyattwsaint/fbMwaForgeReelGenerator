@@ -99,14 +99,14 @@ describe('sites/', () => {
   test('the client reels are cut to the signature track; MWA Forge brings its own', async () => {
     // The resolution rule, both ways round (#67): the signature track is what a config
     // that names no bed falls back to, and naming one is what makes that a fallback
-    // rather than the only answer. A second track in `audio/` changes neither client.
+    // rather than the only answer. Since #87 the signature track *is* Quiet
+    // Confidence, so mwaforge's named bed and the default are one file — the two
+    // paths still differ in how they get there, which is what is asserted.
     for (const slug of ['brobst', 'pharos']) {
       assert.equal(planReel(await site(slug)).audio.file, DEFAULT_TRACK, slug)
     }
-    assert.equal(
-      planReel(await site('mwaforge')).audio.file,
-      'audio/quiet-confidence.mp3',
-    )
+    assert.equal((await site('mwaforge')).music?.file, 'audio/quiet-confidence.mp3')
+    assert.equal(planReel(await site('mwaforge')).audio.file, DEFAULT_TRACK)
   })
 
   test('no config carries a Meta Sound Collection path', async () => {

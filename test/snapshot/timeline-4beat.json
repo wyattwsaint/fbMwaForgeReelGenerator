@@ -113,7 +113,7 @@
     }
   ],
   "audio": {
-    "file": "audio/mwaforge-signature.mp3",
+    "file": "audio/quiet-confidence.mp3",
     "offsetMs": 0,
     "fadeOutMs": 1000
   }

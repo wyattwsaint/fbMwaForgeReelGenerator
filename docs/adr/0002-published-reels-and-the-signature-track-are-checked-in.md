@@ -76,8 +76,10 @@ cheap and open.
 concern in a private repo" no longer holds even on its own terms. Two things are now
 published:
 
-- `audio/mwaforge-signature.mp3` — the one thing that makes a reel recognisably MWA
-  Forge's, now downloadable by anyone.
+- `audio/quiet-confidence.mp3` — the default bed since #87, and the one thing that
+  makes a reel recognisably MWA Forge's, now downloadable by anyone. Both tracks in
+  `audio/` are free-tier Suno output and both are published; the rights position is
+  the same for either, and `audio/PROVENANCE.md` records it per file.
 - `reels/` — client work, promoted by `reel keep` ([ADR-0004](0004-promotion-is-a-command-the-judgment-is-not.md)).
 
 ## Amended decision

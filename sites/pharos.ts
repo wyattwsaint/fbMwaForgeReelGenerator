@@ -3,6 +3,7 @@ import { defineSite } from 'reel'
 /**
  * Pharos Academy — the busy site, and every override earning its place. Each one
  * below traces to something the page does that the fixture did not.
+
  */
 export default defineSite({
   url: 'https://pharosacademy.net',
@@ -71,6 +72,7 @@ export default defineSite({
   cta: { credit: 'pharosacademy.net' },
   // The signature track, named only so the bed can be slid: the schema wants a `file`
   // whenever a `music` block is written at all, and this is the file it would have
-  // used anyway.
-  music: { file: 'audio/mwaforge-signature.mp3', offset: 1.1 },
+  // used anyway. Quiet Confidence, since #87 — the name changed under this line, the
+  // decision did not.
+  music: { file: 'audio/quiet-confidence.mp3', offset: 1.1 },
 })
