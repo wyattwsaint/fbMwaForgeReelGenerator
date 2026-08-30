@@ -11,10 +11,24 @@
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
+import { MOTION_FLOOR, STILL_DEGRADATION } from './motion.ts'
+import { AMBIENT_DEGRADATION } from './scroll.ts'
 import { configuredMotion } from './site.ts'
-import type { Beat, Direction, HookMotion, LiveMotion, Move, PushPull, SiteConfig } from './site.ts'
+import type {
+  Beat,
+  Direction,
+  HookMotion,
+  LiveMotion,
+  Move,
+  PushPull,
+  SiteConfig,
+} from './site.ts'
+// Type-only, and only ever type-only: `survey.ts` imports this module for real, so a
+// value import here would be a runtime cycle between the page and the plan of it.
+import type { Survey } from './survey.ts'
 
 export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
+export type { Rect, Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
 export type Shot = {
   kind: 'hook' | 'beat' | 'cta'
@@ -294,38 +308,66 @@ function rotatedPushPull(index: number): PushPull {
 }
 
 /**
- * The headings the beats' own sections lead with, in beat order — what `check` read off
- * the settled page. A beat naming no `label` takes its section's heading as one (#62).
+ * How the hook is really shot, and what to say about the difference — the two
+ * questions a live hook turns on, in the order the answers chain (#64, #88, ADR-0008).
  *
- * A parameter rather than something the plan goes and fetches, because the plan is pure:
- * the page is the one thing about a reel that needs a browser, and a timeline that had
- * to load one would stop being the value #22 made it. Absent, every beat is unlabelled
- * unless its config says otherwise — which is what makes the plan assertable on its own.
- */
-export type Headings = readonly (string | null)[]
-
-/**
- * How tall the beats' own sections measured at the *base* viewport, in beat order —
- * the other thing `check` learned while the page was open (#66).
+ * A pure function of the config and the two readings the survey carries, here beside
+ * the other move decisions rather than in the preflight that took them (ADR-0009): a
+ * survey carries facts and never verdicts, and what the page said is a boolean and a
+ * number. `planReel` and `check` both call this, so they cannot disagree about which
+ * hook is being cut — one function of one value, which is a stronger guarantee than
+ * carrying the verdict forward ever bought.
  *
- * A parameter for the same reason the headings are: it is a fact about the page, and
- * the plan is pure. Only `fit` reads it, and only to find the beat whose section is
- * too tall to fit legibly. Absent — or null for a beat — every fit beat is planned as
- * one, which is exactly the reel this planned before the cap existed.
+ * The chain runs one way and is three deep: a `scroll` whose reveals cannot re-fire
+ * becomes an `ambient`, and an `ambient` that does not move in frame becomes a
+ * `still`. So a `scroll` hook can degrade twice in one run, and both steps are named —
+ * a human handed a still where they asked for a scroll should be able to read why in
+ * two lines rather than infer it from one.
+ *
+ * An unread reading is what the config asked for, exactly as an unmeasured height is
+ * uncapped: a survey nobody took, a page that would not load, or a hero nobody could
+ * find degrades nothing and is noted as nothing. The load failure and the missing hero
+ * are already problems, and a note about either would be the same defect said twice.
+ *
+ * The floor stays in `motion.ts`, where the probe that calibrated it is written; only
+ * the *reading* crosses the seam, which is what lets a test sit either side of it.
  */
-export type SectionHeights = readonly (number | null)[]
-
-/**
- * The reel's whole shape. Throws when the config cannot describe a reel at all —
- * `check` reports those by name before it ever gets here.
- */
-export function planReel(
+export function resolvedMotion(
   config: SiteConfig,
-  headings: Headings = [],
-  heights: SectionHeights = [],
-  motion?: HookMotion,
-): Timeline {
+  survey?: Survey,
+): { motion: HookMotion; notes: string[] } {
+  const notes: string[] = []
+  let motion: HookMotion = configuredMotion(config)
+  if (motion === 'scroll' && survey?.scrollRefires === false) {
+    notes.push(AMBIENT_DEGRADATION)
+    motion = 'ambient'
+  }
+  if (motion !== 'ambient') return { motion, notes }
+  const reading = survey?.motionReading ?? null
+  if (reading === null || reading >= MOTION_FLOOR) return { motion, notes }
+  notes.push(STILL_DEGRADATION)
+  return { motion: 'still', notes }
+}
+
+/**
+ * The reel's whole shape, from the config and what one settled page load said about it
+ * (ADR-0009). Throws when the config cannot describe a reel at all — `check` reports
+ * those by name before it ever gets here.
+ *
+ * The survey is a value rather than a page, because the plan is pure: the page is the
+ * one thing about a reel that needs a browser, and a timeline that had to load one
+ * would stop being the value #22 made it. It is optional for the same reason it used
+ * to be three optional parameters — absent, the plan is exactly the reel the config
+ * asked for: every beat unlabelled unless its own config says otherwise (#62), every
+ * fit beat uncapped (#66), and the hook shot in the motion it was written with (#64,
+ * #88). The plan only knows what it is handed.
+ */
+export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   const beats = config.beats
+  // Null where the survey said nothing, and null where it had nothing to say: a beat
+  // past the end of an empty survey is unmeasured in exactly the way a beat whose
+  // selector did not resolve is.
+  const surveyed = survey?.beats ?? []
   const n = beats.length
   if (n < MIN_BEATS || n > MAX_BEATS) {
     throw new Error(`a reel is ${MIN_BEATS}-${MAX_BEATS} beats, this config has ${n}`)
@@ -335,15 +377,15 @@ export function planReel(
   // `still` unless the config says otherwise, so a config that names no motion plans
   // exactly the reel it planned before #63.
   //
-  // The override is `check`'s verdict, not a second opinion: a `scroll` whose reveals
-  // cannot re-fire is an `ambient` (#64), and an `ambient` whose hero does not move in
-  // the frame is a `still` (#88). Both are measured on a real page, and both change the
-  // *plan* — a still hook is punched, drifts 10% and is synthesised from one frozen
-  // master, where a live one breathes 3% over a recording. So the plan is told, rather
-  // than planning a live hook and leaving capture to quietly shoot something else.
-  // Unmeasured is what the config asked for, exactly as an unmeasured height is
-  // uncapped: the plan only knows what it is handed.
-  const hookMotion = motion ?? configuredMotion(config)
+  // The degradation is read here rather than taken on trust from the preflight: a
+  // `scroll` whose reveals cannot re-fire is an `ambient` (#64), and an `ambient` whose
+  // hero does not move in the frame is a `still` (#88), and both change the *plan* — a
+  // still hook is punched, drifts 10% and is synthesised from one frozen master, where
+  // a live one breathes 3% over a recording. `check` reads the same chain off the same
+  // survey, so the reel it reports on is the reel this plans. Unmeasured is what the
+  // config asked for, exactly as an unmeasured height is uncapped: the plan only knows
+  // what it is handed.
+  const hookMotion = resolvedMotion(config, survey).motion
   const liveHook = hookMotion !== 'still'
   const shots: Shot[] = [
     {
@@ -369,7 +411,7 @@ export function planReel(
     // existed — fit to width, covered by a vertical pan, which is the move a section
     // with this much height to spare is for. Unmeasured is uncapped: the plan only
     // knows what it is handed, and `check` is what hands it a height.
-    const height = heights[index]
+    const height = surveyed[index]?.height
     const capped = beat.fit === true && height != null && pastFitCap(height)
     const fit = beat.fit === true && !capped
     // A fit section is exactly one frame, so there is nothing for a pan to travel
@@ -459,7 +501,7 @@ export function planReel(
   beats.forEach((beat, index) => {
     // The config wins, and it wins even when it says nothing: `label: ''` is a human
     // deciding this shot carries no text, which is not the same as never having said.
-    const content = beat.label ?? headings[index] ?? ''
+    const content = beat.label ?? surveyed[index]?.heading ?? ''
     if (!content) return
     const shot = shots[index + 1] as Shot
     const startMs = shot.startMs + LABEL_LEAD_IN_MS

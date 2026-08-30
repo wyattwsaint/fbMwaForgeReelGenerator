@@ -199,7 +199,7 @@ does the hero actually move? Three samples over 2s, differenced per horizontal b
 the highest band mean is the reading. It measures the *capture*, not the page, so it
 is blind to why a hook would record dead — and the eye cannot ask it, because a dead
 recording and a live one make the same review still.
-Asked once, by `check`, and carried into the plan with the headings and the heights,
+Asked once, by the **survey**, and written down as a reading the plan reads,
 because it changes the plan and not just the capture: a hook that degrades is punched,
 drifts 10% and is synthesised from a frozen master, and none of that can be decided by
 a pass that is already holding a timeline. **Scripted scroll**'s re-fire question moved
@@ -401,6 +401,19 @@ overrides; a config that names none of them still renders. A beat label override
 section's own **heading** rather than an absence, so a reel carries copy whether or not
 the config says a word. Timings are not overridable — 3.5s per beat is a finding, not a
 preference.
+
+**Survey** — what one settled page load gives up about a config, as a value: every
+beat's rect, height and **heading**, the page's own height, the hero's rect, and the
+two readings a **live shot** turns on — whether the page's scroll effects re-fire, and
+its **motion probe** reading. Facts and never verdicts: the degradation chain, the
+**fit** cap and every **problem** and **note** are derived from it afterwards, by code
+that never opens a browser.
+
+It is not the **check** and it is not the **sections report**. A sections report
+describes a page before a config exists; a survey describes a page *against* a config;
+a check is the judgment passed on the survey. One survey serves both the judgment and
+the **timeline**, because a page fact that reached only one of them would be a plan and
+a preflight free to disagree about the same page.
 
 **Check** — the render pipeline stopped after settle: resolves every beat's selector and
 reports missing selectors, sections shorter than the frame, punch factors that leave

@@ -10,7 +10,7 @@ import type { Shot } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
-import { probe, withWorkspace } from './helpers.ts'
+import { probe, surveyed, withWorkspace } from './helpers.ts'
 
 /**
  * The capture plan is the one part of the capture pass that needs no browser, so
@@ -286,7 +286,7 @@ describe('captureMasters, fit', () => {
       }
       const dir = join(ws.root, 'out')
       // The heights `check` measured, which is what the cap is read against (#66).
-      const timeline = planReel(site, [], [3000, 2400, 4400])
+      const timeline = planReel(site, surveyed(site, { beats: [{ height: 3000 }, { height: 2400 }, { height: 4400 }] }))
       const masters = await captureMasters(site, timeline, dir)
 
       const fell = masters.find((master) => master.shot.kind === 'beat' && master.shot.index === 2)

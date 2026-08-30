@@ -4,7 +4,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { FRAME_WIDTH } from '../src/frame.ts'
+import { BASE_VIEWPORT, FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
+import type { Rect, Survey, SurveyedBeat, SurveyedPage } from '../src/plan.ts'
+import type { SiteConfig } from '../src/site.ts'
 
 const REPO = fileURLToPath(new URL('../', import.meta.url))
 const BIN = join(REPO, 'bin', 'reel.mjs')
@@ -26,6 +28,101 @@ export function snapshot(name: string, value: unknown): void {
     return
   }
   assert.equal(actual, readFileSync(path, 'utf8'), `${name} no longer matches test/snapshot/${name}.json`)
+}
+
+/** What one beat's section measured, as a test states it. Every field optional. */
+export type BeatFacts = {
+  /** The heading the section leads with; absent or null is a section with none. */
+  heading: string | null
+  /**
+   * How tall it is, at the base viewport.
+   *
+   * This is also what says the beat resolved at all: a survey states a height for every
+   * section it found, so a beat with none is a selector that did not match, and is
+   * judged as one. A test about anything else therefore states a height for every beat
+   * it wants measured, which is the same page fact a real survey would have written.
+   */
+  height: number
+  /**
+   * How far down the page the section starts. Absent is a section at the very top,
+   * which is only interesting beside `scrollHeight`: together they are what says
+   * whether a beat runs off the foot of its page.
+   */
+  top: number
+}
+
+/** The page facts a test states, as fields rather than as positions. */
+export type PageFacts = {
+  /**
+   * In beat order — one object per beat, stating only what that beat is about. A beat
+   * a test says nothing about is `{}`, which is a section nothing measured.
+   */
+  beats?: readonly Partial<BeatFacts>[]
+  /**
+   * The page's own scroll height, for every page in the survey. Absent is a height
+   * nobody read, and a beat is never judged against a page nobody measured.
+   */
+  scrollHeight?: number
+  /** The hero, as the hook found it; `null` is a hook that resolved to nothing. */
+  heroRect?: Rect | null
+  /**
+   * Whether the page's scroll effects re-fire under a scripted scroll; absent is a
+   * question nobody asked, which is what a hook that is not a `scroll` leaves behind.
+   */
+  scrollRefires?: boolean
+  /** What the motion probe read in the hook's own frame; absent is a probe never run. */
+  motionReading?: number
+}
+
+/** A section the page laid out where the test said, at the width it was measured at. */
+function measuredAt(top: number, height: number): Rect {
+  return { x: 0, y: top, width: BASE_VIEWPORT.width, height }
+}
+
+/**
+ * A survey of *this config's* pages, stating only the facts a test is about and
+ * "nothing measured" everywhere else — so a test about one section's height does not
+ * have to write down a whole page.
+ *
+ * The hero is the one exception: absent, it is a hero that resolved, because a page
+ * whose hook found nothing is a problem in its own right and every test would otherwise
+ * carry it. State `heroRect: null` for the test that is about exactly that.
+ *
+ * The config is the first argument rather than a url a test remembers to pass, because
+ * a survey's beats and pages are keyed by url and a judgment drops every beat whose url
+ * no page in the survey carries. A builder that invented its own url would hand a test
+ * a survey of somewhere else, and the verdict over it would report nothing however
+ * wrong the facts it stated were — a green test asserting an empty list.
+ */
+export function surveyed(config: SiteConfig, facts: PageFacts = {}): Survey {
+  const beats: SurveyedBeat[] = config.beats.map((beat, i) => {
+    const stated = facts.beats?.[i] ?? {}
+    const height = stated.height ?? null
+    return {
+      url: beat.url ?? config.url,
+      // A rect and a height are one measurement: a page that gave up one gave up both,
+      // and a survey that carried a rect for a section it never measured is not a
+      // survey any page could have produced.
+      rect: height === null ? null : measuredAt(stated.top ?? 0, height),
+      height,
+      heading: stated.heading ?? null,
+    }
+  })
+  // One page per distinct url in the order the beats name them, plus the site's own —
+  // which a real survey always loads, because the hook lives there.
+  const urls = [config.url, ...beats.map((beat) => beat.url)]
+  const pages: SurveyedPage[] = [...new Set(urls)].map((url) => ({
+    url,
+    scrollHeight: facts.scrollHeight ?? null,
+    failure: null,
+  }))
+  return {
+    pages,
+    beats,
+    heroRect: facts.heroRect === undefined ? measuredAt(0, FRAME_HEIGHT) : facts.heroRect,
+    scrollRefires: facts.scrollRefires ?? null,
+    motionReading: facts.motionReading ?? null,
+  }
 }
 
 export type Workspace = {
