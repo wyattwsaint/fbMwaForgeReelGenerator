@@ -151,42 +151,54 @@ export const TEXT_SLOT = {
 
 /** The **release**: the stretch above the text the wash takes to come up from nothing. */
 const SCRIM_RELEASE = 240
+/** The **fall**: the stretch below the copy the wash takes to go back to nothing. */
+const SCRIM_FALL = 160
 const SCRIM_TOP = TEXT_SLOT.top - SCRIM_RELEASE
+const SCRIM_FOOT = TEXT_SLOT.bottom + SCRIM_FALL
 
 /**
- * The scrim's shape: released above the text band, at full density from the band's
- * head down to the foot of the frame.
+ * The scrim's shape: released above the text band, at full density across the band,
+ * and fallen back to nothing a breath below the copy's foot.
  *
- * Anchored to the foot rather than the top (#60): the wash exists to hold up the text
- * and the text is at the bottom now, so the geometry inverts with it rather than
- * merely sliding. Below the band there is nothing to fade towards — the frame ends,
- * and the last 35% of it is under Meta's UI anyway — so the whole gradient is spent
- * *above* the copy, easing the site into the wash instead of stopping at a line.
+ * Anchored to the copy at both ends (#60, as amended): the wash exists to hold up the
+ * text, so it is as tall as the text needs and no taller. It used to run to the foot
+ * of the frame on the argument that there was nothing below the band to fade towards —
+ * the last 35% being under Meta's UI once the reel is boosted. That is true of a
+ * boosted reel and false of an organic one, where it spent ~720px of frame washing out
+ * the client's own site to hold up nothing. The site is the thing the reel is selling;
+ * it gets those pixels back.
+ *
+ * What the foot anchor was really buying was the absence of a bottom edge, and a hard
+ * edge reads as a TV chyron and competes with the card. So the wash does not stop
+ * below the copy, it *falls* — the same cube, mirrored. Shorter than the release
+ * because the eye is not being led into anything down there: it is being let go.
  *
  * The cube is the same cube: it reaches density fast and spends its tail at the thin
  * end, which over a rising ramp means the wash is already solid where the first line
- * starts and the eye never finds the edge. It is a wash, not a plate: a hard edge
- * reads as a TV chyron and competes with the card.
+ * starts and the eye never finds the edge. Mirrored under the copy, the same shape
+ * holds density through the last line and spends its thin tail at the foot.
  *
- * `peak`, `falloff` and `release` cite no finding, because there is none to cite: #9
- * fixes the scrim's colour and its gradient and stops there. The numbers were set by
- * eye, and the only pixels they have ever been read against are the fixture site's
- * own — `test/render.test.ts` decodes the band off a rendered fixture reel and asserts
- * the wash rides with its text, which is the shape and not these values. No client
- * capture (`sites/`) has been reviewed for them. A hero that reads through the wash,
- * or copy that goes muddy over one, is a reason to retune them here — and the retuning
- * is a finding, at which point this comment cites it instead.
+ * `peak`, `falloff`, `release` and `fall` cite no finding, because there is none to
+ * cite: #9 fixes the scrim's colour and its gradient and stops there. The numbers were
+ * set by eye, and the only pixels they have ever been read against are the fixture
+ * site's own — `test/render.test.ts` decodes the band off a rendered fixture reel and
+ * asserts the wash rides with its text, which is the shape and not these values. No
+ * client capture (`sites/`) has been reviewed for them. A hero that reads through the
+ * wash, or copy that goes muddy over one, is a reason to retune them here — and the
+ * retuning is a finding, at which point this comment cites it instead.
  */
 export const SCRIM = {
-  /** Alpha at the foot of the frame. */
+  /** Alpha across the text band, between the release and the fall. */
   peak: 0.9,
   /** The ramp's exponent — higher reaches density sooner and leaves a longer thin tail. */
   falloff: 3,
-  /** Full width, from the release point down to the foot of the frame. */
+  /** Full width, from the release point down to the fall's end. */
   width: FRAME_WIDTH,
   /** Where the wash begins, at zero alpha: one release above the slot's head. */
   top: SCRIM_TOP, // 776
-  height: FRAME_HEIGHT - SCRIM_TOP, // 1144
+  height: SCRIM_FOOT - SCRIM_TOP, // 584
   /** The stretch the wash takes to go from nothing to `peak`, ending at the slot's head. */
   release: SCRIM_RELEASE,
+  /** The stretch it takes to go back to nothing, starting at the slot's foot. */
+  fall: SCRIM_FALL,
 }

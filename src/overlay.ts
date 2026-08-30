@@ -58,10 +58,14 @@ export function alphaExpr(envelope: Envelope): string {
  */
 function scrimChain(envelope: Envelope, label: StreamLabel): string {
   const { r, g, b } = channels(GROUND)
-  // Y is measured from the wash's own head, so the ramp is written against `release`
-  // rather than `H`: everything past the release is at peak, all the way to the foot
-  // of the frame, and only the stretch above the copy is spent coming up from nothing.
-  const alpha = `255*${SCRIM.peak}*(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release},0,1),${SCRIM.falloff}))`
+  // Y is measured from the wash's own head, so both ramps are written against their own
+  // stretch rather than against `H`: `release` above the copy and `fall` below it, with
+  // the band between them at peak. The two are the same cube mirrored, multiplied
+  // together — each is 1 outside its own stretch, so neither touches the other's end.
+  const fallTop = SCRIM.height - SCRIM.fall
+  const rise = `(1-pow(clip((${SCRIM.release}-Y)/${SCRIM.release},0,1),${SCRIM.falloff}))`
+  const fall = `(1-pow(clip((Y-${fallTop})/${SCRIM.fall},0,1),${SCRIM.falloff}))`
+  const alpha = `255*${SCRIM.peak}*${rise}*${fall}`
   const { start, lit, held, dark } = envelopeFrames(envelope)
 
   const stages = [

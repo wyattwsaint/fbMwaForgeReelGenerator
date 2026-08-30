@@ -47,16 +47,21 @@ describe('the house style is #9’s, frozen', () => {
     )
   })
 
-  test('the scrim is dense at the frame’s foot and released above the text', () => {
-    // Full width, and anchored to the *foot* of the frame rather than its top: the
-    // text sits at the bottom now, so the wash is densest there and lets go upward.
+  test('the scrim is dense across the text band and released at both ends', () => {
+    // Full width, and anchored to the *copy* at both ends: the wash is as tall as the
+    // text needs and no taller, so the site keeps the frame below the copy.
     assert.equal(SCRIM.width, FRAME_WIDTH)
-    assert.equal(SCRIM.top + SCRIM.height, FRAME_HEIGHT)
     // Text is never drawn over an unwashed pixel: the wash is at full density by the
-    // slot's head, so both lines of a two-line hook sit on peak, and it runs past the
-    // slot's foot rather than letting go under the copy.
+    // slot's head and still at full density at its foot, so both lines of a two-line
+    // hook sit on peak and neither ramp eats into the band.
     assert.ok(SCRIM.top + SCRIM.release <= TEXT_SLOT.top, 'the wash is still coming up under the copy')
-    assert.ok(SCRIM.top + SCRIM.height >= TEXT_SLOT.bottom, 'the wash lets go above the slot’s foot')
+    assert.ok(
+      SCRIM.top + SCRIM.height - SCRIM.fall >= TEXT_SLOT.bottom,
+      'the wash starts falling before the copy’s foot',
+    )
+    // And it lets go rather than stopping: the fall ends above the frame's foot, which
+    // is the whole point — those pixels are the client's site.
+    assert.ok(SCRIM.top + SCRIM.height < FRAME_HEIGHT, 'the wash still runs to the frame’s foot')
   })
 
   test('the tagline is its own role, under the headline and over the credit', () => {

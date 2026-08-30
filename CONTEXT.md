@@ -127,9 +127,11 @@ never lit across a cut point.
 arbitrary screenshot. Constant colour, never sampled from the page, and it lives
 and dies with the text it serves: no text on screen, no scrim, because a
 permanent scrim dims the site the reel exists to show off. It is anchored to the
-frame's foot, where the slot is: dense from the slot's head down, and spending
-its whole **release** — the stretch above the copy it takes to come up from
-nothing — easing the site into the wash rather than stopping at a line.
+copy at both ends, as tall as the text needs and no taller: dense across the
+slot, spending its **release** — the stretch above the copy it takes to come up
+from nothing — and its shorter **fall** below, so the site is eased into the wash
+and let go of rather than stopped at a line. The wash ends well above the frame's
+foot; those pixels are the client's site, which is the thing being sold.
 
 **Budget** — the character allowance for a line of copy. Exceeding it fails
 loudly at `check`, like a missing selector. Type never shrinks to fit: a reel

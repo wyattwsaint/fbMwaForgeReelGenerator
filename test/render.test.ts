@@ -46,6 +46,13 @@ const SCRIM_BAND = [SCRIM.top, SAFE_ZONE.bottom] as const
  * (#60), and the band is derived rather than restated so it follows the wash.
  */
 const ABOVE_THE_WASH = [0, SCRIM.top] as const
+/**
+ * Everything below the wash — from the foot of its fall to the foot of the frame.
+ * The scrim used to run all the way down here; it does not any more, and this band is
+ * what that bought: the client's own site, undimmed, in the third of the frame a
+ * boosted reel hides under Meta's UI and an organic one does not.
+ */
+const BELOW_THE_WASH = [SCRIM.top + SCRIM.height, FRAME_HEIGHT] as const
 
 /** One band of a decoded frame, so a colour can be counted where it should be and not. */
 function rows(frameBytes: Buffer, top: number, bottom: number): Buffer {
@@ -349,6 +356,19 @@ describe('reel render', () => {
     assert.ok(
       Math.abs(lit - dark) < dark * 0.05,
       `something is still drawn above the wash: ${lit} vs ${dark}`,
+    )
+  })
+
+  test('the wash lets go above the frame’s foot, and the site keeps those pixels', async () => {
+    // The mirror of the test above, read under the copy instead of over it. The hook
+    // is lit on one frame and gone on the other, and down here that makes no
+    // difference either: the fall has already spent itself before this band starts,
+    // so the site below the copy is the site, not a dimmed one.
+    const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...BELOW_THE_WASH)
+    const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...BELOW_THE_WASH)
+    assert.ok(
+      Math.abs(lit - dark) < dark * 0.05,
+      `the wash still reaches the frame’s foot: ${lit} vs ${dark}`,
     )
   })
 
@@ -902,10 +922,18 @@ export default defineSite({
   })
 
   test('fires the reveal on camera — the frames carry what no still could', async () => {
-    // Frame 0 is the top of the document, where the reveal is 50px below the fold: not
-    // in the band, and not anywhere else in the frame either.
+    // Frame 0 is the top of the walk, where the reveal is still down at the fold and
+    // nowhere near the band. Read in the band rather than across the whole frame: the
+    // window the trim cuts opens a couple of hundred pixels into the walk, so the
+    // reveal's own top edge is already on screen at the foot before it has travelled
+    // anywhere. That was invisible until the scrim stopped running to the frame's
+    // foot and washing it out — the count, not the capture, is what changed.
     const first = await frame(walkedPath, 0)
-    assert.equal(pixelsNear(first, REVEAL), 0, 'the reveal is already on the thumbnail')
+    assert.equal(
+      pixelsNear(rows(first, ...REVEAL_BAND), REVEAL),
+      0,
+      'the reveal is already in the band on the thumbnail',
+    )
 
     // And by the last frame of the hook the walk has carried it up into the band.
     const last = await frame(walkedPath, (CUTS[0] as number) - 1)
