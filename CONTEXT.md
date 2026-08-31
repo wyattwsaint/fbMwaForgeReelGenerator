@@ -202,6 +202,22 @@ exactly one frame of pixels — a browser records its viewport at the size the p
 is laid out at, whatever resolution it is asked for — so a live shot cannot be
 **punched**, and its breath spends 3% of upscale where a beat's drift spends 10%.
 
+**Hero position** — which column of a cover-cropped hero the frame takes.
+`hook.heroPosition`, 0 at the source's left edge and 1 at its right; absent leaves the
+site's own `object-position` alone, which is every reel before ADR-0011.
+A landscape hero under `object-fit: cover` shows about a third of itself in a 9:16 box
+and the browser discards the rest before this pipeline sees a pixel. The frame's aspect
+fixes *how much*; the site's `object-position` picks *which* — chosen for a visitor
+reading a page, not for a 3-second silent shot whose job is to move. Where a hero's
+subject and its motion sit at opposite ends of it — pharos' painting, lighthouse left
+and water right — the two answers differ, and the reel says which one this shot wants.
+A per-site framing knob like **punch factor**, not a house constant: it answers a
+question only this hero can be looked at to answer.
+Applied before the **motion probe**, so a hook is measured in the crop it is cut in,
+and to a still hook's **master** as well as to a **recording**. Cover-cropped media
+inside the hook's element only, horizontal only; a hero with no `object-position` to
+move is left alone.
+
 **Recording** — what a live shot is made of, as a master is what a still shot is
 made of: the viewport over the shot's own duration, at the reel's frame rate and
 the frame's own size.

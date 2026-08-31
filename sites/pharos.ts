@@ -18,11 +18,37 @@ export default defineSite({
     // a per-site value because it is the one settle knob a page can break, and the
     // page that the default was measured on is this one.
     videoTime: 2.0,
-    // Not `motion: 'ambient'`, though the hero's subject is water that moves. It does
-    // not move *here*: hope-1920.mp4 is 16:9 under `object-fit: cover`, and covering a
-    // 1080x1920 frame renders it 3413px wide, so the hook sees 31.6% of the source and
-    // the moving water is almost all outside that column. Framed, the hero reads 1.46
-    // against a floor of 5 — it records dead, and ADR-0008 is the measurement.
+    // The hero is a painting that moves — hope-1920.mp4, 16:9, water and a sunlit sky
+    // under `object-fit: cover`. Covering a 1080x1920 frame renders it 3413px wide, so
+    // the frame holds 31.6% of the source and the browser throws the rest away before
+    // this pipeline sees a pixel. *Which* 31.6% is the site's `object-position: 22%`,
+    // and profiled column by column this painting's motion is all on its right: framed
+    // at the site's own crop the hero reads 1.97 against a floor of 5. That is
+    // ADR-0008's dead hook, and this page is where it was measured. (1.97 today where
+    // that ADR wrote 1.46: the probe takes the highest of three pairs across a 2s window
+    // and this painting's loop is longer than that, so a dead reading wanders. Both are
+    // dead, which is the only thing either number is load-bearing for.)
+    //
+    // So the reel asks for a different column. Swept at the frame the shot is cut in:
+    // 22% reads 1.97, 50% 6.31, 70% 13.71, 85% 18.61, and the right edge 21.64. 0.85 is
+    // where the water and the sun's glitter fill the lower half while the shore and the
+    // meadow still hold the bottom corner: the painting reads as a coast at 85% and as
+    // open water at 100%, and the school is on a coast. What that composition costs is
+    // 14% of a reading — 3.7x the floor rather than 4.3x, both far enough into open
+    // ground that the choice is by eye and not by measurement. Against the site's own
+    // crop it is 9.4x, which is the difference between a hook and a dead one.
+    //
+    // What it costs is the lighthouse, on the left, which is what the school is named
+    // for. That is a real loss and it is the trade ADR-0011 makes: no 9:16 window of
+    // this painting holds both the namesake and the water, the site is right to keep the
+    // namesake for a visitor reading the page, and a 3-second silent shot whose whole
+    // job is to move is not that visitor. The lockup survives either crop — it is the
+    // page's own text drawn over the video, so no `object-position` moves it.
+    //
+    // `ambient` rather than `scroll`: the water moves on its own clock, and nothing here
+    // is keyed to the page being scrolled.
+    motion: 'ambient',
+    heroPosition: 0.85,
   },
   beats: [
     {

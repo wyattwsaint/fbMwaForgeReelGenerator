@@ -60,6 +60,23 @@ export function configuredMotion(config: SiteConfig): HookMotion {
   return config.hook?.motion ?? 'still'
 }
 
+/**
+ * The hero crop this config asked for, or `undefined` where it asked for nothing.
+ *
+ * A per-site framing knob and deliberately one, where the motion floor and the scroll's
+ * pace are house constants: `punchFactor` and a beat's `y`/`height` are the same kind
+ * of field, and what all three have in common is that they answer a question only this
+ * page can be looked at to answer. The site's own `object-position` is itself such a
+ * number — this is the reel disagreeing with it about one shot, not a house rule being
+ * hand-tuned per client (ADR-0011).
+ *
+ * Stated here rather than spelled `config.hook?.heroPosition` at each of its four
+ * readers, for the reason `configuredMotion` is: the default is a decision.
+ */
+export function configuredHeroPosition(config: SiteConfig): number | undefined {
+  return config.hook?.heroPosition
+}
+
 export type Beat = {
   /** Required — resolved on the settled page. */
   selector: string
@@ -96,6 +113,12 @@ export type SiteConfig = {
     motion?: HookMotion
     /** Default 2.0 — seek time for a <video> hero. */
     videoTime?: number
+    /**
+     * Which column of a cover-cropped hero the frame takes, 0 (left edge) to 1 (right).
+     * Absent leaves the site's own `object-position` alone, which is every reel before
+     * ADR-0011.
+     */
+    heroPosition?: number
   }
   /** Length is n, validated 3..5. */
   beats: Beat[]
