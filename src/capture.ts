@@ -29,7 +29,7 @@ import {
   fitViewportWidth,
   punchedFrameHeight,
 } from './frame.ts'
-import { frameAt } from './motion.ts'
+import { frameAt, painted } from './motion.ts'
 import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { FPS, frameCount } from './plan.ts'
@@ -103,11 +103,37 @@ const RECORD_TAIL_MS = 400
  * window, and the answer is in the same clock as the cut. Magenta because it has to
  * survive a lossy encode and a downscale to a handful of pixels and still be nothing a
  * client's own hero could be mistaken for.
+ *
+ * One hex, read by the wash and by the detector that finds it again — the same way the
+ * house colours are written once and handed to `ffmpegColor`. A colour the page is
+ * painted in and hunted for by two different numbers is a marker that stops being
+ * found the day one of them is edited.
  */
-const MARKER_CSS = '#ff00ff'
+const MARKER = '#ff00ff'
 
 /** How far a marker frame may drift per channel through VP8, yuv420 and the downscale. */
 const MARKER_TOLERANCE = 24
+
+/**
+ * The square a frame is averaged down to before it is read.
+ *
+ * Named once because the filter that asks for it and the arithmetic that walks the
+ * bytes back have to agree: a `scale` edited on its own would leave every frame
+ * misread at the wrong stride, and misread quietly. Four pixels rather than one, so a
+ * frame that is *nearly* all marker — a page's own wash under a corner of something —
+ * is not averaged into a marker frame.
+ */
+const MARKER_PROBE = 2
+
+/**
+ * How far the marker's run on film may sit from the dwell it was actually held for.
+ *
+ * The dwell is bounded above by the round trips either side of it and below by
+ * nothing, so this is slack rather than a measurement — wide enough that no real
+ * recording is refused, narrow enough that a stretch of a page's own colour is not
+ * mistaken for the dwell.
+ */
+const MARKER_DWELL_TOLERANCE_MS = 250
 
 /** The element the marker is drawn as — removed, never merely hidden. */
 const MARKER_ID = 'reel-record-marker'
@@ -527,9 +553,9 @@ async function markPage(page: Page): Promise<void> {
         'z-index:2147483647;pointer-events:none'
       document.documentElement.append(cover)
     },
-    { id: MARKER_ID, colour: MARKER_CSS },
+    { id: MARKER_ID, colour: MARKER },
   )
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+  await painted(page)
 }
 
 /**
@@ -541,7 +567,7 @@ async function markPage(page: Page): Promise<void> {
  */
 async function unmarkPage(page: Page): Promise<void> {
   await page.evaluate((id) => document.getElementById(id)?.remove(), MARKER_ID)
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+  await painted(page)
 }
 
 /**
@@ -552,39 +578,79 @@ async function unmarkPage(page: Page): Promise<void> {
  * tail is padded past the last paint by a floor the recorder picks. The marker is the
  * one thing in the file whose position both the browser and this pass agree about.
  *
- * The frame is averaged down to four pixels rather than sampled, so "the marker is up"
- * means the whole frame and not a corner of it, and the file is read as a handful of
- * bytes a frame rather than decoded. The *last* marker frame is taken: a page cannot
- * draw this colour over its whole viewport, so a later run of it would be the marker
- * having been lifted twice, which it never is.
+ * What is looked for is the *dwell*, not merely a marker-coloured frame: one unbroken
+ * run of them, about as long as the page was actually held under the wash, with none
+ * of the colour anywhere else in the file. Taking the last marker frame on its own
+ * would trust a claim nobody can make about a client's site — that no page paints this
+ * colour over its whole viewport — and a page that does (a transition flash, a
+ * full-bleed hero) would push the window late and reproduce #91 with a correct frame
+ * count and no error at all. So the shape is checked and a file that does not have it
+ * fails loudly, which is the same bargain the frame count is cut under.
+ *
+ * The run may sit anywhere in the file, and does not begin at its start: a recording
+ * covers the page's whole life, so the load and the stabilise are on the film ahead of
+ * the dwell.
  */
 async function markerLift(raw: string, shot: Shot): Promise<number> {
-  const pixels = await ffmpegPixels([
-    '-i', raw,
-    // The timeline's own rate, so this reads the film on the grid the cut is made on.
-    '-vf', `fps=${FPS},scale=2:2:flags=area`,
-    '-f', 'rawvideo',
-    '-pix_fmt', 'rgb24',
-    '-',
-  ])
-  const stride = 2 * 2 * 3
-  let last = -1
-  for (let at = 0; at + stride <= pixels.length; at += stride) {
-    let whole = true
-    for (let px = 0; px < 4 && whole; px++) {
-      const r = pixels[at + px * 3] as number
-      const g = pixels[at + px * 3 + 1] as number
-      const b = pixels[at + px * 3 + 2] as number
-      whole = 255 - r <= MARKER_TOLERANCE && g <= MARKER_TOLERANCE && 255 - b <= MARKER_TOLERANCE
-    }
-    if (whole) last = at / stride
-  }
+  const marked = await markerFrames(raw)
+  const last = marked.lastIndexOf(true)
   if (last < 0) {
     throw new Error(
       `${shotName(shot)} — the recording carries no start marker; there is no shot to cut from it`,
     )
   }
+  let first = last
+  while (first > 0 && marked[first - 1]) first--
+
+  const run = (last - first + 1) / FPS
+  const dwell = RECORD_START_MS / 1000
+  const stray = first > 0 && marked.lastIndexOf(true, first - 1) >= 0
+  if (stray || Math.abs(run - dwell) > MARKER_DWELL_TOLERANCE_MS / 1000) {
+    throw new Error(
+      `${shotName(shot)} — the recording carries ${run.toFixed(2)}s of unbroken start marker` +
+        `${stray ? ', and more of that colour earlier in the file' : ''}; the dwell is ` +
+        `${dwell.toFixed(2)}s, so this is not the marker lifting once and there is no ` +
+        'moment in the file this shot can honestly be cut from',
+    )
+  }
   return (last + 1) / FPS
+}
+
+/**
+ * Which of a recording's frames are the marker, on the grid the cut is made on.
+ *
+ * Averaged down to `MARKER_PROBE` squared rather than sampled, so "the marker is up"
+ * means the whole frame and not a corner of it, and the file is read as a handful of
+ * bytes a frame rather than decoded.
+ */
+async function markerFrames(raw: string): Promise<boolean[]> {
+  const side = MARKER_PROBE
+  const pixels = await ffmpegPixels([
+    '-i', raw,
+    // The timeline's own rate, so this reads the film on the grid the cut is made on.
+    '-vf', `fps=${FPS},scale=${side}:${side}:flags=area`,
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgb24',
+    '-',
+  ])
+  const want = channelsOf(MARKER)
+  const stride = side * side * 3
+  const marked: boolean[] = []
+  for (let at = 0; at + stride <= pixels.length; at += stride) {
+    let whole = true
+    for (let px = 0; px < side * side && whole; px++) {
+      whole = want.every(
+        (channel, k) => Math.abs((pixels[at + px * 3 + k] as number) - channel) <= MARKER_TOLERANCE,
+      )
+    }
+    marked.push(whole)
+  }
+  return marked
+}
+
+/** A `#rrggbb` as the three numbers a decoded frame is made of. */
+function channelsOf(hex: string): number[] {
+  return [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16))
 }
 
 /**
@@ -595,9 +661,11 @@ async function markerLift(raw: string, shot: Shot): Promise<number> {
  * walked hook's frame 0 a quarter-second into its own scroll (#91).
  *
  * Exported for the tests, which is where its loud failures are worth reading. A
- * recording that carries no marker, one with less than the shot left after it, or one
- * that decodes to fewer frames than the timeline asked for, throws here — a hook is
- * never quietly padded out to length, because what it would be padded with is black.
+ * recording that carries no marker, one whose marker is not the single unbroken dwell
+ * it was held under, one with less than the shot left after it, or one that decodes to
+ * fewer frames than the timeline asked for, throws here — a hook is never quietly
+ * padded out to length, because what it would be padded with is black, and never
+ * quietly cut from a moment nothing in the file points at.
  */
 export async function trimRecording(
   raw: string,

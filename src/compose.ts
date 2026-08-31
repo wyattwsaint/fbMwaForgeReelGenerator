@@ -44,9 +44,12 @@ export async function ffprobe(args: string[]): Promise<string> {
  * the plumbing of stdout differs, and a string is exactly the wrong container for a
  * frame. The caller says what shape it asked for and reads it back on that promise:
  * this decodes nothing.
+ *
+ * No `-y`, unlike `ffmpeg`: the output is stdout, and there is no file here to be
+ * asked about overwriting.
  */
 export function ffmpegPixels(args: string[]): Promise<Buffer> {
-  return runBytes('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...args])
+  return runBytes('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', ...args])
 }
 
 async function run(bin: string, args: string[]): Promise<string> {

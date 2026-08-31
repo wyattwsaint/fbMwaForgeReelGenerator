@@ -97,6 +97,19 @@ export const STILL_DEGRADATION =
  */
 export async function frameAt(page: Page, y: number): Promise<void> {
   await page.evaluate((to) => window.scrollTo(0, to), y)
+  await painted(page)
+}
+
+/**
+ * Let the page paint what was just asked of it, and wait for the frame it paints on.
+ *
+ * Stated once for the same reason the framing is: every caller here is about to time
+ * something against a frame the browser has actually drawn — where a probe samples,
+ * where a recording's dwell starts, where its window opens — and a caller that skipped
+ * the wait would be measuring the request rather than the paint. One rAF, because one
+ * is what "the browser has drawn it" costs.
+ */
+export async function painted(page: Page): Promise<void> {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
 }
 
