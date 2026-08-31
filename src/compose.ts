@@ -11,7 +11,7 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { cameraFor, cardCamera, moveRamp } from './camera.ts'
-import { cardChains, wordmarkInput, writeWordmark } from './card.ts'
+import { cardChains, rawFrameInput, writeCardSources } from './card.ts'
 import type { Camera, Ramp } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 import { ffmpegColor, pad, rampFraction, stream, zoomStage } from './filtergraph.ts'
@@ -107,22 +107,33 @@ export async function renderShot(
 /**
  * The card (#9 §5, #25) — the one shot with no site pixels and no master.
  *
- * It is built rather than filmed: house ground, MWA Forge's mark, its headline, the
- * accent rule and the client's credit, all of it drifting. The client's domain
- * reaches it as `cta.credit` and nothing else does, which is the difference between
- * a credit and a card.
+ * It is built rather than filmed: house ground, MWA Forge's lockup, its tagline and
+ * headline, the accent rule and the client's credit, all of it drifting. The client's
+ * domain reaches it as `cta.credit` and nothing else does, which is the difference
+ * between a credit and a card.
+ *
+ * Three inputs, in the order the graph names them: the ground, `MWA`'s pixels, and the
+ * spark the `FORGE` type is cut out of.
  */
 async function renderCard(shot: Shot, dir: string, cues: TextCue[]): Promise<string> {
   const output = shotPath(shot, dir)
   const camera = cardCamera(shot)
-  const mark = await writeWordmark(dir)
+  const { mark, ramp } = await writeCardSources(dir)
   const card = stream('card')
-  const graph = cardChains(cues, camera, stream('0:v'), stream('1:v'), card).join(';')
+  const graph = cardChains(
+    cues,
+    camera,
+    stream('0:v'),
+    stream('1:v'),
+    stream('2:v'),
+    card,
+  ).join(';')
 
   await ffmpeg([
     '-f', 'lavfi',
     '-i', groundSource(),
-    ...wordmarkInput(mark),
+    ...rawFrameInput(mark),
+    ...rawFrameInput(ramp),
     '-filter_complex', graph,
     '-map', pad(card),
     '-frames:v', String(camera.frames),

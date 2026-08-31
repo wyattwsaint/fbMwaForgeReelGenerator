@@ -12,12 +12,12 @@ import {
   creditProblems,
 } from '../src/card.ts'
 import { escapeValue, stream } from '../src/filtergraph.ts'
-import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE } from '../src/house.ts'
-import { lineWidth } from '../src/measure.ts'
+import { ACCENT, FONT_FILE, INK, SAFE_ZONE, SPARK, TYPE } from '../src/house.ts'
+import { KERN_FO, TRACKING, lockupGeometry, mwaMask, mwaRgba, sparkRgba } from '../src/lockup.ts'
+import { capUnits, glyphMetrics, lineWidth, unitsPerEm } from '../src/measure.ts'
 import { drawnOverlays } from '../src/overlay.ts'
 import { CTA_MS, frameCount, planReel } from '../src/plan.ts'
 import type { Shot, TextCue } from '../src/plan.ts'
-import { wordmarkMask, wordmarkRgba } from '../src/wordmark.ts'
 
 const FRAMES = frameCount(CTA_MS)
 
@@ -41,9 +41,13 @@ function graph(credit = 'fixture.test', shot: Shot = CARD_SHOT): string {
     cardCamera(shot),
     stream('ground'),
     stream('mark'),
+    stream('ramp'),
     stream('out'),
   ).join(';')
 }
+
+/** The `MWA` half's box, which is what the rasteriser is asked for. */
+const MWA_WIDTH = Math.round(lockupGeometry(MARK_WIDTH).mwa.width)
 
 /** The one `drawtext` that draws the tagline, cut out of a graph whole. */
 function taglineStage(chains: string): string {
@@ -52,31 +56,54 @@ function taglineStage(chains: string): string {
   return chains.slice(chains.lastIndexOf('drawtext', at), chains.indexOf(',', at))
 }
 
-describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', () => {
-  test('the mask keeps the SVG\u2019s aspect and is empty at its corners', () => {
-    const mask = wordmarkMask(MARK_WIDTH)
-    assert.equal(mask.width, MARK_WIDTH)
-    // 502 x 200 in the file, so the mask is that ratio and nothing else decides it.
-    assert.equal(mask.height, Math.round((MARK_WIDTH * 200) / 502))
-    const at = (x: number, y: number) => mask.alpha[y * mask.width + x] as number
-    assert.equal(at(0, 0), 0)
-    assert.equal(at(mask.width - 1, mask.height - 1), 0)
+describe('MWA is MWA Forge\u2019s own geometry, rasterised from the repo constant', () => {
+  /** The SVG's own coordinates, so a point here is a point on the asset. */
+  const sample = () => {
+    const mask = mwaMask(MWA_WIDTH)
+    const scale = MWA_WIDTH / 735.22
+    return (x: number, y: number) =>
+      mask.alpha[Math.round(y * scale) * mask.width + Math.round(x * scale)] as number
+  }
+
+  test('the mask keeps the SVG\u2019s aspect, which is the ratio the layout solved on', () => {
+    const mask = mwaMask(MWA_WIDTH)
+    assert.equal(mask.width, MWA_WIDTH)
+    // 735.22 x 154 in the file, and the height *is* the cap height \u2014 which is what
+    // lets `lockupGeometry` read the half's ratio-to-cap off the viewBox directly.
+    assert.equal(mask.height, Math.round((MWA_WIDTH * 154) / 735.22))
   })
 
-  test('a stem is solid and the A’s counter is a hole', () => {
-    const mask = wordmarkMask(MARK_WIDTH)
-    const scale = MARK_WIDTH / 502
-    const at = (x: number, y: number) => mask.alpha[Math.round(y) * mask.width + Math.round(x)] as number
-    // The M's left stem runs x 0..32, y 20..180 in the file's own units.
-    assert.equal(at(16 * scale, 100 * scale), 255)
-    // The A's counter sits inside the letter, so an even-odd fill leaves it empty.
-    assert.equal(at(427 * scale, 104 * scale), 0)
-    // And the gap between the M's stems, which is outside the letter, is empty too.
-    assert.equal(at(75 * scale, 170 * scale), 0)
+  test('a stem is solid and the space between the M’s stems is not', () => {
+    const at = sample()
+    // The M's left stem runs x 0..29.80 all the way down to the baseline.
+    assert.equal(at(15, 140), 255)
+    // Below where its four middle edges meet, the space between the stems is outside
+    // the letter — the notch, not a counter.
+    assert.equal(at(114, 140), 0)
   })
 
-  test('the mark is inked in the house palette, not in a colour of its own', () => {
-    const { data, width, height } = wordmarkRgba(MARK_WIDTH)
+  test('the A has no enclosed counter: the space between its legs opens downward', () => {
+    // #106. The brand A's crossbar hangs off the right leg only and stops short of the
+    // left one, so what looks like a counter is a bay open at the bottom left. That is
+    // why `mwaforge-mwa.svg` is three polygons and not four — there is no hole to state.
+    const at = sample()
+    // First that there is an `A` here at all: both legs and the crossbar between them.
+    // Every claim below is a claim about *empty* pixels, and an `A` that failed to
+    // rasterise would satisfy all of them.
+    assert.equal(at(575, 70), 255, 'the A’s left leg is not drawn')
+    assert.equal(at(670, 70), 255, 'the A’s right leg is not drawn')
+    assert.equal(at(660, 110), 255, 'the A’s crossbar is not drawn')
+    // Above the crossbar, between the legs: empty, as a counter would also be.
+    assert.equal(at(625, 70), 0)
+    // But at the crossbar's own rows there is a channel between the left leg's inner
+    // edge and the bar's left end, and it runs on down past the baseline. A closed
+    // counter has no such row.
+    for (const y of [100, 110, 120]) assert.equal(at(595, y), 0, `the bay is closed at y ${y}`)
+    assert.equal(at(595, 150), 0)
+  })
+
+  test('MWA is inked in the house palette, not in a colour of its own', () => {
+    const { data, width, height } = mwaRgba(MWA_WIDTH)
     assert.equal(data.length, width * height * 4)
     const ink = [1, 3, 5].map((at) => Number.parseInt(INK.slice(at, at + 2), 16))
     let lit = 0
@@ -87,7 +114,87 @@ describe('the wordmark is MWA Forge\u2019s, rasterised from the repo constant', 
     }
     // A mark that covers everything or nothing is a rasteriser that failed quietly.
     const covered = lit / (width * height)
-    assert.ok(covered > 0.1 && covered < 0.5, `the mark covers ${(covered * 100).toFixed(1)}% of its box`)
+    assert.ok(covered > 0.2 && covered < 0.6, `MWA covers ${(covered * 100).toFixed(1)}% of its box`)
+  })
+})
+
+describe('the lockup’s proportions are solved, not tabulated', () => {
+  test('the two halves are set to one cap height, and MWA’s box is exactly it', () => {
+    const geometry = lockupGeometry(MARK_WIDTH)
+    assert.equal(geometry.mwa.height, geometry.capHeight)
+    // `FORGE`'s box is taller, because `O` and `G` overshoot a flat capital at both
+    // ends — and `MWA` sits that overshoot down from the drawn box's top so the two
+    // halves' flat capitals line up.
+    assert.ok(geometry.forge.height > geometry.capHeight)
+    assert.ok(geometry.mwa.y > 0 && geometry.mwa.y < 3)
+    assert.equal(geometry.forge.y, 0)
+  })
+
+  test('the cap height falls out of the width — no offset table, at any size', () => {
+    // The whole point of solving it: the same three ratios at any `MARK_WIDTH`, so
+    // nothing has to be re-measured when the card's one image changes size.
+    const small = lockupGeometry(440)
+    const large = lockupGeometry(880)
+    assert.ok(Math.abs(large.capHeight / small.capHeight - 2) < 1e-9)
+    assert.ok(Math.abs(large.gap / large.capHeight - small.gap / small.capHeight) < 1e-9)
+    // And the fontsize is the cap read through the face's own cap-to-em ratio: 0.70
+    // for Space Grotesk, so a cap of 87.57 is set at 125.10.
+    assert.ok(Math.abs(large.fontSize * (capUnits() / unitsPerEm()) - large.capHeight) < 1e-9)
+  })
+
+  test('FORGE is tracked at a round 0.100em, with the F→O kern carried separately', () => {
+    // #106: fitting one number to the whole word gives 0.094em, which is that single
+    // `GPOS` pair smeared across four gaps. The face has no legacy `kern` table and
+    // each glyph is drawn on its own, so nothing downstream would ever apply it — the
+    // pen positions have to carry it, and they are checked here against the asset's.
+    assert.equal(TRACKING, 0.1)
+    assert.equal(KERN_FO, -6.5)
+    const { glyphs, capHeight } = lockupGeometry(MARK_WIDTH)
+    const units = (index: number) =>
+      (((glyphs[index] as { x: number }).x - (glyphs[0] as { x: number }).x) * capUnits()) /
+      capHeight
+    // Measured off the exported PNG, in font units relative to `F`'s pen.
+    for (const [index, measured] of [627.27, 1403.91, 2135.5, 2897.23].entries()) {
+      assert.ok(
+        Math.abs(units(index + 1) - measured) < 1,
+        `pen ${index + 1} is ${units(index + 1).toFixed(2)}, the asset says ${measured}`,
+      )
+    }
+  })
+
+  test('the drawn box is the type’s, so the O and the G are not clipped', () => {
+    const { height, capHeight } = lockupGeometry(MARK_WIDTH)
+    const drawn = glyphMetrics('O').yMax - glyphMetrics('O').yMin
+    assert.ok(Math.abs(height - (capHeight * drawn) / capUnits()) < 1e-9)
+  })
+})
+
+describe('the spark is the one gradient in a reel', () => {
+  test('it ramps blue to purple to pink across its width and nowhere else', () => {
+    const width = 100
+    const { data } = sparkRgba(width, 3)
+    const at = (x: number) => [data[x * 4], data[x * 4 + 1], data[x * 4 + 2]] as number[]
+    const [firstR, , firstB] = at(0) as [number, number, number]
+    const [lastR, , lastB] = at(width - 1) as [number, number, number]
+    // Blue at the left, pink at the right: red climbs and blue falls across the ramp.
+    assert.ok(firstR < lastR && firstB > lastB)
+    for (let x = 0; x < width; x++) {
+      // Flat down every column — the shape is the glyph mask's to give, not the ramp's.
+      assert.deepEqual(
+        [...data.subarray(x * 4, x * 4 + 4)],
+        [...data.subarray((2 * width + x) * 4, (2 * width + x) * 4 + 4)],
+      )
+      // Opaque: `alphamerge` reads the mask's luma for transparency, so a ramp that
+      // carried alpha of its own would be a second opinion about the same pixels.
+      assert.equal(data[x * 4 + 3], 255)
+    }
+  })
+
+  test('the accent is the spark’s middle stop rather than a second purple', () => {
+    // `CONTEXT.md`, "Spark": the flat accent and the gradient's middle are one colour,
+    // so a restyle of one cannot leave the other behind.
+    assert.equal(SPARK[1]?.color, ACCENT)
+    assert.equal(SPARK[1]?.at, 0.55)
   })
 })
 
@@ -95,21 +202,25 @@ describe('the card is laid out in the boosted safe box', () => {
   const layout = cardLayout()
 
   test('its content is centred on y 760, not on the frame\u2019s own middle', () => {
-    const top = layout.mark.y
+    const top = layout.lockup.y
     const bottom = layout.credit.y + TYPE.credit.lineHeight
     assert.ok(Math.abs((top + bottom) / 2 - CARD_CENTRE_Y) <= 1, `centred on ${(top + bottom) / 2}`)
   })
 
   test('nothing reaches outside the box Meta leaves alone', () => {
-    assert.ok(layout.mark.y >= SAFE_ZONE.top)
+    assert.ok(layout.lockup.y >= SAFE_ZONE.top)
     assert.ok(layout.credit.y + TYPE.credit.lineHeight <= SAFE_ZONE.bottom)
-    assert.ok(layout.mark.x >= SAFE_ZONE.left)
-    assert.ok(layout.mark.x + layout.mark.width <= SAFE_ZONE.right)
+    // The lockup keeps a breath of ground either side rather than reaching the edges:
+    // a mark that touches the box it is centred in reads as cropped by the frame, and
+    // `<=` would pass on the equality that is exactly that failure (#106).
+    const breath = 20
+    assert.ok(layout.lockup.x >= SAFE_ZONE.left + breath, `the lockup starts at ${layout.lockup.x}`)
+    assert.ok(layout.lockup.x + layout.lockup.width <= SAFE_ZONE.right - breath)
     assert.ok(layout.rule.x >= SAFE_ZONE.left && layout.rule.x + layout.rule.width <= SAFE_ZONE.right)
   })
 
-  test('mark, tagline, headline, rule and credit stack in that order', () => {
-    assert.ok(layout.mark.y + layout.mark.height < layout.tagline.y)
+  test('lockup, tagline, headline, rule and credit stack in that order', () => {
+    assert.ok(layout.lockup.y + layout.lockup.height < layout.tagline.y)
     assert.ok(layout.tagline.y + TYPE.tagline.lineHeight <= layout.headline.y)
     assert.ok(layout.headline.y + TYPE.headline.lineHeight <= layout.rule.y)
     assert.ok(layout.rule.y + layout.rule.height < layout.credit.y)
@@ -121,21 +232,22 @@ describe('the card is laid out in the boosted safe box', () => {
     // 760 — and a relation survives a type size moving by twenty pixels. These do not:
     // a change to any of `TYPE`'s card roles or to a gap breaks this test first, which
     // is the point. Read off `cardLayout` and checked by eye against a rendered card.
-    assert.equal(layout.mark.y, 472)
-    assert.equal(layout.tagline.y, 687)
-    assert.equal(layout.headline.y, 803)
-    assert.equal(layout.rule.y, 959)
-    assert.equal(layout.credit.y, 1005)
-    assert.equal(layout.credit.y + TYPE.credit.lineHeight, 1049)
+    assert.equal(layout.lockup.y, 517)
+    assert.equal(layout.lockup.height, 92)
+    assert.equal(layout.tagline.y, 641)
+    assert.equal(layout.headline.y, 757)
+    assert.equal(layout.rule.y, 913)
+    assert.equal(layout.credit.y, 959)
+    assert.equal(layout.credit.y + TYPE.credit.lineHeight, 1003)
   })
 
-  test('the tagline sits closer to the mark than to the headline', () => {
-    // #61: the mark and the words for what it sells are one lockup. Set equidistant
-    // they read as two separate lines that happen to be stacked, and the tagline
-    // starts to look like a second headline instead of the mark's own signature.
-    const toMark = layout.tagline.y - (layout.mark.y + layout.mark.height)
+  test('the tagline sits closer to the lockup than to the headline', () => {
+    // #61: the lockup and the words for what it sells are one signature. Set
+    // equidistant they read as two separate lines that happen to be stacked, and the
+    // tagline starts to look like a second headline instead of the lockup's own signing.
+    const toLockup = layout.tagline.y - (layout.lockup.y + layout.lockup.height)
     const toHeadline = layout.headline.y - (layout.tagline.y + TYPE.tagline.lineHeight)
-    assert.ok(toMark < toHeadline, `the lockup is not one object: ${toMark} vs ${toHeadline}`)
+    assert.ok(toLockup < toHeadline, `the signature is not one object: ${toLockup} vs ${toHeadline}`)
   })
 
   test('the headline and the tagline both fit the card at the sizes they are set in', () => {
@@ -150,7 +262,7 @@ describe('the card is laid out in the boosted safe box', () => {
 })
 
 describe('the card\u2019s filtergraph', () => {
-  test('draws the mark, the tagline, the headline, the accent rule and the credit', () => {
+  test('draws the lockup, the tagline, the headline, the accent rule and the credit', () => {
     const chains = graph()
     const layout = cardLayout()
     assert.match(chains, /overlay=x=\d+:y=\d+/)
@@ -176,7 +288,36 @@ describe('the card\u2019s filtergraph', () => {
   })
 
   test('every line is centred on the card rather than left-aligned in the slot', () => {
+    // Three: the tagline, the headline and the credit. `FORGE`'s five glyphs are not
+    // lines of copy — each is placed at a pen position the face decided.
     assert.equal(graph().match(/x=\(w-text_w\)\/2/g)?.length, 3)
+  })
+
+  test('FORGE is five drawtexts on one baseline, cut out of the spark', () => {
+    const chains = graph()
+    const { geometry } = cardLayout().lockup
+    for (const glyph of geometry.glyphs) {
+      assert.ok(
+        chains.includes(`text=${glyph.character}:expansion=none:fontcolor=white`),
+        `${glyph.character} is not drawn into the mask`,
+      )
+    }
+    // On a baseline solved from the face, not on a top the five letters happen to share.
+    assert.equal(chains.match(/y_align=baseline/g)?.length, 5)
+    assert.ok(chains.includes(`fontsize=${geometry.fontSize}`))
+    // White on black and read as luma: `alphamerge` takes the mask's brightness for
+    // the ramp's transparency, so the mask is a `gray` picture and not an alpha channel.
+    assert.ok(chains.includes('color=c=black:'))
+    assert.ok(chains.includes('format=gray[mask]'))
+    assert.ok(chains.includes('[ramp][mask]alphamerge[forge]'))
+  })
+
+  test('the spark ramps across FORGE and across nothing else', () => {
+    // `CONTEXT.md`, "Spark". The ramp is cut to the `FORGE` box, so the blue end lands
+    // on the `F` — a ramp the width of the lockup would spend its blue under `MWA`.
+    const { geometry } = cardLayout().lockup
+    assert.ok(geometry.forge.width < geometry.width * 0.6)
+    assert.ok(!graph().includes('gradients'), 'the spark is a buffer, not an ffmpeg gradient')
   })
 
   test('no config reaches the tagline — an empty credit still leaves it signed', () => {
@@ -214,8 +355,9 @@ describe('the card\u2019s filtergraph', () => {
   test('no site pixels and no client asset reach the card', () => {
     const chains = graph()
     assert.ok(!chains.includes('.jpg'), 'the card names a master')
-    // Its only image is the repo's own mark.
-    assert.equal(chains.match(/overlay=/g)?.length, 1)
+    // Its only image is the repo's own lockup, which lands in two overlays because it
+    // is drawn in two halves — `MWA`'s pixels, then `FORGE`'s.
+    assert.equal(chains.match(/overlay=/g)?.length, 2)
   })
 })
 

@@ -6,7 +6,7 @@ import { after, before, describe, test } from 'node:test'
 import { cardLayout } from '../src/card.ts'
 import { RECORD_START_MS } from '../src/capture.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
-import { SAFE_ZONE, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
+import { SAFE_ZONE, SCRIM, SPARK, TEXT_SLOT, TYPE } from '../src/house.ts'
 import {
   AUDIO_FADE_OUT_MS,
   FPS,
@@ -66,8 +66,18 @@ function rows(frameBytes: Buffer, top: number, bottom: number): Buffer {
   return frameBytes.subarray(top * FRAME_WIDTH * 3, bottom * FRAME_WIDTH * 3)
 }
 
-/** The house accent — on a rendered reel it appears on the CTA card's rule and nowhere else. */
+/**
+ * The house accent. It is the CTA card's rule — and, since #106, the spark's middle
+ * stop as well, which is why the two ends of the ramp are what the spark is read by.
+ */
 const ACCENT = '#8b5cf6'
+
+/**
+ * The spark's two ends, taken from the table rather than written out again: a restyle
+ * of the gradient has to move what this test looks for with it.
+ */
+const SPARK_START = SPARK[0]?.color as string
+const SPARK_END = SPARK[SPARK.length - 1]?.color as string
 
 /** #12's arithmetic for three beats: 3.0 + 3 x 3.5 + 2.5, less the 0.3 crossfade. */
 const REEL_SECONDS = 15.7
@@ -437,23 +447,48 @@ describe('reel render', () => {
     ] as const) {
       assert.equal(pixelsNear(card, colour), 0, `${name} reaches the card`)
     }
-    // The mark and the headline, in house ink, and the accent rule under them.
+    // `MWA` and the three lines of type, in house ink, and the accent rule under them.
+    // Only half the lockup is counted here, and that is #106's doing rather than an
+    // omission: `FORGE` wears the spark, so none of its pixels are house ink. What the
+    // typeset half is, is the next test's question.
     assert.ok(pixelsNear(card, INK) > 10_000, 'the card carries no mark or headline')
     // The rule is 140x6, and its top and bottom rows are blended into the ground by
     // the scale it is drifting under — so most of it, not all of it, is the accent.
     assert.ok(pixelsNear(card, ACCENT) > 300, 'the card carries no accent rule')
   })
 
+  test('the spark rides FORGE, and reaches nothing else on the card', async () => {
+    // #106's one gradient, in the shipped mp4. `lockup.test.ts` gates its *shape* off a
+    // single filtergraph pass; this is the other half — that both ends of the ramp
+    // survive an encode, and that the ramp is cut to the word rather than washed over
+    // the card. Read on the same frame as the test above, deep into the card's hold.
+    const card = await frame(reelPath, 440)
+    const layout = cardLayout()
+    // Everything under the lockup's own box: the tagline, the headline, the rule and
+    // the credit, all of which are house ink or house accent and none of them the ramp.
+    const below = rows(card, layout.lockup.y + layout.lockup.height, FRAME_HEIGHT)
+    for (const [name, colour] of [
+      ['blue', SPARK_START],
+      ['pink', SPARK_END],
+    ] as const) {
+      assert.ok(pixelsNear(card, colour) > 300, `the spark's ${name} end never reaches the card`)
+      assert.equal(pixelsNear(below, colour), 0, `the spark's ${name} end is loose on the card`)
+    }
+  })
+
   test('the card’s content sits in the boosted safe box, centred on y 760', async () => {
     const card = await frame(reelPath, CARD_ALONE)
     const layout = cardLayout()
     const empty = meanLuma(card, 1300, 1500) // Ground, below everything drawn.
-    const mark = meanLuma(card, layout.mark.y + 10, layout.mark.y + layout.mark.height - 10)
+    // Luma rather than a colour count, which is why the lockup being half house ink and
+    // half spark since #106 changes nothing here: the claim is that something is drawn
+    // in this band, and both halves are far brighter than the ground they sit on.
+    const lockup = meanLuma(card, layout.lockup.y + 10, layout.lockup.y + layout.lockup.height - 10)
     const tagline = meanLuma(card, layout.tagline.y, layout.tagline.y + TYPE.tagline.lineHeight)
     const headline = meanLuma(card, layout.headline.y + 10, layout.headline.y + 90)
     const credit = meanLuma(card, layout.credit.y, layout.credit.y + TYPE.credit.lineHeight)
 
-    assert.ok(mark > empty * 2, `nothing is drawn where the mark should be (${mark})`)
+    assert.ok(lockup > empty * 2, `nothing is drawn where the lockup should be (${lockup})`)
     assert.ok(tagline > empty * 2, `nothing is drawn where the tagline should be (${tagline})`)
     assert.ok(headline > empty * 2, `nothing is drawn where the headline should be (${headline})`)
     // Four separate elements down the card and not one block of ink (#61): between the
@@ -462,7 +497,11 @@ describe('reel render', () => {
     // the arithmetic, and what this frame is evidence of is that it rendered that way.
     // Inset windows, because the card is drifting and its pixels have travelled.
     for (const [name, from, to] of [
-      ['the mark and the tagline', layout.mark.y + layout.mark.height + 5, layout.tagline.y - 5],
+      [
+        'the lockup and the tagline',
+        layout.lockup.y + layout.lockup.height + 5,
+        layout.tagline.y - 5,
+      ],
       ['the tagline and the ask', layout.tagline.y + TYPE.tagline.size + 15, layout.headline.y - 5],
     ] as const) {
       const gap = meanLuma(card, from, to)

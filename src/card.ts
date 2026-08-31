@@ -20,26 +20,37 @@ import { FRAME_WIDTH } from './frame.ts'
 import { drawText, ffmpegColor, pad, stream, zoomStage } from './filtergraph.ts'
 import type { StreamLabel } from './filtergraph.ts'
 import { ACCENT, FONT_FILE, INK, SAFE_ZONE, TYPE } from './house.ts'
+import { forgePixels, lockupChains, lockupGeometry, mwaRgba, sparkRgba } from './lockup.ts'
+import type { Frame, LockupGeometry } from './lockup.ts'
 import { overflowProblems } from './measure.ts'
 import { FPS } from './plan.ts'
 import type { TextCue } from './plan.ts'
-import { wordmarkHeight, wordmarkRgba } from './wordmark.ts'
 
 /** The repo's own call to action. Config never reaches it — #9 §5 is explicit. */
 export const HEADLINE = 'mwaforge.com'
 
 /**
- * What the mark sells, in words (#61).
+ * What the lockup sells, in words (#61, #106).
  *
- * House style, like the face, the mark and the accent: the same line on every reel,
+ * House style, like the face, the lockup and the accent: the same line on every reel,
  * for every client, so it is a constant here and not a config field. A viewer who
- * catches only the last two seconds sees a wordmark and a domain, neither of which
- * says what is being offered; this is the line that does.
+ * catches only the last two seconds sees a name and a domain, neither of which says
+ * what is being offered; this is the line that does. It does not repeat the name,
+ * because the lockup above it already is the name — what it adds is the offer, and
+ * `jobs` is the word the trade the client is in actually uses.
  */
-export const TAGLINE = 'Websites by MWA Forge'
+export const TAGLINE = 'Websites that book jobs'
 
-/** The mark, in frame pixels. Wide enough to read as the mark and no wider. */
-export const MARK_WIDTH = 460
+/**
+ * The lockup, in frame pixels — the one number the rest of its geometry is solved
+ * from (`lockupGeometry`).
+ *
+ * 880 of the safe box's 950, which leaves 35 either side. Wide because the lockup is
+ * now the whole lockup: at 460 the `MWA` half alone was the mark, and `FORGE` set
+ * beside it at that width would be type nobody can read through an encode at the ~430
+ * pixels a reel is watched at. It is the card's one image and the card has the room.
+ */
+export const MARK_WIDTH = 880
 
 /** #9 §5: the card's content is centred here, not on the frame's own middle. */
 export const CARD_CENTRE_Y = 760
@@ -52,14 +63,15 @@ export const CARD_CENTRE_Y = 760
 const RULE = { width: 140, height: 6 }
 
 /**
- * The mark and the tagline are one lockup — the words are the mark's own signature,
- * not a second line stacked under it — so they sit tighter than the gaps between the
- * card's other elements. Set equidistant, the tagline starts to read as a headline.
+ * The lockup and the tagline are one **signature** — the words are the lockup's own
+ * signing, not a second line stacked under it — so they sit tighter than the gaps
+ * between the card's other elements. Set equidistant, the tagline starts to read as a
+ * headline.
  */
 const SIGNATURE_GAP = 32
 
-/** Space under the lockup, and around the rule. */
-const LOCKUP_GAP = 56
+/** Space under the signature, and around the rule. */
+const BLOCK_GAP = 56
 const RULE_GAP = 40
 
 /** The credit is attribution, so it is set muted as well as small. */
@@ -68,7 +80,9 @@ const CREDIT_ALPHA = 0.62
 export type CardLayout = {
   /** The content box: the boosted safe box's own width, centred in the frame. */
   width: number
-  mark: { x: number; y: number; width: number; height: number }
+  /** Where the lockup's drawn box sits, and — inside it, in its own coordinates —
+   * where the two halves and `FORGE`'s five glyphs go. */
+  lockup: { x: number; y: number; width: number; height: number; geometry: LockupGeometry }
   tagline: { y: number }
   headline: { y: number }
   rule: { x: number; y: number; width: number; height: number }
@@ -84,12 +98,16 @@ export type CardLayout = {
  * house style is for.
  */
 export function cardLayout(): CardLayout {
-  const markHeight = wordmarkHeight(MARK_WIDTH)
+  const geometry = lockupGeometry(MARK_WIDTH)
+  // The lockup's drawn box is taller than its cap — `O` and `G` overshoot — and it is
+  // the drawn box the stack has to make room for, because it is the drawn box a viewer
+  // sees. Rounded up: half a pixel of `G` clipped is the half nobody forgives.
+  const markHeight = Math.ceil(geometry.height)
   const stack =
     markHeight +
     SIGNATURE_GAP +
     TYPE.tagline.lineHeight +
-    LOCKUP_GAP +
+    BLOCK_GAP +
     TYPE.headline.lineHeight +
     RULE_GAP +
     RULE.height +
@@ -98,15 +116,16 @@ export function cardLayout(): CardLayout {
   const top = Math.round(CARD_CENTRE_Y - stack / 2)
 
   const taglineY = top + markHeight + SIGNATURE_GAP
-  const headlineY = taglineY + TYPE.tagline.lineHeight + LOCKUP_GAP
+  const headlineY = taglineY + TYPE.tagline.lineHeight + BLOCK_GAP
   const ruleY = headlineY + TYPE.headline.lineHeight + RULE_GAP
   return {
     width: SAFE_ZONE.right - SAFE_ZONE.left,
-    mark: {
+    lockup: {
       x: Math.round((FRAME_WIDTH - MARK_WIDTH) / 2),
       y: top,
       width: MARK_WIDTH,
       height: markHeight,
+      geometry,
     },
     tagline: { y: taglineY },
     headline: { y: headlineY },
@@ -144,57 +163,74 @@ export function cardCredit(cues: TextCue[]): string {
   return cues.find((cue) => cue.role === 'cta')?.content ?? ''
 }
 
-export type Wordmark = { path: string; width: number; height: number }
+/** A single frame of pixels on disk, with the shape argv will have to declare. */
+export type RawFrame = { path: string; width: number; height: number }
+
+/** Both of the card's rasterised inputs: `MWA`'s ink, and the spark the type wears. */
+export type CardSources = { mark: RawFrame; ramp: RawFrame }
 
 /**
- * The mark, rasterised into `dir` as raw RGBA for ffmpeg to read.
+ * The card's two rasters, written into `dir` as raw RGBA for ffmpeg to read.
  *
- * Raw rather than encoded: encoding it would mean carrying an encoder for one image
- * that is identical on every render. It is written beside the masters and wiped with
- * them — it is derived from a checked-in constant, so it is never something to keep.
+ * Raw rather than encoded: encoding them would mean carrying an encoder for two images
+ * that are identical on every render. They are written beside the masters and wiped
+ * with them — both are derived from checked-in constants, so neither is ever something
+ * to keep.
+ *
+ * The ramp is cut to the `FORGE` box exactly, because the spark ramps across `FORGE`
+ * and nothing else (`CONTEXT.md`, "Spark"): a ramp the width of the whole lockup would
+ * put blue under the `F` that belongs a third of the way in.
  */
-export async function writeWordmark(dir: string): Promise<Wordmark> {
-  const { data, width, height } = wordmarkRgba(MARK_WIDTH)
-  const path = join(dir, 'wordmark.rgba')
-  await writeFile(path, data)
-  return { path, width, height }
+export async function writeCardSources(dir: string): Promise<CardSources> {
+  const { geometry } = cardLayout().lockup
+  const forge = forgePixels(geometry)
+  const mark = mwaRgba(Math.round(geometry.mwa.width))
+  const ramp = sparkRgba(forge.width, forge.height)
+  return {
+    mark: await writeRaw(join(dir, 'mwa.rgba'), mark),
+    ramp: await writeRaw(join(dir, 'spark.rgba'), ramp),
+  }
 }
 
-/** The mark's input arguments — raw pixels carry no header, so the header is argv. */
-export function wordmarkInput(mark: Wordmark): string[] {
+async function writeRaw(path: string, frame: Frame): Promise<RawFrame> {
+  await writeFile(path, frame.data)
+  return { path, width: frame.width, height: frame.height }
+}
+
+/** A raster's input arguments — raw pixels carry no header, so the header is argv. */
+export function rawFrameInput(frame: RawFrame): string[] {
   return [
     '-f', 'rawvideo',
     '-pixel_format', 'rgba',
-    '-video_size', `${mark.width}x${mark.height}`,
-    '-i', mark.path,
+    '-video_size', `${frame.width}x${frame.height}`,
+    '-i', frame.path,
   ]
 }
 
 /**
- * The whole card, from a flat ground and the mark's single frame to a drifting shot.
+ * The whole card, from a flat ground and two single frames to a drifting shot.
  *
  * Drawn first and scaled after, so the drift moves the card rather than its elements
- * moving against each other — mark, type and rule are one object, and a zoom applied
- * per element would read as five things sliding apart.
+ * moving against each other — lockup, type and rule are one object, and a zoom applied
+ * per element would read as six things sliding apart.
  */
 export function cardChains(
   cues: TextCue[],
   camera: Camera,
   ground: StreamLabel,
   mark: StreamLabel,
+  ramp: StreamLabel,
   output: StreamLabel,
 ): string[] {
   const layout = cardLayout()
   const credit = cardCredit(cues)
-  const looped = stream('mark')
-  const marked = stream('marked')
+  const locked = stream('lockup')
   const drawn = stream('drawn')
   return [
-    // The mark is one frame and the card is seventy-five. Looped rather than re-read,
-    // and given a frame rate as well as timestamps — `overlay` counts frames.
-    `${pad(mark)}format=rgba,loop=loop=-1:size=1:start=0,fps=${FPS}${pad(looped)}`,
-    `${pad(ground)}${pad(looped)}overlay=x=${layout.mark.x}:y=${layout.mark.y}:shortest=1${pad(marked)}`,
-    `${pad(marked)}${[
+    // One thing, however many halves it is made of: `lockup.ts` owns the seam between
+    // traced geometry and type, and this file places a mark (ADR-0010).
+    ...lockupChains(layout.lockup.geometry, layout.lockup, ground, mark, ramp, locked),
+    `${pad(locked)}${[
       drawLine(TAGLINE, 'tagline', layout.tagline.y, ffmpegColor(INK)),
       drawLine(HEADLINE, 'headline', layout.headline.y, ffmpegColor(INK)),
       drawLine(credit, 'credit', layout.credit.y, `${ffmpegColor(INK)}@${CREDIT_ALPHA}`),

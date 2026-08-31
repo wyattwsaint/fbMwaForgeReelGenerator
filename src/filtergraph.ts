@@ -39,6 +39,7 @@ declare const streamLabel: unique symbol
 export type StreamName =
   | '0:v'
   | '1:v'
+  | '2:v'
   /** `compose`: the master after its move, and the shot after its overlay. */
   | 'moved'
   | 'overlaid'
@@ -46,9 +47,18 @@ export type StreamName =
   | 'scrim'
   | 'washed'
   | 'drawn'
-  /** `card`: the mark looped, the ground with it on, and the finished card. */
+  /** `card`: the lockup's two halves and the ground they land on.
+   *
+   * `mark` is `MWA` as rasterised pixels and `ramp` is the spark, both arriving as one
+   * frame and looped; `mask` is `FORGE` drawn as white type on black, and `forge` is
+   * the ramp wearing that mask. `marked` is the ground with `MWA` on it and `lockup`
+   * is the ground with both halves on. */
   | 'mark'
+  | 'ramp'
+  | 'mask'
+  | 'forge'
   | 'marked'
+  | 'lockup'
   | 'card'
   /** Named by a caller that is wiring a graph of its own — the tests, today. */
   | 'ground'
@@ -170,6 +180,14 @@ export function drawText(draw: {
   /** Written as ffmpeg reads it — a number, or an expression like `(w-text_w)/2`. */
   x: string
   y: number
+  /**
+   * What `y` is measured to. `text` is drawtext's own default — the top of the line
+   * box, which is where a line of copy wants to be pinned, because that is where the
+   * eye reads a line as starting. `baseline` is for type being set to a *metric*: the
+   * lockup's `FORGE` sits on a baseline solved from the face, and pinning its top
+   * instead would put a number in the layout that only holds for these five letters.
+   */
+  yAlign?: 'text' | 'baseline'
   /** An alpha expression per frame. Absent on a line lit for the whole of its shot. */
   alpha?: string
 }): string {
@@ -184,5 +202,6 @@ export function drawText(draw: {
     ...(draw.alpha === undefined ? [] : [`:alpha=${escapeValue(draw.alpha)}`]),
     `:x=${draw.x}`,
     `:y=${draw.y}`,
+    ...(draw.yAlign === undefined ? [] : [`:y_align=${draw.yAlign}`]),
   ].join('')
 }
