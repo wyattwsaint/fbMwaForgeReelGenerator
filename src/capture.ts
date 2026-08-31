@@ -20,7 +20,7 @@ import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { masterScale, masterSize } from './camera.ts'
 import type { MasterSize } from './camera.ts'
-import { ffmpeg, ffprobe, intermediateEncode } from './compose.ts'
+import { ffmpeg, ffmpegPixels, ffprobe, intermediateEncode } from './compose.ts'
 import {
   BASE_VIEWPORT,
   FRAME_HEIGHT,
@@ -71,15 +71,46 @@ const JPEG_QUALITY = 92
  * distance past the same stabilise, so frame 0 frames the same thing even though it
  * is not the same pixels. Frame 0 is the thumbnail Facebook shows, so that much is
  * worth keeping.
+ *
+ * The dwell is spent under the **marker**, and the marker is what makes that claim
+ * true rather than nearly true (#91).
  */
 export const RECORD_START_MS = 500
 
 /**
- * How long past the shot the browser goes on recording. Slack, not content: the trim
- * window is measured back from the file's own end, and a recording that stopped on the
- * shot's last frame would have no margin for the browser's own close latency.
+ * How long past the shot the browser goes on recording. Slack, not content: the window
+ * opens where the marker lifts and runs for exactly the shot, so a recording that
+ * stopped on the shot's own last frame would be betting on the browser having painted
+ * one — and the last thing a live hook may be padded out with is black.
  */
 const RECORD_TAIL_MS = 400
+
+/**
+ * The colour the viewport is held under for the dwell, and lifted from at the exact
+ * moment the shot begins (#91).
+ *
+ * A recording's own timeline is *not* the wall clock, which is what a window measured
+ * back from the file's end quietly assumed. A browser emits a frame when the page
+ * paints, so an idle stretch is one frame held rather than a stretch of frames; and
+ * the recorder pads the file's tail past the last paint by a floor of its own. Both
+ * ends of the file therefore sit an unknown distance from the wall-clock moments this
+ * pass timed the shot by, and a `scroll` hook's frame 0 landed a quarter-second into
+ * the walk — a couple of hundred pixels down a page whose top it is supposed to frame,
+ * and a different couple of hundred each run.
+ *
+ * So the recording is asked where the shot starts instead of being told: the marker is
+ * a wash the page cannot draw, the last frame carrying it is the last frame before the
+ * window, and the answer is in the same clock as the cut. Magenta because it has to
+ * survive a lossy encode and a downscale to a handful of pixels and still be nothing a
+ * client's own hero could be mistaken for.
+ */
+const MARKER_CSS = '#ff00ff'
+
+/** How far a marker frame may drift per channel through VP8, yuv420 and the downscale. */
+const MARKER_TOLERANCE = 24
+
+/** The element the marker is drawn as — removed, never merely hidden. */
+const MARKER_ID = 'reel-record-marker'
 
 /** Masters live here, run-scoped: wiped by the next render, never a build artifact. */
 export function mastersDir(outDir: string): string {
@@ -372,10 +403,11 @@ function clipFor(
  * A live shot: the stabilised hero recorded while the page moves.
  *
  * `stabilise` and never `settle` — the freeze is exactly what a live shot must not
- * have (ADR-0006), so videos autoplay and animations run. The page is then framed,
- * left alone for `RECORD_START_MS` — the fixed moment frame 0 is reproducible from —
- * and recorded a little past the shot, so there is a window to cut out of the middle
- * of the file rather than off the end of it.
+ * have (ADR-0006), so videos autoplay and animations run. The page is then framed and
+ * held under the **marker** for `RECORD_START_MS` — the fixed moment frame 0 is
+ * reproducible from — and recorded a little past the shot, so there is a window to cut
+ * out of the middle of the file rather than off the end of it. The marker lifts as the
+ * window opens, which is how the cut and the shot agree about where that was (#91).
  *
  * How it is framed is the difference between the two live motions (#64). An `ambient`
  * shot scrolls the hero to the top of the viewport and holds there while the page
@@ -410,15 +442,16 @@ async function recordGroup(
     recordVideo: { dir: raws, size: { width: size.width, height: size.height } },
   })
   let raw: string
-  let recordedMs: number
   try {
     const page = await context.newPage()
     await page.goto(group.url, LOAD)
     await stabilise(page)
     const walking = await framedForRecording(page, shot, group.motion as LiveMotion)
+    await markPage(page)
     await page.waitForTimeout(RECORD_START_MS)
 
-    const startedAt = Date.now()
+    // The window opens here, and says so on the film rather than on this pass's clock.
+    await unmarkPage(page)
     // Started rather than awaited: the walk and the recording window are the same
     // stretch of time, so the page has to be driven while the browser is filming it.
     const walk = walking ? scriptedScroll(page, shot.durationMs) : null
@@ -426,16 +459,14 @@ async function recordGroup(
     await walk
     const video = page.video()
     if (!video) throw new Error(`${shotName(shot)} — the browser recorded no video`)
-    // Recording stops when the page does, so this is the last moment on the file.
     await page.close()
-    recordedMs = Date.now() - startedAt
     raw = await video.path()
   } finally {
     await context.close()
   }
 
   const path = join(dir, `${shotName(shot)}.mp4`)
-  await trimRecording(raw, path, shot, size, recordedMs)
+  await trimRecording(raw, path, shot, size)
   await rm(raws, { recursive: true, force: true })
   onCapture({ kind: 'master', shot, ms: Date.now() - since })
   return [{ shot, path, size }]
@@ -480,31 +511,107 @@ async function framedForRecording(page: Page, shot: Shot, motion: LiveMotion): P
 }
 
 /**
+ * Cover the viewport with the marker, and let the browser paint it.
+ *
+ * On `documentElement` rather than on `body`, so a page whose own `body` carries a
+ * transform cannot turn a fixed cover into a scrolling one — the marker has to be the
+ * whole frame or it is not an answer.
+ */
+async function markPage(page: Page): Promise<void> {
+  await page.evaluate(
+    (marker) => {
+      const cover = document.createElement('div')
+      cover.id = marker.id
+      cover.style.cssText =
+        `position:fixed;inset:0;background:${marker.colour};` +
+        'z-index:2147483647;pointer-events:none'
+      document.documentElement.append(cover)
+    },
+    { id: MARKER_ID, colour: MARKER_CSS },
+  )
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+}
+
+/**
+ * Lift the marker — the first frame that carries none of it is the shot's frame 0.
+ *
+ * The page is given a frame to come back on its own before the caller starts driving
+ * it, so the frame the window opens on is the framing the shot was planned around
+ * rather than the first step of a walk.
+ */
+async function unmarkPage(page: Page): Promise<void> {
+  await page.evaluate((id) => document.getElementById(id)?.remove(), MARKER_ID)
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
+}
+
+/**
+ * Where the marker lifts, in the recording's own seconds — the moment the shot starts.
+ *
+ * Read off the film rather than computed from this pass's clock, which is the whole of
+ * #91: a recording's timeline is wall time only where the page is painting, and its
+ * tail is padded past the last paint by a floor the recorder picks. The marker is the
+ * one thing in the file whose position both the browser and this pass agree about.
+ *
+ * The frame is averaged down to four pixels rather than sampled, so "the marker is up"
+ * means the whole frame and not a corner of it, and the file is read as a handful of
+ * bytes a frame rather than decoded. The *last* marker frame is taken: a page cannot
+ * draw this colour over its whole viewport, so a later run of it would be the marker
+ * having been lifted twice, which it never is.
+ */
+async function markerLift(raw: string, shot: Shot): Promise<number> {
+  const pixels = await ffmpegPixels([
+    '-i', raw,
+    // The timeline's own rate, so this reads the film on the grid the cut is made on.
+    '-vf', `fps=${FPS},scale=2:2:flags=area`,
+    '-f', 'rawvideo',
+    '-pix_fmt', 'rgb24',
+    '-',
+  ])
+  const stride = 2 * 2 * 3
+  let last = -1
+  for (let at = 0; at + stride <= pixels.length; at += stride) {
+    let whole = true
+    for (let px = 0; px < 4 && whole; px++) {
+      const r = pixels[at + px * 3] as number
+      const g = pixels[at + px * 3 + 1] as number
+      const b = pixels[at + px * 3 + 2] as number
+      whole = 255 - r <= MARKER_TOLERANCE && g <= MARKER_TOLERANCE && 255 - b <= MARKER_TOLERANCE
+    }
+    if (whole) last = at / stride
+  }
+  if (last < 0) {
+    throw new Error(
+      `${shotName(shot)} — the recording carries no start marker; there is no shot to cut from it`,
+    )
+  }
+  return (last + 1) / FPS
+}
+
+/**
  * The recording, cut to exactly the shot and re-encoded as an intermediate.
  *
- * The window is measured *back from the file's own end*: `recordedMs` is how long the
- * browser went on recording past the moment the shot starts at, and where the file
- * starts is the browser's business while where it stops is this pass's.
+ * The window opens where the **marker** lifts and runs for the shot's own length. It
+ * used to be measured back from the file's end off a wall-clock stopwatch, which put a
+ * walked hook's frame 0 a quarter-second into its own scroll (#91).
  *
  * Exported for the tests, which is where its loud failures are worth reading. A
- * recording shorter than the window, or one that decodes to fewer frames than the
- * timeline asked for, throws here — a hook is never quietly padded out to length,
- * because what it would be padded with is black.
+ * recording that carries no marker, one with less than the shot left after it, or one
+ * that decodes to fewer frames than the timeline asked for, throws here — a hook is
+ * never quietly padded out to length, because what it would be padded with is black.
  */
 export async function trimRecording(
   raw: string,
   output: string,
   shot: Shot,
   size: MasterSize,
-  recordedMs: number,
 ): Promise<void> {
   const frames = frameCount(shot.durationMs)
+  const offset = await markerLift(raw, shot)
   const recorded = await probeDuration(raw)
-  const offset = recorded - recordedMs / 1000
-  if (!(offset >= 0)) {
+  if (recorded - offset < shot.durationMs / 1000) {
     throw new Error(
-      `${shotName(shot)} — the browser recorded ${recorded.toFixed(2)}s of a ` +
-        `${(recordedMs / 1000).toFixed(2)}s window; there is no shot to cut from it`,
+      `${shotName(shot)} — the browser recorded ${(recorded - offset).toFixed(2)}s past the ` +
+        `marker; the shot is ${(shot.durationMs / 1000).toFixed(2)}s`,
     )
   }
 

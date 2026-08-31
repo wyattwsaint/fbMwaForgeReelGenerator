@@ -990,6 +990,31 @@ export default defineSite({
     }
   })
 
+  test('frame 0 is the top of the document, not a moment into the walk', async () => {
+    // #91: the thumbnail is the frame the plan says it is, and it is that frame every
+    // run. `RECORD_START_MS`'s docblock spends determinism on a live shot and keeps
+    // *composition*, and this is the claim — the walk starts where frame 0 is, not a
+    // couple of hundred pixels down a page whose top it is supposed to frame.
+    //
+    // Read off the fixture's `#reveal`, which is the one thing on the page whose
+    // position says the scroll: a 400px bar sitting 50px clear of the 1920px fold at
+    // scroll 0 and therefore on no frame the top of the document is on. Not the band
+    // the reveal-fired test reads — the whole frame, because "how far has it walked"
+    // is answered by the reveal's first row and not by where it ends up. A quarter of
+    // a second of the house pace puts ~240px of it on screen; a fiftieth puts none.
+    //
+    // The window used to be measured back from the recording's own end on a wall-clock
+    // stopwatch, and a recording's timeline is not the wall clock: an idle page emits
+    // one held frame rather than a stretch of them, and the recorder pads the tail past
+    // the last paint. The marker is what closed that gap, so this fails loudly if it is
+    // ever traded back for a stopwatch.
+    assert.equal(
+      pixelsNear(await frame(walkedPath, 0), REVEAL),
+      0,
+      'the thumbnail is already into the walk',
+    )
+  })
+
   test('draws its line fully on frame 0, and still cuts hard into a frozen beat', async () => {
     // Everything ADR-0006 fixed for an ambient hook holds for a walked one: frame 0 is
     // the thumbnail whichever way the pixels were got, and the cut is still a cut.
