@@ -8,6 +8,7 @@ import {
   MOTION_FLOOR,
   MOTION_SAMPLES,
   MOTION_WINDOW_MS,
+  STILL_DEGRADATION,
   frameAt,
   framedMotion,
   movesEnough,
@@ -53,6 +54,20 @@ describe('the motion probe’s house constants', () => {
     assert.equal(MOTION_SAMPLES, 3)
     assert.equal(MOTION_WINDOW_MS, 2000)
     assert.equal(MOTION_BANDS, 8)
+  })
+
+  test('the still degradation says which motion was asked for and what is shot', () => {
+    // The sentence itself, and not only the constant the source names it by: every
+    // other assertion about this note compares it against the same constant it came
+    // from, so a rewording would change src and test together in silence. A human
+    // reads this line out of a preflight, so the wording is the finding — and it is
+    // pinned here, beside the probe whose reading produces it, rather than beside the
+    // chain in `plan.ts` that only decides when it is said.
+    assert.equal(
+      STILL_DEGRADATION,
+      "hook.motion 'ambient' — this hero does not move in the frame it would be shot " +
+        "in, so the hook is captured as 'still'",
+    )
   })
 })
 

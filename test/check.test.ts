@@ -134,6 +134,11 @@ export default defineSite({
       const run = await reel(['check', 'deadroute'], ws.root)
       assert.equal(run.code, 1, run.output)
       assert.match(run.stdout, /gone\.html — .*\(unchecked: beats\[2\]\)/)
+      // A dead route is one problem however many beats it took down, and the tally
+      // says so in the singular. The plural branch is covered by the run above; this
+      // is the only CLI case here that reports exactly one, so it is where a report
+      // that had learned to print "1 problems." would be caught.
+      assert.match(run.stdout, /^1 problem\.$/m)
     }))
 
   test('names the config file when there is none', () =>

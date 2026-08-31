@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {
+  ambientBeforeProbe,
   BEAT_MS,
   COPY_BUDGETS,
   copyProblem,
@@ -727,22 +728,26 @@ describe('resolvedMotion', () => {
   // ADR-0008's chain, as a function of two numbers rather than of a page that animates
   // (#96): a `scroll` whose reveals do not re-fire is an `ambient`, and an `ambient`
   // that does not move in its own frame is a `still`.
-  test('each degradation says, in words, which motion was asked for and what is shot', () => {
-    // The sentences themselves, and not only the constants the source names them by:
-    // every other test here compares a note against the same constant it came from, so
-    // a rewording would change src and test together in silence. A human reads these
-    // lines out of a preflight, so the wording is the finding.
-    assert.equal(
-      AMBIENT_DEGRADATION,
-      "hook.motion 'scroll' — this page's scroll effects do not re-fire, " +
-        "so the hook is recorded as 'ambient'",
-    )
-    assert.equal(
-      STILL_DEGRADATION,
-      "hook.motion 'ambient' — this hero does not move in the frame it would be shot " +
-        "in, so the hook is captured as 'still'",
-    )
+  // What each degradation *says* is pinned against the module that owns the sentence —
+  // `AMBIENT_DEGRADATION` in `test/scroll.test.ts`, `STILL_DEGRADATION` in
+  // `test/motion.test.ts` — because a note's wording is a fact about the probe that
+  // produced it, not about the chain that orders them. What is asserted here is the
+  // ordering: which sentences a config and a survey produce, and in which order.
+  test('the probe gate is the chain’s first step, and reaches the survey as a predicate', () => {
+    // What `survey.ts` asks before spending 2s on the probe (ADR-0009). Stated once
+    // here and called from both sides, so the browser never asks the chain for a
+    // verdict about the survey it is halfway through taking — and, because the reading
+    // is a parameter rather than a survey, the gate cannot come to depend on the number
+    // the probe below it is about to write down.
+    assert.equal(ambientBeforeProbe(withHook({ motion: 'ambient' }), null), true)
+    assert.equal(ambientBeforeProbe(withHook({ motion: 'still' }), false), false)
+    // A scroll is probed only where it has already lost its scroll: unread re-fires
+    // are what the config asked for, exactly as `resolvedMotion` reads them.
+    assert.equal(ambientBeforeProbe(withHook({ motion: 'scroll' }), false), true)
+    assert.equal(ambientBeforeProbe(withHook({ motion: 'scroll' }), true), false)
+    assert.equal(ambientBeforeProbe(withHook({ motion: 'scroll' }), null), false)
   })
+
   test('an unsurveyed hook is the one the config asked for, and is noted as nothing', () => {
     for (const motion of ['still', 'ambient', 'scroll'] as const) {
       assert.deepEqual(resolvedMotion(withHook({ motion })), { motion, notes: [] })

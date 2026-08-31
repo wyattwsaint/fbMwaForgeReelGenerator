@@ -167,13 +167,15 @@ describe('judge', () => {
   // reports are the ones it was written to have.
   const ROOT = fileURLToPath(new URL('../', import.meta.url))
 
-  /** Every beat roomy, so a count test reports the count and nothing else. */
-  function roomy(n: number): { beats: Partial<BeatFacts>[] } {
-    return { beats: Array.from({ length: n }, () => ({ height: ROOMY })) }
+  /** Every beat roomy but the ones a test states, so a report is about what it stated. */
+  function roomy(n: number, stated: Record<number, Partial<BeatFacts>>): {
+    beats: Partial<BeatFacts>[]
+  } {
+    return { beats: Array.from({ length: n }, (_, i) => ({ height: ROOMY, ...stated[i] })) }
   }
 
-  function reportOf(site: SiteConfig, n: number) {
-    return judge(site, ROOT, surveyed(site, roomy(n)))
+  function reportOf(site: SiteConfig, n: number, stated: Record<number, Partial<BeatFacts>> = {}) {
+    return judge(site, ROOT, surveyed(site, roomy(n, stated)))
   }
 
   test('a beat count no reel can be cut from is named by `check`, not only by the plan', () => {
@@ -188,10 +190,9 @@ describe('judge', () => {
     // On beat 1, which drifts, and over a section tall enough for the frame that punch
     // captures: the only thing wrong with this config is the number itself.
     const site = config(3, [{}, { punchFactor: 0.7 }])
-    assert.deepEqual(
-      judge(site, ROOT, surveyed(site, { beats: [{ height: ROOMY }, { height: 3000 }, { height: ROOMY }] })).problems,
-      ['beats[1].punchFactor is 0.7; 1 is "no punch"'],
-    )
+    assert.deepEqual(reportOf(site, 3, { 1: { height: 3000 } }).problems, [
+      'beats[1].punchFactor is 0.7; 1 is "no punch"',
+    ])
   })
 
   test('a beat naming both fit and punchFactor fails — they are opposite ends', () => {
