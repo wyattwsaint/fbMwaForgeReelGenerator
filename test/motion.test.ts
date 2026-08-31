@@ -8,9 +8,10 @@ import {
   MOTION_FLOOR,
   MOTION_SAMPLES,
   MOTION_WINDOW_MS,
+  STILL_DEGRADATION,
   frameAt,
   framedMotion,
-  movesAsFramed,
+  movesEnough,
 } from '../src/motion.ts'
 import { hookRect } from '../src/page.ts'
 import { stabilise } from '../src/settle.ts'
@@ -54,6 +55,20 @@ describe('the motion probe’s house constants', () => {
     assert.equal(MOTION_WINDOW_MS, 2000)
     assert.equal(MOTION_BANDS, 8)
   })
+
+  test('the still degradation says which motion was asked for and what is shot', () => {
+    // The sentence itself, and not only the constant the source names it by: every
+    // other assertion about this note compares it against the same constant it came
+    // from, so a rewording would change src and test together in silence. A human
+    // reads this line out of a preflight, so the wording is the finding — and it is
+    // pinned here, beside the probe whose reading produces it, rather than beside the
+    // chain in `plan.ts` that only decides when it is said.
+    assert.equal(
+      STILL_DEGRADATION,
+      "hook.motion 'ambient' — this hero does not move in the frame it would be shot " +
+        "in, so the hook is captured as 'still'",
+    )
+  })
 })
 
 describe('framedMotion', () => {
@@ -64,7 +79,7 @@ describe('framedMotion', () => {
     try {
       const reading = await framedMotion(page)
       assert.ok(reading > MOTION_FLOOR, `a live hero read ${reading.toFixed(2)}`)
-      assert.equal(await movesAsFramed(page), true)
+      assert.equal(movesEnough(reading), true)
     } finally {
       await page.close()
     }
@@ -76,8 +91,9 @@ describe('framedMotion', () => {
     // reading is the *page's* and never the probe's. `once.html` is deliberately still.
     const page = await framedOnHero('/once.html')
     try {
-      assert.equal(await framedMotion(page), 0)
-      assert.equal(await movesAsFramed(page), false)
+      const reading = await framedMotion(page)
+      assert.equal(reading, 0)
+      assert.equal(movesEnough(reading), false)
     } finally {
       await page.close()
     }
@@ -88,7 +104,7 @@ describe('framedMotion', () => {
     // the frame the hero would be shot in.
     const page = await framedOnHero('/cropped.html')
     try {
-      assert.equal(await movesAsFramed(page), false)
+      assert.equal(movesEnough(await framedMotion(page)), false)
 
       // And the motion is real — the same page, framed on the part of the hero that
       // has it, reads live. Nothing is wrong with the page, the browser or the probe;

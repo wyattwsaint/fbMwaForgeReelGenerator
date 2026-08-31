@@ -164,9 +164,12 @@ waits for the page to move, `scroll` makes it. An `ambient` shot is only taken i
 the **motion probe** finds motion in the frame it would be shot in (ADR-0008);
 where it does not, the shot **records dead** and degrades to `still`.
 The trade is deliberate (ADR-0006): the page animates on a clock this pipeline
-does not own, so no two recordings are alike. Recording starts at a fixed
-post-stabilise moment, so **frame 0** is at least reproducible in *composition* —
-and the hook line is still drawn fully on it and still never animates in.
+does not own, so no two recordings are alike. Where the shot starts is not left
+to a clock at all: the page is held under the **marker** for a fixed
+post-stabilise dwell, and the film itself says where that lifted. So **frame 0**
+frames the same thing run to run — reproducible in *composition*, and by the
+recording's own agreement rather than by a stopwatch's guess at it — and the hook
+line is still drawn fully on it and still never animates in.
 
 A live shot's camera only breathes: the card's 3% zoom rather than a beat's 10%,
 because the page is already moving and a full drift on top of it competes with the
@@ -182,6 +185,24 @@ Run-scoped exactly like a master, discarded with them, never a build artifact an
 never promoted. It is the one capture that *scrolls* to its subject, because a
 recording is the viewport — so a live hook carries whatever page chrome sits over
 its hero.
+
+**Marker** — the wash a **live shot**'s page is covered by, whole-viewport, for the
+dwell before its **recording**'s window opens; it lifts at the instant the shot
+begins, and the last frame carrying it is the last frame before **frame 0**.
+It exists because a recording's own timeline is not the wall clock, so a window
+measured off this pipeline's stopwatch cannot be trusted at either end: a browser
+emits a frame when the page paints, so an idle stretch is one held frame and not a
+stretch of them, and the recorder pads the file's tail past the last paint by a
+floor of its own. Both ends therefore sit an unknown distance from the moments that
+timed the shot, which put a `scroll` hook's frame 0 a quarter-second into its own
+**scripted scroll**. Marking the film instead puts the cut and the shot on one
+clock.
+It is read back from the recording averaged down to a handful of pixels, so
+"under the marker" means the whole frame and never a corner of it, and what is
+looked for is the *dwell* rather than the colour: one unbroken run, about as long
+as the page was held, and none of that colour anywhere else in the file. A page
+that paints it too — a transition flash, a full-bleed hero — is a loud failure and
+never a shot quietly cut from the wrong moment.
 
 **Scripted scroll** — the walk down the page a `scroll` **live shot** is recorded
 under: from the top of the document through the hero, at a constant pace, for

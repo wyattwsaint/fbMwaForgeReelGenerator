@@ -167,13 +167,15 @@ describe('judge', () => {
   // reports are the ones it was written to have.
   const ROOT = fileURLToPath(new URL('../', import.meta.url))
 
-  /** Every beat roomy, so a count test reports the count and nothing else. */
-  function roomy(n: number): { beats: Partial<BeatFacts>[] } {
-    return { beats: Array.from({ length: n }, () => ({ height: ROOMY })) }
+  /** Every beat roomy but the ones a test states, so a report is about what it stated. */
+  function roomy(n: number, stated: Record<number, Partial<BeatFacts>>): {
+    beats: Partial<BeatFacts>[]
+  } {
+    return { beats: Array.from({ length: n }, (_, i) => ({ height: ROOMY, ...stated[i] })) }
   }
 
-  function reportOf(site: SiteConfig, n: number) {
-    return judge(site, ROOT, surveyed(site, roomy(n)))
+  function reportOf(site: SiteConfig, n: number, stated: Record<number, Partial<BeatFacts>> = {}) {
+    return judge(site, ROOT, surveyed(site, roomy(n, stated)))
   }
 
   test('a beat count no reel can be cut from is named by `check`, not only by the plan', () => {
@@ -182,6 +184,36 @@ describe('judge', () => {
         `beats: a reel is 3-5 beats, this config has ${n}`,
       ])
     }
+  })
+
+  test('a punchFactor below 1 is rejected — there is no punching out', () => {
+    // On beat 1, which drifts, and over a section tall enough for the frame that punch
+    // captures: the only thing wrong with this config is the number itself.
+    const site = config(3, [{}, { punchFactor: 0.7 }])
+    assert.deepEqual(reportOf(site, 3, { 1: { height: 3000 } }).problems, [
+      'beats[1].punchFactor is 0.7; 1 is "no punch"',
+    ])
+  })
+
+  test('a beat naming both fit and punchFactor fails — they are opposite ends', () => {
+    const site = config(3, [{}, { fit: true, punchFactor: 1.4 }])
+    assert.deepEqual(reportOf(site, 3).problems, [
+      'beats[1] names both fit and punchFactor; fit shows the whole section, ' +
+        'punchFactor crops into it',
+    ])
+  })
+
+  test('music without a file fails by name', () => {
+    const site = { ...config(3), music: { offset: 0.42 } as { file: string; offset: number } }
+    assert.deepEqual(reportOf(site, 3).problems, ['music.file is required when music is set'])
+  })
+
+  test('an offset that runs backwards out of the track fails by name', () => {
+    // A real track, so the only thing wrong with this config is the offset.
+    const site = { ...config(3), music: { file: 'audio/mwaforge-signature.mp3', offset: -2 } }
+    assert.deepEqual(reportOf(site, 3).problems, [
+      'music.offset is -2; an offset slides forward into the track',
+    ])
   })
 
   test('a copy budget problem carries the field the human would go and edit', () => {

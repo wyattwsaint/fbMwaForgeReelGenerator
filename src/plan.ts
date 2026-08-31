@@ -11,7 +11,7 @@
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
-import { MOTION_FLOOR, STILL_DEGRADATION } from './motion.ts'
+import { STILL_DEGRADATION, movesEnough } from './motion.ts'
 import { AMBIENT_DEGRADATION } from './scroll.ts'
 import { configuredMotion } from './site.ts'
 import type {
@@ -308,6 +308,29 @@ function rotatedPushPull(index: number): PushPull {
 }
 
 /**
+ * Whether the shot the motion probe would be deciding about is an `ambient` one — the
+ * chain's first step, as a function of the config and the one reading that step reads.
+ *
+ * This is the whole reason the probe is gated: a `scroll` that is going to stay a
+ * `scroll` has nothing to measure, and a hook that was never going to be `ambient` has
+ * nothing for the probe to decide. `resolvedMotion` asks it for step one and
+ * `survey.ts` asks it before probing, so the browser and the plan cannot disagree about
+ * which hook this is without the disagreement being written down twice first.
+ *
+ * It takes the *refire* reading rather than a survey, for the reason `movesEnough`
+ * takes a number rather than a page (ADR-0009): a survey carries facts and never
+ * verdicts, so the browser side may hand its own reading to a pure question, but must
+ * never ask the chain for a verdict about a page it is halfway through surveying. Note
+ * what is *not* a parameter: the probe's reading. The step this gates is the step
+ * before it, so a caller cannot gate the probe on the number the probe is about to
+ * take.
+ */
+export function ambientBeforeProbe(config: SiteConfig, scrollRefires: boolean | null): boolean {
+  const configured = configuredMotion(config)
+  return configured === 'ambient' || (configured === 'scroll' && scrollRefires === false)
+}
+
+/**
  * How the hook is really shot, and what to say about the difference — the two
  * questions a live hook turns on, in the order the answers chain (#64, #88, ADR-0008).
  *
@@ -329,22 +352,27 @@ function rotatedPushPull(index: number): PushPull {
  * find degrades nothing and is noted as nothing. The load failure and the missing hero
  * are already problems, and a note about either would be the same defect said twice.
  *
- * The floor stays in `motion.ts`, where the probe that calibrated it is written; only
- * the *reading* crosses the seam, which is what lets a test sit either side of it.
+ * The floor stays in `motion.ts`, where the probe that calibrated it is written, and so
+ * does the comparison against it — `movesEnough` is asked here rather than the constant
+ * re-compared. Step one is `ambientBeforeProbe` above for the same reason: it is the
+ * question the survey's probe gate asks, and a condition stated in both places is a
+ * condition free to differ. Only *readings* cross the seam, which is what lets a test
+ * sit either side of it.
  */
 export function resolvedMotion(
   config: SiteConfig,
   survey?: Survey,
 ): { motion: HookMotion; notes: string[] } {
   const notes: string[] = []
-  let motion: HookMotion = configuredMotion(config)
-  if (motion === 'scroll' && survey?.scrollRefires === false) {
-    notes.push(AMBIENT_DEGRADATION)
-    motion = 'ambient'
-  }
+  const configured = configuredMotion(config)
+  const ambient = ambientBeforeProbe(config, survey?.scrollRefires ?? null)
+  // Only a `scroll` that arrived at `ambient` degraded to get there; one written
+  // `ambient` is shot as asked, and has nothing to say about it.
+  if (ambient && configured === 'scroll') notes.push(AMBIENT_DEGRADATION)
+  const motion: HookMotion = ambient ? 'ambient' : configured
   if (motion !== 'ambient') return { motion, notes }
   const reading = survey?.motionReading ?? null
-  if (reading === null || reading >= MOTION_FLOOR) return { motion, notes }
+  if (reading === null || movesEnough(reading)) return { motion, notes }
   notes.push(STILL_DEGRADATION)
   return { motion: 'still', notes }
 }

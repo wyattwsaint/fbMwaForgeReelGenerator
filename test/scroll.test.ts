@@ -4,7 +4,13 @@ import { chromium } from 'playwright'
 import type { Page } from 'playwright'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 import { HOOK_MS } from '../src/plan.ts'
-import { SCROLL_PACE, scriptedScroll, scrollDistance, scrollEffectsRefire } from '../src/scroll.ts'
+import {
+  AMBIENT_DEGRADATION,
+  SCROLL_PACE,
+  scriptedScroll,
+  scrollDistance,
+  scrollEffectsRefire,
+} from '../src/scroll.ts'
 import { stabilise } from '../src/settle.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
@@ -124,5 +130,19 @@ describe('scrollEffectsRefire', () => {
     } finally {
       await page.close()
     }
+  })
+
+  test('the ambient degradation says which motion was asked for and what is shot', () => {
+    // The sentence itself, and not only the constant the source names it by: every
+    // other assertion about this note compares it against the same constant it came
+    // from, so a rewording would change src and test together in silence. A human
+    // reads this line out of a preflight, so the wording is the finding — and it is
+    // pinned here, beside the reading that produces it, rather than beside the chain
+    // in `plan.ts` that only decides when it is said.
+    assert.equal(
+      AMBIENT_DEGRADATION,
+      "hook.motion 'scroll' — this page's scroll effects do not re-fire, " +
+        "so the hook is recorded as 'ambient'",
+    )
   })
 })

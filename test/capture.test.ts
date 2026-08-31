@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { masterSize } from '../src/camera.ts'
-import { capturePlan, captureMasters, trimRecording } from '../src/capture.ts'
+import { RECORD_START_MS, capturePlan, captureMasters, trimRecording } from '../src/capture.ts'
 import { ffmpeg } from '../src/compose.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH, fitViewportWidth } from '../src/frame.ts'
 import { frameCount, planReel } from '../src/plan.ts'
@@ -10,7 +10,7 @@ import type { Shot } from '../src/plan.ts'
 import type { Beat, SiteConfig } from '../src/site.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
-import { probe, surveyed, withWorkspace } from './helpers.ts'
+import { frame, pixelsNear, probe, surveyed, withWorkspace } from './helpers.ts'
 
 /**
  * The capture plan is the one part of the capture pass that needs no browser, so
@@ -206,33 +206,106 @@ describe('trimRecording', () => {
   /** The ambient hook as the plan draws it — the one shot that is ever recorded. */
   const shot = planReel(ambient()).shots[0] as Shot
   const size = masterSize(shot, FRAME_HEIGHT)
+  /** ffmpeg's own `blue`, which is what the shot's own stretch is drawn in below. */
+  const BLUE = '#0000ff'
+  /** The dwell as the browser really films it: the marker, for `RECORD_START_MS`. */
+  const MARKER: Stretch = { colour: 'magenta', seconds: RECORD_START_MS / 1000 }
 
-  test('refuses a recording the browser never got to the end of', async () => {
-    // #63: a failed recording fails loudly. Half a second of file against a 3.4s
-    // window is a hook that would otherwise be padded out with black, and a reel is
-    // never cut from a black hook.
+  /** One flat-coloured stretch of a recording, and how long the recorder spent on it. */
+  type Stretch = { colour: string; seconds: number }
+
+  /**
+   * A recording as the browser hands one over: a marker lead, the shot, and whatever
+   * the recorder went on writing afterwards. Every stretch is a flat colour, so what
+   * the cut landed on is readable off one frame of it (#91).
+   */
+  async function recorded(path: string, stretches: Stretch[]): Promise<void> {
+    const inputs = stretches.flatMap(({ colour, seconds }) => [
+      '-f', 'lavfi',
+      '-i', `color=c=${colour}:s=64x64:r=17:d=${seconds}`,
+    ])
+    const chain = stretches.map((_, at) => `[${at}:v]`).join('')
+    await ffmpeg([
+      ...inputs,
+      '-filter_complex', `${chain}concat=n=${stretches.length}:v=1`,
+      path,
+    ])
+  }
+
+  test('refuses a recording it can find no marker in', async () => {
+    // #91: the marker is where the shot starts, so a file without one is a file this
+    // pass has no honest way to cut. It guesses at nothing — a wrong guess is a hook
+    // framed on some arbitrary moment of the page, which is exactly what #91 was.
     await withWorkspace(async (ws) => {
-      const raw = join(ws.root, 'short.mp4')
-      await ffmpeg(['-f', 'lavfi', '-i', 'color=c=black:s=64x64:r=30:d=0.5', raw])
+      const raw = join(ws.root, 'unmarked.mp4')
+      await recorded(raw, [{ colour: 'red', seconds: 5 }])
       await assert.rejects(
-        () => trimRecording(raw, join(ws.root, 'hook.mp4'), shot, size, 3400),
-        /hook — the browser recorded 0\.5\ds of a 3\.40s window/,
+        () => trimRecording(raw, join(ws.root, 'hook.mp4'), shot, size),
+        /hook — the recording carries no start marker/,
       )
     })
   })
 
-  test('cuts the shot out of the end of a recording that has one', async () => {
+  test('refuses a recording with less than the shot past its marker', async () => {
+    // #63: a failed recording fails loudly. Half a second of page against a 3.0s shot
+    // is a hook that would otherwise be padded out with black, and a reel is never cut
+    // from a black hook.
+    await withWorkspace(async (ws) => {
+      const raw = join(ws.root, 'short.mp4')
+      await recorded(raw, [MARKER, { colour: 'red', seconds: 0.5 }])
+      await assert.rejects(
+        () => trimRecording(raw, join(ws.root, 'hook.mp4'), shot, size),
+        /hook — the browser recorded 0\.\d\ds past the marker; the shot is 3\.00s/,
+      )
+    })
+  })
+
+  test('cuts the shot from where the marker lifts, not from the file’s end', async () => {
     await withWorkspace(async (ws) => {
       const raw = join(ws.root, 'long.mp4')
       const output = join(ws.root, 'hook.mp4')
-      // Five seconds of it, of which the last 3.4 is the window the browser held open.
-      await ffmpeg(['-f', 'lavfi', '-i', 'color=c=red:s=64x64:r=17:d=5', raw])
-      await trimRecording(raw, output, shot, size, 3400)
+      // The marker, then exactly the shot, then a tail the recorder padded on. A
+      // window measured back from the end would land in the tail; this one may not
+      // touch it, which is the whole of #91 said in three colours.
+      await recorded(raw, [
+        MARKER,
+        { colour: 'blue', seconds: 3 },
+        { colour: 'yellow', seconds: 2 },
+      ])
+      await trimRecording(raw, output, shot, size)
       // Exactly the hook, at the timeline's own rate and the pixels the camera was
       // planned over — whatever rate and size the browser happened to record at.
       const stream = await probe(output, 'stream=nb_frames,width,height', 'v:0')
       assert.equal(Number(stream.nb_frames), frameCount(shot.durationMs))
       assert.deepEqual([Number(stream.width), Number(stream.height)], [size.width, size.height])
+      // And it is the shot: no marker on the first frame, no tail on the last.
+      const pixels = size.width * size.height
+      const first = await frame(output, 0)
+      const last = await frame(output, frameCount(shot.durationMs) - 1)
+      assert.ok(pixelsNear(first, BLUE) > pixels * 0.9, 'the window opens before the marker lifts')
+      assert.ok(pixelsNear(last, BLUE) > pixels * 0.9, 'the window runs on into the padded tail')
+    })
+  })
+
+  test('refuses a recording carrying the marker’s colour anywhere but the dwell', async () => {
+    // #91's own defect one turn further on. The marker is trusted because the page is
+    // held under it for a known length of time and then never again — not because no
+    // site could paint magenta over its whole viewport, which is a promise nobody can
+    // make for a client's page. A full-bleed hero or a transition flash past the lift
+    // would otherwise take the window late by exactly as much, with the right frame
+    // count, the right size and no error: #91 again, silently.
+    await withWorkspace(async (ws) => {
+      const raw = join(ws.root, 'twice.mp4')
+      await recorded(raw, [
+        MARKER,
+        { colour: 'blue', seconds: 3 },
+        { colour: 'magenta', seconds: 1 },
+        { colour: 'yellow', seconds: 1 },
+      ])
+      await assert.rejects(
+        () => trimRecording(raw, join(ws.root, 'hook.mp4'), shot, size),
+        /hook — the recording carries 1\.\d\ds of unbroken start marker, and more of that colour earlier in the file/,
+      )
     })
   })
 })

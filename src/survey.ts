@@ -9,12 +9,18 @@
  * A survey carries facts and never verdicts. The motion probe's *reading* is here; the
  * `scroll -> ambient -> still` chain that reads it is not. A section's *height* is
  * here; the cap that refuses it is not.
+ *
+ * Where this module has to know a rule the judgment also knows — the one case is which
+ * hook is worth probing — it asks a pure predicate `plan.ts` states for both sides
+ * (`ambientBeforeProbe`), never the chain's verdict. The dependency stays one way: a
+ * fact goes up, a question goes down, and nothing here reads a judgment about the
+ * half-built survey in its own hands.
  */
 
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { BASE_VIEWPORT, DEFAULT_VIDEO_TIME, LOAD } from './frame.ts'
-import { HOOK_MS } from './plan.ts'
+import { HOOK_MS, ambientBeforeProbe } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { frameAt, framedMotion } from './motion.ts'
@@ -200,18 +206,27 @@ async function surveyPage(
  * the floor — the probe would be measuring its own camera. And a hook that was never
  * going to be `ambient` has nothing for the probe to decide.
  *
+ * The order is load-bearing in one place: the refire reading is taken before the probe
+ * gate, because the gate is the chain step that reads it. It is not load-bearing in the
+ * other — the gate is a function of the config and that reading only, so it cannot come
+ * to depend on the number the probe below it is about to write down.
+ *
  * The hero is framed exactly as the recording frames it — scrolled to the top of the
  * viewport, at the viewport the page is already loaded at — and the page is put back
  * where `stabilise` left it, which is where everything below expects it.
  */
 async function readLive(page: Page, config: SiteConfig, taken: Survey): Promise<void> {
-  let motion = configuredMotion(config)
-  if (motion === 'scroll') {
+  if (configuredMotion(config) === 'scroll') {
     taken.scrollRefires = await scrollEffectsRefire(page, HOOK_MS)
-    if (!taken.scrollRefires) motion = 'ambient'
   }
   taken.heroRect = await hookRect(page, config.hook?.selector)
-  if (motion !== 'ambient') return
+  // Whether the shot the probe would be deciding about is an `ambient` one — the
+  // chain's first step, stated once in `plan.ts` and asked here rather than re-derived,
+  // so the gate and the plan cannot disagree about which hook this is. It is a pure
+  // predicate over the one reading above and never the chain's verdict: a survey
+  // carries facts, and asking the judgment about a survey still being built would
+  // invert the seam ADR-0009 draws.
+  if (!ambientBeforeProbe(config, taken.scrollRefires)) return
   const rect = taken.heroRect
   if (!rect) return
   await frameAt(page, rect.y)

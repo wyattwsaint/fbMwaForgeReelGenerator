@@ -36,18 +36,40 @@ export async function ffprobe(args: string[]): Promise<string> {
   return run('ffprobe', ['-hide_banner', '-loglevel', 'error', ...args])
 }
 
-function run(bin: string, args: string[]): Promise<string> {
+/**
+ * ffmpeg with its output read back as *bytes* rather than written to a file — one pass
+ * whose answer is pixels rather than a picture (#91).
+ *
+ * The same launcher as `ffmpeg`, because it is the same tool asked the same way; only
+ * the plumbing of stdout differs, and a string is exactly the wrong container for a
+ * frame. The caller says what shape it asked for and reads it back on that promise:
+ * this decodes nothing.
+ *
+ * No `-y`, unlike `ffmpeg`: the output is stdout, and there is no file here to be
+ * asked about overwriting.
+ */
+export function ffmpegPixels(args: string[]): Promise<Buffer> {
+  return runBytes('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', ...args])
+}
+
+async function run(bin: string, args: string[]): Promise<string> {
+  return (await runBytes(bin, args)).toString()
+}
+
+function runBytes(bin: string, args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { windowsHide: true })
-    let stdout = ''
+    const stdout: Buffer[] = []
     let stderr = ''
-    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => (stderr += chunk))
     child.on('error', (error) =>
       reject(new Error(`${bin} — ${error.message} (is it on PATH?)`)),
     )
     child.on('close', (code) =>
-      code === 0 ? resolve(stdout) : reject(new Error(`${bin} exited ${code}\n${stderr.trim()}`)),
+      code === 0
+        ? resolve(Buffer.concat(stdout))
+        : reject(new Error(`${bin} exited ${code}\n${stderr.trim()}`)),
     )
   })
 }

@@ -7,8 +7,16 @@ import { cardLayout } from '../src/card.ts'
 import { RECORD_START_MS } from '../src/capture.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 import { SAFE_ZONE, SCRIM, TEXT_SLOT, TYPE } from '../src/house.ts'
-import { AUDIO_FADE_OUT_MS, FRAME_MS, HOOK_FADE_OUT_MS, HOOK_MS, frameCount } from '../src/plan.ts'
+import {
+  AUDIO_FADE_OUT_MS,
+  FPS,
+  FRAME_MS,
+  HOOK_FADE_OUT_MS,
+  HOOK_MS,
+  frameCount,
+} from '../src/plan.ts'
 import { SHEET_TILE, sheetSize } from '../src/review.ts'
+import { SCROLL_PACE } from '../src/scroll.ts'
 import { startFixtureSite } from './fixture/server.ts'
 import type { FixtureSite } from './fixture/server.ts'
 import {
@@ -880,6 +888,30 @@ describe('a scroll hook', () => {
    */
   const REVEAL_BAND = [540, 700] as const
   const HOOK_FRAMES = frameCount(HOOK_MS)
+  /**
+   * How far frame 0 may move between two renders: one frame of the walk, plus a few
+   * pixels of edge. The marker's lift is found on the timeline's own frame grid, so
+   * the cut lands within a frame of it and never closer — that residue is what this
+   * bounds, and the number is derived from the pace rather than observed off a run.
+   */
+  const WALK_TOLERANCE = Math.ceil(SCROLL_PACE / FPS) + 7
+
+  /**
+   * How far down the page a frame is, as the top row of the fixture's `#throb`.
+   *
+   * The throb rather than the reveal, because it is *on* an unwalked frame: a
+   * full-width bar whose top sits at document y 1620, inside the 1920px fold at scroll
+   * 0 and below the scrim's foot, so nothing washes it. Its height animates and its
+   * top does not, which is the half of it being read. A row counts as the throb once
+   * most of it is, so a row of encoder fringe at the edge is not the answer.
+   */
+  function walkedTo(frameBytes: Buffer): number {
+    for (let row = 0; row < FRAME_HEIGHT; row++) {
+      const found = pixelsNear(rows(frameBytes, row, row + 1), PARKED_ANIMATION)
+      if (found > FRAME_WIDTH / 2) return row
+    }
+    return -1
+  }
 
   function scrollSite(url: string): string {
     return `
@@ -926,14 +958,13 @@ export default defineSite({
   test('fires the reveal on camera — the frames carry what no still could', async () => {
     // Frame 0 is the top of the document, where the reveal is not in the band.
     //
-    // The band rather than the whole frame, because the reveal is only 50px clear of
-    // the fold and the walk is already running when the first frame is recorded — a
-    // couple of hundred milliseconds of it, under a loaded machine — so a strip of the
-    // reveal can be on the frame's last rows at frame 0 and it means nothing. That the
-    // whole-frame count used to be zero was the *scrim*: the wash ran to the foot of
-    // the frame and ate those rows. It stops above them now (#60, as amended), so the
-    // claim has to be the one this test was always making — the reveal travelled into
-    // the band — rather than one the wash was making for it.
+    // The band rather than the whole frame, because this test's claim is that the
+    // reveal *travelled* — it is about the last frame, and the first one is only its
+    // control. Where frame 0 itself is, is the next test's question, and it reads the
+    // whole frame to ask it. That the whole-frame count here used to be zero for the
+    // wrong reason is worth knowing: the scrim ran to the foot of the frame and ate
+    // the rows the reveal would have shown in. It stops above them now (#60, as
+    // amended), so the claim is read where the claim is.
     const first = await frame(walkedPath, 0)
     assert.equal(
       pixelsNear(rows(first, ...REVEAL_BAND), REVEAL),
@@ -988,6 +1019,66 @@ export default defineSite({
       const beat = await frame(walkedPath, index)
       assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
     }
+  })
+
+  test('frame 0 is the top of the document, not a moment into the walk', async () => {
+    // #91: the thumbnail is the frame the plan says it is. `RECORD_START_MS`'s
+    // docblock spends determinism on a live shot and keeps *composition*, and this is
+    // the claim — the walk starts where frame 0 is, not a couple of hundred pixels
+    // down a page whose top it is supposed to frame.
+    //
+    // Two readings, because either alone is blind. The reveal's absence bounds the
+    // walk from above: a 400px bar whose top sits 50px clear of the 1920px fold at
+    // scroll 0, so a frame carrying none of it was taken at **scroll <= 50px** — the
+    // fixture's own geometry is the tolerance, against the ~240px a quarter-second of
+    // the house pace puts on screen. But absence is a count of zero, and a frame that
+    // never lifted the marker at all would score zero too. So the throb's own top row
+    // is read as well: it says positively that this frame is the page, and says where
+    // down the page it is. At scroll 0 it lands at 1620 of 1920, and a walk of any
+    // consequence drags it up out of that.
+    //
+    // The window used to be measured back from the recording's own end on a wall-clock
+    // stopwatch, and a recording's timeline is not the wall clock: an idle page emits
+    // one held frame rather than a stretch of them, and the recorder pads the tail past
+    // the last paint. The marker is what closed that gap, so this fails loudly if it is
+    // ever traded back for a stopwatch.
+    const first = await frame(walkedPath, 0)
+    assert.equal(pixelsNear(first, REVEAL), 0, 'the thumbnail is already into the walk')
+    assert.ok(
+      walkedTo(first) > 1500,
+      `frame 0 is not the page at its top: the throb is at row ${walkedTo(first)}`,
+    )
+  })
+
+  test('composes frame 0 the same way across two renders of the same site', async () => {
+    // The other half of #91, and the half a single render cannot see: the evidence
+    // table was two runs whose frame 0 sat 18px apart, and "the same thing" is the
+    // word the `RECORD_START_MS` docblock uses, not "nearly".
+    //
+    // Composition and never pixels — ADR-0006 spent those on purpose, so the frames
+    // are not compared to each other; where the page sits in them is. What is left to
+    // move is the marker's own quantisation: the lift is found on the timeline's frame
+    // grid, so the cut can be up to one frame early or late, and one frame of the
+    // house pace is SCROLL_PACE / FPS ≈ 17px of walk. That, plus a few pixels for
+    // where an encoded edge is judged to begin, is the whole budget.
+    const before = await frame(walkedPath, 0)
+    const master = join(walked.root, 'out', 'masters', 'hook.mp4')
+    const wasCaptured = (await stat(master)).mtimeMs
+
+    const again = await reel(['render', 'scrolled'], walked.root)
+    assert.equal(again.code, 0, again.output)
+    // Run-scoped, exactly as a still hook's master is (#14): the second render filmed
+    // the page again rather than re-cutting the first render's recording.
+    assert.notEqual((await stat(master)).mtimeMs, wasCaptured)
+
+    const second = await frame(walkedPath, 0)
+    assert.equal(pixelsNear(second, REVEAL), 0, 'the second render’s thumbnail is into the walk')
+    const drift = Math.abs(walkedTo(second) - walkedTo(before))
+    assert.ok(
+      drift <= WALK_TOLERANCE,
+      `frame 0 moved ${drift}px between two renders, past the ${WALK_TOLERANCE}px a frame ` +
+        'of the marker’s own quantisation can account for',
+    )
   })
 
   test('draws its line fully on frame 0, and still cuts hard into a frozen beat', async () => {

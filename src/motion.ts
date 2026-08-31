@@ -97,12 +97,34 @@ export const STILL_DEGRADATION =
  */
 export async function frameAt(page: Page, y: number): Promise<void> {
   await page.evaluate((to) => window.scrollTo(0, to), y)
+  await painted(page)
+}
+
+/**
+ * Let the page paint what was just asked of it, and wait for the frame it paints on.
+ *
+ * Stated once for the same reason the framing is: every caller here is about to time
+ * something against a frame the browser has actually drawn — where a probe samples,
+ * where a recording's dwell starts, where its window opens — and a caller that skipped
+ * the wait would be measuring the request rather than the paint. One rAF, because one
+ * is what "the browser has drawn it" costs.
+ */
+export async function painted(page: Page): Promise<void> {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
 }
 
-/** Whether the frame this page is currently at moves enough to be worth recording. */
-export async function movesAsFramed(page: Page): Promise<boolean> {
-  return (await framedMotion(page)) >= MOTION_FLOOR
+/**
+ * Whether a probe reading is worth recording — the floor comparison itself, as a
+ * function of the number rather than of the page it was read off.
+ *
+ * It lives here beside the constant the calibration set, because the floor and the
+ * comparison are one fact and a caller that wrote `>= MOTION_FLOOR` out for itself
+ * could disagree about which side of it "live" is. It takes a reading rather than a
+ * page because only the reading crosses the survey's seam (ADR-0009): the degradation
+ * chain in `plan.ts` asks this question with no browser under it.
+ */
+export function movesEnough(reading: number): boolean {
+  return reading >= MOTION_FLOOR
 }
 
 /**
