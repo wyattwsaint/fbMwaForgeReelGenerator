@@ -49,7 +49,11 @@ pan and drift alternate, so no move repeats across a cut. The hook drifts, so
 beat 1 pans. Each pan then takes the next direction in the rotation, and each drift
 the next of push and pull — both seeded on the beat index alone, so overriding one
 beat never moves another's. The card is in the drift rotation and the hook is not.
-Per-beat override in config.
+A **scroll** hook is the one thing outside the pan rotation that spends a step of
+it: a scripted scroll travels down the page and so does a vertical pan, so behind a
+scroll hook the rotation starts one step in and beat 1 is lateral. Read off the
+hook's resolved motion, so a scroll that degrades to ambient travels nowhere and the
+rotation starts where it always did. Per-beat override in config.
 
 **Timeline** — a reel's whole shape, derived from its config before anything is
 captured: its length, its shots and their moves, its cut points and every

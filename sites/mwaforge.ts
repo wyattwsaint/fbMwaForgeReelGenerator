@@ -46,8 +46,12 @@ export default defineSite({
     {
       // How it works. #how is 666px on its own, which is a punch of 2.9 before the
       // frame is even full. The window runs from its top down through the four step
-      // cards and out into #work's own heading, which is 1300px and pans at 1.8 with
-      // 233px of travel to spare.
+      // cards and out into #work's own heading, which is 1300px.
+      //
+      // This beat is a *lateral* pan, because the hook scrolls: a scroll hook spends
+      // the rotation's vertical step (`src/plan.ts`), so the height buys framing here
+      // and nothing else — lateral travel comes from the punch alone, and 1.8 leaves
+      // 864px of it, which is more than the 728 a pan asks for.
       selector: '#how',
       y: 1090,
       height: 1300,

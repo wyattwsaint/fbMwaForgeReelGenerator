@@ -216,18 +216,49 @@ describe('planReel', () => {
     test('a scroll hook plans the ambient hook, carrying its own motion', () => {
       // #64: the two live motions differ in what the page is doing under the lens, and
       // the plan is upstream of that entirely — it says "recorded", and the capture
-      // pass is where "while a scripted scroll runs" happens. So the timeline a scroll
-      // hook plans is the ambient one with a different word in it, and the scroll's own
+      // pass is where "while a scripted scroll runs" happens. So the hook a scroll
+      // plans is the ambient one with a different word in it, and the scroll's own
       // pace and distance appear nowhere in it, because they are house constants.
       const walked = planReel(withHook({ motion: 'scroll' }))
       const dwelt = planReel(withHook({ motion: 'ambient' }))
       const hook = walked.shots[0] as Shot
       assert.equal(hook.motion, 'scroll')
       assert.equal(isLive(hook), true)
-      assert.deepEqual(
-        walked.shots.map((shot) => ({ ...shot, motion: undefined })),
-        dwelt.shots.map((shot) => ({ ...shot, motion: undefined })),
-      )
+      assert.deepEqual({ ...hook, motion: undefined }, { ...(dwelt.shots[0] as Shot), motion: undefined })
+      // The beats are where the two do differ, and only in the rotation's phase: a
+      // scroll travels down the page, so the pans start past the direction that would
+      // travel down it again. The test below is that rule; this is where it shows up.
+      assert.notDeepEqual(walked.shots.slice(1), dwelt.shots.slice(1))
+    })
+
+    test('a scroll hook is not followed by a vertical pan', () => {
+      // The rotation's one rule read across the hook boundary: a scripted scroll and a
+      // vertical pan are the same downward gesture, and a hard cut between them makes
+      // one long slide with a stutter in it. The hook is a drift, so the pan rotation
+      // never used to compare itself against it.
+      const walked = beatShots(planReel(withHook({ motion: 'scroll' })))
+      assert.equal(walked[0]!.direction, 'lateral')
+      // Stepped past, not exempted from: every direction is still reachable and none
+      // repeats across a cut, which is the whole of what the rotation is for.
+      const directions = walked.map((shot) => shot.direction).filter(Boolean)
+      for (const [i, direction] of directions.entries()) {
+        if (i > 0) assert.notEqual(direction, directions[i - 1], `pan ${i} repeats its neighbour`)
+      }
+      // The other two motions travel nowhere on their own, so they start where the
+      // rotation always started.
+      for (const motion of ['still', 'ambient'] as const) {
+        assert.equal(beatShots(planReel(withHook({ motion })))[0]!.direction, 'vertical')
+      }
+    })
+
+    test('a scroll that degrades to ambient plans the rotation it degraded into', () => {
+      // #64's degradation is the reason the shift is read off the resolved motion and
+      // not off the config's ask: a hook whose reveals cannot re-fire is recorded
+      // standing still, so there is no downward move for beat 1 to repeat and nothing
+      // to step past. The reel plans the vertical it would always have had.
+      const asked = withHook({ motion: 'scroll' })
+      const degraded = surveyed(asked, { scrollRefires: false, motionReading: MOTION_FLOOR })
+      assert.equal(beatShots(planReel(asked, degraded))[0]!.direction, 'vertical')
     })
 
     test('a surveyed reading degrades the hook, and plans the shot it lands on', () => {
