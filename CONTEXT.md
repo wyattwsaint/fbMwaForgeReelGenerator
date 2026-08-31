@@ -61,23 +61,42 @@ a beat boundary; the last is where the CTA's crossfade starts, which is a
 transition rather than a cut, and it is the only one two shots share.
 
 **CTA** — the closing 2.5s. A card, crossfaded in, carrying **MWA Forge's** call
-to action: the MWA wordmark, the **tagline** beneath it, `mwaforge.com` in large
+to action: the **lockup**, the **tagline** beneath it, `mwaforge.com` in large
 type, and the client's domain credited under that. The reel is MWA Forge's
 marketing, so the viewer's next step is hiring MWA Forge; the client site is the
 proof, and the credit line attributes it. On MWA Forge's own reel (#67) the credit is
 `mwaforge.com` and the card therefore says it twice — the credit line answers "whose
 site was that", and on that one reel the honest answer is the same domain. The card
-keeps its shape rather than growing a special case. The card drifts like everything else, and
-takes its turn at pushing and pulling: it is drawn rather than filmed, so a pull costs
-it no sharpness, and it is the last thing on screen, which is where an alternation is
-most visible.
+keeps its shape rather than growing a special case. The card drifts like everything
+else, and takes its turn at pushing and pulling: it is drawn rather than filmed, so
+a pull costs it no sharpness, and it is the last thing on screen, which is where an
+alternation is most visible.
+
+**Lockup** — MWA Forge's mark: the word `MWA` beside the word `FORGE`, `MWA` in
+house **ink** and `FORGE` in the **spark**. It is the one image on the **card**,
+it is a repo constant, and it is never the client's — the client reaches the
+viewer as site pixels and as a **credit**. Its two halves are made differently:
+`MWA` is drawn geometry, `FORGE` is the house display face set as type. That is an
+implementation seam, not a domain one — the lockup is one thing, and its
+proportions are brand facts that hold wherever it is drawn (ADR-0010).
+
+**Spark** — MWA Forge's brand gradient, and the only gradient in a reel: blue to
+purple to pink, left to right, ramping across `FORGE` and nothing else. The
+**accent** stays a flat colour — it is the spark's middle stop, not a second
+gradient. Two gradients on a 2.5s card is one too many.
 
 **Tagline** — the line on the CTA card that says what MWA Forge sells:
-`Websites by MWA Forge`, set between the wordmark and `mwaforge.com`. House
-style, not config — the same words on every reel, like the face, the mark and the
-accent. It is not the **credit**: a credit attributes the client's site, a tagline
-is the author's own signature. Set smaller than `mwaforge.com`, which stays the
+`Websites that book jobs`, set between the **lockup** and `mwaforge.com`. House
+style, not config — the same words on every reel, like the face, the lockup and the
+accent. It does not repeat the name, because the lockup above it already is the
+name; what it adds is the offer, for the viewer who catches only the last two
+seconds. It is not the **credit**: a credit attributes the client's site, a tagline
+is the author's own voice. Set smaller than `mwaforge.com`, which stays the
 largest type on the card because it is the one line asking the viewer to act.
+
+**Signature** — the **lockup** and the **tagline** together, set tighter than the
+card's other gaps. The words are the lockup's own signing, not a second line
+stacked under it: set equidistant, the tagline starts to read as a headline.
 
 **Card** — a rendered frame containing no site pixels. Currently the CTA is the
 only card, and it is drawn in the house style — a card is never the client's.
@@ -103,9 +122,10 @@ writes a shorter label — the pressure is the point, because type never shrinks
 fit.
 
 **House style** — the one visual treatment every overlay and card uses, on every
-reel, for every client: MWA Forge's own display face, ink, ground, accent and
-**tagline**, frozen as constants in this repo. The client's brand reaches the
-viewer as site pixels; the overlay is the author's voice, not the subject's.
+reel, for every client: MWA Forge's own display face, ink, ground, accent,
+**spark**, **lockup** and **tagline**, frozen as constants in this repo. The
+client's brand reaches the viewer as site pixels; the overlay is the author's
+voice, not the subject's.
 
 **Slot** — the single fixed region overlay text occupies: left-aligned, in the
 lower band of the safe zone, its foot a breath clear of the boosted bottom
@@ -354,7 +374,7 @@ first frame it is alone on screen.
 
 **Signature track** — the piece of music a reel gets when its config names none. Not
 reproducible from the prompt that made it, so the file itself is the asset. It is MWA
-Forge's, like the face and the mark, so it is found beside them in this repo rather
+Forge's, like the face and the lockup, so it is found beside them in this repo rather
 than beside any site's config. It is the default rather than the only one: `audio/`
 holds a second track that MWA Forge's own reel names for itself, and a track a config
 names is checked in and provenanced exactly as this one is.

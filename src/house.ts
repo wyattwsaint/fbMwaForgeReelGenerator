@@ -24,12 +24,28 @@ export const FONT_FILE = fileURLToPath(
 ).replaceAll('\\', '/')
 
 /**
- * The MWA Forge mark, drawn for this repo and checked in beside the face — see
- * `assets/brand/PROVENANCE.md`. It is the card's one image, and it is never the
- * client's: the client reaches the viewer as site pixels and as a credit line.
+ * The `MWA` half of the lockup, drawn for this repo and checked in beside the face —
+ * see `assets/brand/PROVENANCE.md`. The lockup is the card's one image, and it is
+ * never the client's: the client reaches the viewer as site pixels and as a credit.
+ *
+ * Half, because the lockup's two halves are made differently: `MWA` is drawn geometry
+ * and `FORGE` is the display face above, set as type (ADR-0010). That is an
+ * implementation seam and not a domain one — there is no "MWA" in the glossary, only
+ * a lockup — which is why the constant is named for the file it points at rather than
+ * for a thing the brand has.
  */
-export const WORDMARK_FILE = fileURLToPath(
-  new URL('../assets/brand/mwaforge-wordmark.svg', import.meta.url),
+export const MWA_SVG_FILE = fileURLToPath(
+  new URL('../assets/brand/mwaforge-mwa.svg', import.meta.url),
+)
+
+/**
+ * The exported lockup, whole, at 6680x1440 — the source of truth, not a source of
+ * pixels. No reel ever draws it: the gate test renders the composed lockup through
+ * the real filtergraph and diffs the result against this file, so the brand facts
+ * in `src/` have something that can contradict them.
+ */
+export const LOCKUP_PNG_FILE = fileURLToPath(
+  new URL('../assets/brand/mwaforge-lockup.png', import.meta.url),
 )
 
 /**
@@ -58,6 +74,26 @@ export function trackPath(file: string | undefined, root: string): string {
 export const INK = '#eef1f6'
 export const GROUND = '#0a0c10'
 export const ACCENT = '#8b5cf6'
+
+/**
+ * The **spark** — MWA Forge's brand gradient, and the only gradient in a reel: blue
+ * to purple to pink, left to right, ramping across `FORGE` and nothing else.
+ *
+ * `ACCENT` stays a flat colour and is the middle stop here rather than a second
+ * purple, which is the whole of why the two live next to each other: two gradients on
+ * a 2.5s card is one too many, and two purples that were meant to be the same purple
+ * is worse.
+ *
+ * The middle stop sits at 55% and not at half. Blue-to-purple is a shorter trip for
+ * the eye than purple-to-pink, so a centred stop reads as pink arriving early; the
+ * extra 5% spends the ramp where the change is actually visible. Set by eye, like the
+ * scrim's numbers, and against the exported lockup.
+ */
+export const SPARK = [
+  { color: '#3b82f6', at: 0 },
+  { color: ACCENT, at: 0.55 },
+  { color: '#ec4899', at: 1 },
+] as const
 
 /**
  * The boosted safe zone — the box Meta's own UI leaves alone once the creative
