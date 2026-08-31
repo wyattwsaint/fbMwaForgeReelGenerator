@@ -11,7 +11,7 @@
 
 import { DEFAULT_PUNCH_FACTOR, FRAME_HEIGHT, FRAME_WIDTH, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { MIN_FIT_SCALE } from './house.ts'
-import { MOTION_FLOOR, STILL_DEGRADATION } from './motion.ts'
+import { STILL_DEGRADATION, movesEnough } from './motion.ts'
 import { AMBIENT_DEGRADATION } from './scroll.ts'
 import { configuredMotion } from './site.ts'
 import type {
@@ -329,8 +329,10 @@ function rotatedPushPull(index: number): PushPull {
  * find degrades nothing and is noted as nothing. The load failure and the missing hero
  * are already problems, and a note about either would be the same defect said twice.
  *
- * The floor stays in `motion.ts`, where the probe that calibrated it is written; only
- * the *reading* crosses the seam, which is what lets a test sit either side of it.
+ * The floor stays in `motion.ts`, where the probe that calibrated it is written, and so
+ * does the comparison against it — `movesEnough` is asked here rather than the constant
+ * re-compared. Only the *reading* crosses the seam, which is what lets a test sit either
+ * side of it.
  */
 export function resolvedMotion(
   config: SiteConfig,
@@ -344,7 +346,7 @@ export function resolvedMotion(
   }
   if (motion !== 'ambient') return { motion, notes }
   const reading = survey?.motionReading ?? null
-  if (reading === null || reading >= MOTION_FLOOR) return { motion, notes }
+  if (reading === null || movesEnough(reading)) return { motion, notes }
   notes.push(STILL_DEGRADATION)
   return { motion: 'still', notes }
 }

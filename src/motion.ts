@@ -113,9 +113,18 @@ export async function painted(page: Page): Promise<void> {
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))))
 }
 
-/** Whether the frame this page is currently at moves enough to be worth recording. */
-export async function movesAsFramed(page: Page): Promise<boolean> {
-  return (await framedMotion(page)) >= MOTION_FLOOR
+/**
+ * Whether a probe reading is worth recording — the floor comparison itself, as a
+ * function of the number rather than of the page it was read off.
+ *
+ * It lives here beside the constant the calibration set, because the floor and the
+ * comparison are one fact and a caller that wrote `>= MOTION_FLOOR` out for itself
+ * could disagree about which side of it "live" is. It takes a reading rather than a
+ * page because only the reading crosses the survey's seam (ADR-0009): the degradation
+ * chain in `plan.ts` asks this question with no browser under it.
+ */
+export function movesEnough(reading: number): boolean {
+  return reading >= MOTION_FLOOR
 }
 
 /**

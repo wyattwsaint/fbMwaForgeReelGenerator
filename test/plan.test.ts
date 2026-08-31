@@ -727,6 +727,22 @@ describe('resolvedMotion', () => {
   // ADR-0008's chain, as a function of two numbers rather than of a page that animates
   // (#96): a `scroll` whose reveals do not re-fire is an `ambient`, and an `ambient`
   // that does not move in its own frame is a `still`.
+  test('each degradation says, in words, which motion was asked for and what is shot', () => {
+    // The sentences themselves, and not only the constants the source names them by:
+    // every other test here compares a note against the same constant it came from, so
+    // a rewording would change src and test together in silence. A human reads these
+    // lines out of a preflight, so the wording is the finding.
+    assert.equal(
+      AMBIENT_DEGRADATION,
+      "hook.motion 'scroll' — this page's scroll effects do not re-fire, " +
+        "so the hook is recorded as 'ambient'",
+    )
+    assert.equal(
+      STILL_DEGRADATION,
+      "hook.motion 'ambient' — this hero does not move in the frame it would be shot " +
+        "in, so the hook is captured as 'still'",
+    )
+  })
   test('an unsurveyed hook is the one the config asked for, and is noted as nothing', () => {
     for (const motion of ['still', 'ambient', 'scroll'] as const) {
       assert.deepEqual(resolvedMotion(withHook({ motion })), { motion, notes: [] })

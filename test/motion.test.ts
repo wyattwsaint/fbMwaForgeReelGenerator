@@ -10,7 +10,7 @@ import {
   MOTION_WINDOW_MS,
   frameAt,
   framedMotion,
-  movesAsFramed,
+  movesEnough,
 } from '../src/motion.ts'
 import { hookRect } from '../src/page.ts'
 import { stabilise } from '../src/settle.ts'
@@ -64,7 +64,7 @@ describe('framedMotion', () => {
     try {
       const reading = await framedMotion(page)
       assert.ok(reading > MOTION_FLOOR, `a live hero read ${reading.toFixed(2)}`)
-      assert.equal(await movesAsFramed(page), true)
+      assert.equal(movesEnough(reading), true)
     } finally {
       await page.close()
     }
@@ -76,8 +76,9 @@ describe('framedMotion', () => {
     // reading is the *page's* and never the probe's. `once.html` is deliberately still.
     const page = await framedOnHero('/once.html')
     try {
-      assert.equal(await framedMotion(page), 0)
-      assert.equal(await movesAsFramed(page), false)
+      const reading = await framedMotion(page)
+      assert.equal(reading, 0)
+      assert.equal(movesEnough(reading), false)
     } finally {
       await page.close()
     }
@@ -88,7 +89,7 @@ describe('framedMotion', () => {
     // the frame the hero would be shot in.
     const page = await framedOnHero('/cropped.html')
     try {
-      assert.equal(await movesAsFramed(page), false)
+      assert.equal(movesEnough(await framedMotion(page)), false)
 
       // And the motion is real — the same page, framed on the part of the hero that
       // has it, reads live. Nothing is wrong with the page, the browser or the probe;

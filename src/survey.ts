@@ -14,7 +14,7 @@
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { BASE_VIEWPORT, DEFAULT_VIDEO_TIME, LOAD } from './frame.ts'
-import { HOOK_MS } from './plan.ts'
+import { HOOK_MS, resolvedMotion } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
 import { frameAt, framedMotion } from './motion.ts'
@@ -205,13 +205,16 @@ async function surveyPage(
  * where `stabilise` left it, which is where everything below expects it.
  */
 async function readLive(page: Page, config: SiteConfig, taken: Survey): Promise<void> {
-  let motion = configuredMotion(config)
-  if (motion === 'scroll') {
+  if (configuredMotion(config) === 'scroll') {
     taken.scrollRefires = await scrollEffectsRefire(page, HOOK_MS)
-    if (!taken.scrollRefires) motion = 'ambient'
   }
   taken.heroRect = await hookRect(page, config.hook?.selector)
-  if (motion !== 'ambient') return
+  // Whether the shot the probe would be deciding about is an `ambient` one is the
+  // first step of the degradation chain, and `resolvedMotion` owns that chain
+  // (ADR-0009). Asked of it rather than re-derived here, so the gate and the plan
+  // cannot disagree about which hook this is. The reading it would read next is still
+  // null at this point, which is the step below — the one this is about to take.
+  if (resolvedMotion(config, taken).motion !== 'ambient') return
   const rect = taken.heroRect
   if (!rect) return
   await frameAt(page, rect.y)
