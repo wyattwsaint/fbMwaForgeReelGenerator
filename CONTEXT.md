@@ -315,6 +315,16 @@ covers a whole number of them a frame. A punched pan therefore travels slightly
 less far than its room allows, and the bigger the master the less it gives up
 (#51).
 
+**Standing back** — framing a beat further out than the punch it would otherwise
+take, so a shot shows the page rather than a detail of it. Stated as a divisor on the
+punch a beat has today, and a *default* rather than a constant: it lives in ADR-0013
+and in each beat's own comment, and sites go on writing final numbers. A beat may stop
+short of it, and one that does names what stopped it — the 1.0 punch floor, the
+section height a punched frame needs, or the travel a pan is left with. So the beats
+of one reel do not all stand at the same distance; standing back is a per-beat framing
+decision like **punch-in** and **hero position**, not a house constant, and not
+something the base **capture viewport**'s width can be made to mean.
+
 **Fit** — capturing a beat's section whole, by widening the **capture viewport**
 instead of punching in. A section is exactly as wide as whatever viewport it is laid
 out in, so loading the page wider makes the section proportionally shorter against the

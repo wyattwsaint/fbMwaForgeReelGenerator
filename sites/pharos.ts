@@ -65,21 +65,35 @@ export default defineSite({
       // full width. Lateral reads as scanning the week; vertical reads as a table
       // being scrolled.
       //
-      // Every beat in this reel stands 30% further out than it used to, so that a shot
-      // shows the page rather than a detail of it. A punch is the only thing pulling
-      // the frame in, so 1.8 / 1.3 = 1.385 — and a punch is also the only thing a
-      // lateral pan travels across, so the travel falls with it: 1080 * (1.385 - 1) =
-      // 416px where it was 864. Across 3.5s that is 4.0px a frame, twice
-      // MIN_PAN_PX_PER_FRAME, so the pan is still a pan and not a drift with a name.
+      // Out again: this reel stands 30% further back than it did, on top of the 30% it
+      // already took, so that a shot shows the page rather than a detail of it. A punch
+      // is the only thing pulling the frame in, so 1.385 / 1.3 = 1.065 — and that is
+      // where this beat stops short of the ask. A punch is also the only thing a
+      // lateral pan travels across, and 1080 * (1.065 - 1) is 70px: 0.67px a frame
+      // across 3.5s, a third of MIN_PAN_PX_PER_FRAME. That is not a slow pan, it is a
+      // still frame that drifts a hair and is filed under 'lateral'.
       //
-      // The height is the cost of standing back. A frame is only full while the
-      // section is at least 1920 / punch tall, which at 1.385 is 1386px against
-      // #week's own 1310 — so the window runs 80px past the table's foot to keep the
-      // frame fed. What that 80px holds is the white above #teachers, which is the
-      // page breathing and not another section arriving.
+      // So the punch clamps at 1.194, which is exactly the pan's own floor: 1080 *
+      // 0.194 = 210px, and panTravelNeeded(3500) is 210. This beat stands 14% further
+      // out rather than 30%, and what the other 16% buys is the only lateral pan in the
+      // reel. beats[2] is the reel's other pan and it is vertical, so a #week that
+      // drifts is a reel with no lateral travel anywhere in it.
+      //
+      // The height is the cost of standing back, and it is a steeper one at 1.194 than
+      // at 1.385. A frame is only full while the section is at least 1920 / punch tall
+      // — 1609px against #week's own 1310 — so the window runs to y 3529 and takes the
+      // first 292px of #teachers with it, where it used to take 73.
+      //
+      // At 73px that was white. At 292 it is not: the contact sheet for this render
+      // ends beats[0] on 'Alongside Homeschool Families' and opens beats[1] on the same
+      // line, so the cut repeats a heading rather than crossing a margin. That is the
+      // real price of the pan, and it is charged at the cut rather than inside the
+      // shot — beats[2] pays the same one at its own cut, 523px into #inquiry. Two of
+      // this reel's three cuts now repeat a line of type, which is the thing to look at
+      // first if a third ÷1.3 is ever asked for (ADR-0013).
       selector: '#week',
-      height: 1390,
-      punchFactor: 1.385,
+      height: 1609,
+      punchFactor: 1.194,
       direction: 'lateral',
       // #week's own heading is 'Mornings here. Afternoons yours.', which is what #62
       // would default this beat to: the school's line, in a reel that is not selling
@@ -100,6 +114,17 @@ export default defineSite({
       // of it. From #teachers' top that reaches y 4907, which is inside #faith's white
       // margin and short of anything #faith draws — the pair the window was opened for
       // is still the whole of what the shot shows.
+      //
+      // This beat does not take the second 30%, and it is one of the two that ADR-0013
+      // was written around. 1.154 / 1.3 is 0.888, and 1.0 is 'no punch': config refuses
+      // anything under it, because a punch below 1.0 asks for page pixels the browser
+      // never rasterised. `fit` is the sanctioned way past 1.0 (ADR-0007) and it is no
+      // help here — fitViewportWidth clamps at the base width until a section is taller
+      // than one frame, so a fit under 1920px is a no-op and `check` then refuses the
+      // beat as too short for a frame. To fit *and* stand 30% back, this window would
+      // have to be 2496px: from y 3237 that reaches y 5733, through #costs, through the
+      // whole of #faith, and 733px into #inquiry. That is not the teachers and what a
+      // family pays for them, it is half the page. The beat keeps the distance it has.
       selector: '#teachers',
       height: 1670,
       punchFactor: 1.154,
@@ -120,19 +145,25 @@ export default defineSite({
       // in the reel and already took it: this override is the first one's cost, not a
       // second finding. A vertical pan wants 2130px of section, which at 810px is 2.7.
       // 810px on its own, so this beat has always been the one the punch is holding
-      // up. Out 30% is 2.7 / 1.3 = 2.077, which needs 925px before the frame is even
-      // full and leaves a vertical pan nothing at all to travel across — travel here
-      // is `section * punch - 1920`, and at 925px that is one pixel.
+      // up — and having the deepest punch in the reel is what lets it take the full 30%
+      // a second time where the others cannot. 2.7 / 1.3 / 1.3 = 1.598, still well
+      // clear of the 1.0 floor.
       //
-      // So the window is sized for the *move* rather than for the frame: 1053px is
-      // what keeps the 267px of travel this pan has today, which is the 2.5px a frame
-      // it has always run at. It reaches y 5243, so the last stretch of the pan brings
-      // the top of #inquiry into shot. That is the trade this beat pays for standing
-      // back, and it is a soft one — the pan is travelling downward and arriving at
-      // the form is where the reel goes next anyway.
+      // The window is sized for the *move* rather than for the frame, as it was at
+      // 2.077. A full frame wants 1920 / 1.598 = 1202px; the pan wants more, because
+      // travel here is `section * punch - 1920` and the 210px panTravelNeeded asks of a
+      // 3.5s shot needs 1333px of section. So 1333, and the pan now runs at the 2px a
+      // frame floor rather than the 2.5 it has always had — that is the last of the
+      // margin this move was carrying.
+      //
+      // It reaches y 5523, so the pan spends its final stretch inside #inquiry instead
+      // of arriving at its top: 523px in, where 2.077 reached 243. The trade is the one
+      // the first 30% already made and it is still soft — the pan travels downward and
+      // the form is where the reel goes next — but it is more than twice as much of it,
+      // and this beat is where that cost has become something to look at.
       selector: '#faith',
-      height: 1053,
-      punchFactor: 2.077,
+      height: 1333,
+      punchFactor: 1.598,
       direction: 'vertical',
     },
     {
@@ -147,6 +178,14 @@ export default defineSite({
       // window is placed by hand and it opens 120px above the section, in the white
       // under #faith: this is the one beat whose `y` is written, and standing back is
       // why.
+      //
+      // The second 30% has nowhere at all to go here, and this is the beat that makes
+      // ADR-0013's escape an escape rather than a caution. 1.231 / 1.3 is 0.947, under
+      // the 1.0 floor; and a `fit` standing 30% back wants a 2496px window, which on a
+      // 6452px page cannot open below y 3956 — and y 3956 is inside #teachers. So there
+      // is no `y` this beat could be given: measured from either end, the page runs out
+      // before the window does. #inquiry keeps 1.231, and being the last section on the
+      // page is the whole reason.
       selector: '#inquiry',
       y: 4880,
       height: 1570,
