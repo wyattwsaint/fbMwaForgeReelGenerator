@@ -504,7 +504,9 @@ describe('planReel', () => {
 
   describe('copy budgets', () => {
     test('the budgets are #9\'s table', () => {
-      assert.deepEqual(COPY_BUDGETS, { hook: { lines: 2, chars: 42 }, label: { lines: 1, chars: 28 } })
+      // One table for both roles since ADR-0012: a label is set at the hook's size, and
+      // this table is a proxy for the width a size draws.
+      assert.deepEqual(COPY_BUDGETS, { hook: { lines: 2, chars: 42 }, label: { lines: 2, chars: 42 } })
     })
 
     test('copy at, one under, and one over a budget classifies correctly', () => {
@@ -525,9 +527,10 @@ describe('planReel', () => {
         copyProblem('hook.text', 'a\nb\nc', COPY_BUDGETS.hook) ?? '',
         /hook\.text is 3 lines; the budget is 2/,
       )
+      assert.equal(copyProblem('beats[0].label', 'a\nb', COPY_BUDGETS.label), null)
       assert.match(
-        copyProblem('beats[0].label', 'a\nb', COPY_BUDGETS.label) ?? '',
-        /beats\[0\]\.label is 2 lines; the budget is 1/,
+        copyProblem('beats[0].label', 'a\nb\nc', COPY_BUDGETS.label) ?? '',
+        /beats\[0\]\.label is 3 lines; the budget is 2/,
       )
     })
   })

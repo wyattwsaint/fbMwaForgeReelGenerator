@@ -75,9 +75,9 @@ describe('verdict', () => {
   test("a page's own heading is held to the label budget it would be drawn as (#62)", () => {
     const site = config(3)
     const { problems } = report(site, {
-      beats: sections({ 1: { heading: 'Enrolling for Fall, apply now' } }),
+      beats: sections({ 1: { heading: 'Enrolling for Fall, apply now before the doors shut' } }),
     })
-    assert.deepEqual(problems, ['beats[1] heading is 29 characters; the budget is 28'])
+    assert.deepEqual(problems, ['beats[1] heading is 51 characters; the budget is 42'])
   })
 
   test('a heading inside the count still fails when it draws too wide', () => {
@@ -88,7 +88,7 @@ describe('verdict', () => {
       beats: sections({ 1: { heading: 'WWWWWWWWWWWWWWWWWWWWWWWWWWWW' } }),
     })
     assert.deepEqual(problems, [
-      'beats[1] heading draws 1106px wide at 44px; the safe box is 950px',
+      'beats[1] heading draws 1911px wide at 76px; the safe box is 950px',
     ])
   })
 
@@ -223,9 +223,9 @@ describe('judge', () => {
     const long = { ...config(3), hook: { text: 'x'.repeat(43) } }
     assert.deepEqual(reportOf(long, 3).problems, ['hook.text is 43 characters; the budget is 42'])
 
-    const labelled = config(3, [{}, { label: 'y'.repeat(29) }])
+    const labelled = config(3, [{}, { label: 'y'.repeat(43) }])
     assert.deepEqual(reportOf(labelled, 3).problems, [
-      'beats[1].label is 29 characters; the budget is 28',
+      'beats[1].label is 43 characters; the budget is 42',
     ])
   })
 })

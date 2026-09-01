@@ -52,14 +52,16 @@ describe('sites/', () => {
     }
   })
 
-  test('brobst names nothing but sections, punch, two labels and a credit line', async () => {
+  test('brobst names nothing but sections, punch, three labels and a credit line', async () => {
     const config = await site('brobst')
     assert.deepEqual(Object.keys(config).sort(), ['beats', 'cta', 'hook', 'url'])
     assert.deepEqual(Object.keys(config.hook), ['text'])
     // No move, direction, push/pull, url or video pin anywhere: the reel's whole shape
     // is still the plan's. A label is the one override #62 can force on a config that
-    // wanted none — a beat that says nothing now draws its section's heading, and two
-    // of Brobst's are too long to draw (55 and 40 characters).
+    // wanted none — a beat that says nothing now draws its section's heading, and all
+    // three of Brobst's are too long to draw. Two were too long by the count (55 and 40
+    // characters); the third is 26 characters and was fine until ADR-0012 set a label
+    // at the hook's size, where it draws 994px across a 950px box.
     for (const beat of config.beats) {
       assert.deepEqual(
         Object.keys(beat).sort().filter((key) => key !== 'label'),
@@ -69,7 +71,7 @@ describe('sites/', () => {
     }
     assert.deepEqual(
       config.beats.map((beat) => beat.label),
-      [undefined, 'One person, start to finish', 'After the second visit'],
+      ['What we do,\neach one well.', 'One person,\nstart to finish', 'After the second visit'],
     )
   })
 

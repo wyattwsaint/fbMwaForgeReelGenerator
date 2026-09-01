@@ -60,11 +60,15 @@ describe('slot overflow', () => {
     assert.match(problems[1] as string, /line 2/)
   })
 
-  test('a label is measured at label size, not hook size', () => {
-    const copy = 'W'.repeat(28)
+  test("a label is measured at its own role's size, which is the hook's (ADR-0012)", () => {
+    const copy = 'W'.repeat(20)
     assert.deepEqual(overflowProblems('beats[0].label', copy, 'label'), [
-      `beats[0].label draws ${lineWidth(copy, TYPE.label.size)}px wide at 44px; the safe box is ${TEXT_SLOT.width}px`,
+      `beats[0].label draws ${lineWidth(copy, TYPE.label.size)}px wide at 76px; the safe box is ${TEXT_SLOT.width}px`,
     ])
-    assert.ok(lineWidth(copy, TYPE.label.size) < lineWidth(copy, TYPE.hook.size))
+    assert.equal(TYPE.label.size, TYPE.hook.size)
+    // The role is still *read* rather than a size assumed, which the two being equal
+    // would otherwise hide: the same copy set at the card's credit size is inside the
+    // box, and only the role tells the two calls apart.
+    assert.deepEqual(overflowProblems('cta.credit', copy, 'credit'), [])
   })
 })

@@ -58,7 +58,7 @@ export default defineSite({
       punchFactor: 1.8,
       // The window's first heading is 'Four steps. No agency runaround.' — 32
       // characters, over #9's 28. The shorter line is the same promise.
-      label: 'Four steps, no runaround.',
+      label: 'Four steps,\nno runaround.',
     },
     {
       // The portfolio, and the beat that is fit (#65): the grid is cards, and a punch
@@ -76,7 +76,7 @@ export default defineSite({
       // The section's own heading, written out because the window starts below it —
       // there is none inside to inherit, and an unlabelled beat is one with no text on
       // it rather than a problem. This is the line the shot is showing.
-      label: 'Real sites. Real businesses.',
+      label: 'Real sites.\nReal businesses.',
     },
     {
       // The guarantee and the person behind it — 623px and 687px, neither enough for
@@ -90,7 +90,7 @@ export default defineSite({
       y: 7069,
       height: 1550,
       punchFactor: 1.5,
-      label: 'The guarantee, and the guy.',
+      label: 'The guarantee,\nand the guy.',
     },
     {
       // The closing ask. 576px of section, run down to the foot of the page — 1030px,
