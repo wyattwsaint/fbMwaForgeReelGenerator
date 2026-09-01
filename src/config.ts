@@ -42,6 +42,17 @@ export function configProblems(config: SiteConfig, root: string): string[] {
     // to fit, so the only fix is shorter copy.
     problems.push(...copyProblems('hook.text', config.hook.text, COPY_BUDGETS.hook, 'hook'))
   }
+  // A fraction of the hero's own width, so the two edges are the two ends of it. Out of
+  // range is not clamped: 1.4 is a human meaning something this cannot do, and a crop
+  // silently snapped back to the right edge is a framing decision nobody made (ADR-0011).
+  const heroPosition = config.hook?.heroPosition
+  const inRange = Number.isFinite(heroPosition) && heroPosition! >= 0 && heroPosition! <= 1
+  if (heroPosition !== undefined && !inRange) {
+    problems.push(
+      `hook.heroPosition is ${heroPosition}; it is a fraction of the hero, ` +
+        '0 (left edge) to 1 (right)',
+    )
+  }
   if (typeof config.cta?.credit !== 'string' || config.cta.credit === '') {
     problems.push('cta.credit is required')
   } else {

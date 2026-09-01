@@ -23,12 +23,18 @@ export default defineSite({
   hook: { text: 'Spotless, every time.' },
   beats: [
     // 1231px, and a vertical pan wants 210px of travel on top of a frame.
-    { selector: '#services', punchFactor: 1.8 },
+    // The section's own heading is 'What we do, each one well.', which #62 defaulted
+    // this beat until ADR-0012 set a label at the hook's size — at 76px it draws 994px
+    // across a 950px box. The label is the heading's own claim, broken at its comma.
+    { selector: '#services', punchFactor: 1.8, label: 'What we do,\neach one well.' },
     // 873px, so a drift is punched to the frame's height and nothing more.
     // The section's own heading is 55 characters, so #62 defaults this beat a line it
     // cannot draw: the label is what the heading was saying, at a length type does not
     // have to shrink for.
-    { selector: '#about', punchFactor: 2.3, label: 'One person, start to finish' },
+    // Two lines since ADR-0012 set a label at the hook's size: 27 characters is well
+    // inside the count, and at 76px it draws 969px across a 950px box. The break is
+    // where the line's own comma is.
+    { selector: '#about', punchFactor: 2.3, label: 'One person,\nstart to finish' },
     // 965px, which is what asks for the 2.1: a punched frame is 1920/2.1 = 915px of
     // section. The lateral travel then comes free — it is bought with the punch, not
     // with the height, and 1.19 would have been enough for the move alone.

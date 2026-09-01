@@ -123,7 +123,14 @@ export const SAFE_ZONE = {
  */
 export const TYPE = {
   hook: { size: 76, lineHeight: 92 },
-  label: { size: 44, lineHeight: 56 },
+  /** A label is set at the hook's size, not under it. The scale used to step down
+   * here on the reading that a hook is the reel's claim and a label is a caption on
+   * someone else's page. That is the wrong picture of who is watching: a reel is
+   * silent, plays at thumb size in a feed, and a beat's line is the only thing in
+   * those 3.5 seconds that says what the shot is *for*. A caption the viewer has to
+   * lean in for is a caption they skip, and the beat then reads as a pretty
+   * scroll-past. So there is one voice across the reel and it is one size. */
+  label: { size: 76, lineHeight: 92 },
   /** The card's own three roles (#9 §5, #61). The headline is the largest type on a
    * reel: it is the only line the whole reel is asking the viewer to act on, and it
    * sits on a flat ground with nothing to compete with. The credit is set small on

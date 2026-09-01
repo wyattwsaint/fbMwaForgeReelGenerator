@@ -1,4 +1,4 @@
-import type { Page } from 'playwright'
+import type { JSHandle, Page } from 'playwright'
 
 export type Rect = { x: number; y: number; width: number; height: number }
 
@@ -85,24 +85,40 @@ export async function rectOf(page: Page, selector: string): Promise<Rect | null>
 }
 
 /**
- * The hero, resolved the one way — `check` and `capture` have to agree about which
- * element the hook is, or a config that checks clean renders a different opening shot.
+ * The hero itself, resolved the one way — `check` and `capture` have to agree about
+ * which element the hook is, or a config that checks clean renders a different opening
+ * shot.
+ *
+ * A handle rather than a rect, because two things now ask this question and want
+ * different answers about the same element: `hookRect` below wants where it is, and
+ * `positionHero` (`./hero.ts`) wants to reach inside it. Stated once here so the rule
+ * cannot be changed at one reader and left alone at the other.
  */
-export async function hookRect(page: Page, selector?: string): Promise<Rect | null> {
-  if (selector) return rectOf(page, selector)
-  const found = await page.evaluate(() => {
+export function heroHandle(page: Page, selector?: string): Promise<JSHandle<Element | null>> {
+  return page.evaluateHandle((sel) => {
+    if (sel) return document.querySelector(sel)
     const main = document.querySelector('main')
-    const hero = (main ?? document).querySelector('section') ?? main?.firstElementChild
-    if (!hero) return null
-    const box = hero.getBoundingClientRect()
-    return {
-      x: box.x + window.scrollX,
-      y: box.y + window.scrollY,
-      width: box.width,
-      height: box.height,
-    }
-  })
-  return found
+    return (main ?? document).querySelector('section') ?? main?.firstElementChild ?? null
+  }, selector)
+}
+
+/** Where the hero sits, in page coordinates — the space a clip is taken in. */
+export async function hookRect(page: Page, selector?: string): Promise<Rect | null> {
+  const hero = await heroHandle(page, selector)
+  try {
+    return await hero.evaluate((element) => {
+      if (!element) return null
+      const box = element.getBoundingClientRect()
+      return {
+        x: box.x + window.scrollX,
+        y: box.y + window.scrollY,
+        width: box.width,
+        height: box.height,
+      }
+    })
+  } finally {
+    await hero.dispose()
+  }
 }
 
 /**

@@ -29,6 +29,7 @@ import {
   fitViewportWidth,
   punchedFrameHeight,
 } from './frame.ts'
+import { positionHero } from './hero.ts'
 import { frameAt, painted } from './motion.ts'
 import { hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
@@ -255,6 +256,11 @@ async function onSettledPage<T>(
   try {
     await page.goto(url, LOAD)
     await settle(page, config.hook?.videoTime)
+    // A still hook is a master like any other, so the crop the config asked for has to
+    // reach the screenshot path too — a reel whose hook records dead still opens on the
+    // framing it was written for. Harmless on a beat's load: a beat is a section of the
+    // page and the hero is in none of them.
+    await positionHero(page, config)
     return await body(page)
   } finally {
     await page.close()
@@ -341,7 +347,7 @@ function captureGroup(
   // A live group takes no config: the freeze is the only thing on it a capture reads,
   // and a live shot is the one that never freezes.
   return group.motion
-    ? recordGroup(browser, dir, group, onCapture)
+    ? recordGroup(browser, config, dir, group, onCapture)
     : screenshotGroup(browser, config, dir, group, onCapture)
 }
 
@@ -448,6 +454,7 @@ function clipFor(
  */
 async function recordGroup(
   browser: Browser,
+  config: SiteConfig,
   dir: string,
   group: CaptureGroup,
   onCapture: OnCapture,
@@ -472,6 +479,7 @@ async function recordGroup(
     const page = await context.newPage()
     await page.goto(group.url, LOAD)
     await stabilise(page)
+    await positionHero(page, config)
     const walking = await framedForRecording(page, shot, group.motion as LiveMotion)
     await markPage(page)
     await page.waitForTimeout(RECORD_START_MS)

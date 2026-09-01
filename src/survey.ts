@@ -20,6 +20,7 @@
 import { chromium } from 'playwright'
 import type { Browser, Page } from 'playwright'
 import { BASE_VIEWPORT, DEFAULT_VIDEO_TIME, LOAD } from './frame.ts'
+import { positionHero } from './hero.ts'
 import { HOOK_MS, ambientBeforeProbe } from './plan.ts'
 import { headingIn, hookRect, rectOf } from './page.ts'
 import type { Rect } from './page.ts'
@@ -166,7 +167,14 @@ async function surveyPage(
   try {
     await page.goto(url, LOAD)
     await stabilise(page)
-    if (url === config.url) await readLive(page, config, taken)
+    if (url === config.url) {
+      // The reposition comes first, because it is part of the frame and every reading
+      // below is a reading *of* the frame — ADR-0008's claim is that the probe measured
+      // the shot that gets cut, and a probe run on the site's own crop would be clearing
+      // a hook nobody is going to see.
+      await positionHero(page, config)
+      await readLive(page, config, taken)
+    }
     await freeze(page, config.hook?.videoTime ?? DEFAULT_VIDEO_TIME)
     scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight)
     for (const index of group) {

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fixture Site — a hero whose motion is cropped out sideways</title>
+<!--
+  ADR-0011's hazard, and the half of ADR-0008's that `cropped.html` could not reproduce.
+  That page says so in its own comment: the client case was a 1920x1080 video under
+  `object-fit: cover` whose motion was in the width the crop threw away, and it settled
+  for putting the motion below the fold instead — the same claim, one dimension over.
+
+  It is reproducible, and this is it. `sided.mp4` is 1920x1080, flat on its left half
+  and flickering on its right. Covering a 1080x1920 box scales it 1.78x to 3413px wide,
+  so the frame holds 31.6% of the source and `object-position` decides which 31.6%.
+  At 0 the frame is all left half and the hero reads dead; at 1 it is all right half and
+  the hero reads live. Nothing about the page differs between the two readings, which is
+  the whole of what ADR-0011 claims.
+
+  The three other pieces of media are here to be *left alone*, because what
+  `positionHero` does not touch is as much a promise as what it does: `#filled` is
+  cover's opposite number and has no crop to slide, `#tall` is a cover image whose
+  vertical framing the site chose and the reel is not asking about, and `#below` sits
+  outside the hero entirely.
+-->
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font: 16px/1.4 system-ui, sans-serif; color: #eef1f6; background: #0a0c10; }
+  section { padding: 40px 32px; }
+
+  /* The same shape as index.html's hero, so a config written against one resolves
+     against the other. */
+  #hero { position: relative; height: 3000px; background: #253856; }
+
+  /* The hero video fills the framed viewport exactly — this page is about the crop, so
+     the box being cropped is the frame itself and nothing else is in it. */
+  #hero #covered { position: absolute; top: 0; left: 0; width: 1080px; height: 1920px;
+    object-fit: cover; object-position: 0% 50%; background: #000; }
+
+  /* Stretched, not cropped: `fill` throws nothing away, so there is no column for a
+     reposition to choose and this element's own framing is not the reel's to move. */
+  #hero #filled { position: absolute; top: 2000px; left: 0; width: 1080px; height: 400px;
+    object-fit: fill; background: #000; }
+
+  /* Cover, and cropped in the *other* axis: the site's answer to "which band of a
+     too-tall source" is a question nobody measured, so it survives untouched. */
+  #hero #tall { position: absolute; top: 2500px; left: 0; width: 1080px; height: 300px;
+    object-fit: cover; object-position: 50% 12%; }
+
+  #services { height: 2400px;
+    background: repeating-linear-gradient(45deg, #1d2b3a 0 40px, #24374b 40px 80px); }
+  #services #below { width: 400px; height: 200px; object-fit: cover; object-position: 30% 50%; }
+  #gallery { height: 2000px; background: #11151c; }
+</style>
+</head>
+<body>
+<main>
+  <section id="hero">
+    <h1>Fixture hero</h1>
+    <video id="covered" src="sided.mp4" preload="none" autoplay muted loop playsinline></video>
+    <video id="filled" src="sided.mp4" preload="none" autoplay muted loop playsinline></video>
+    <img id="tall" src="img/tile-1.svg" alt="">
+  </section>
+
+  <section id="services">
+    <h2>Services</h2>
+    <img id="below" src="img/tile-1.svg" alt="">
+  </section>
+
+  <section id="gallery"><h2>Gallery</h2></section>
+</main>
+</body>
+</html>

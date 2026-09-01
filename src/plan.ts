@@ -153,7 +153,13 @@ export type CopyBudget = { lines: number; chars: number }
  */
 export const COPY_BUDGETS: { hook: CopyBudget; label: CopyBudget } = {
   hook: { lines: 2, chars: 42 },
-  label: { lines: 1, chars: 28 },
+  // The same budget as the hook, because a label is now set at the hook's size
+  // (`TYPE` in house.ts) and this table is a proxy for the width that size draws.
+  // A label's one line and 28 characters were the 44px scale's allowance; carried
+  // over unchanged they would refuse a line that fits and admit one that does not,
+  // which is a proxy pointing at nothing. The text slot is two hook lines tall by
+  // construction, so two is what there is room for.
+  label: { lines: 2, chars: 42 },
 }
 
 /**
@@ -266,18 +272,47 @@ export function copyProblem(field: string, content: string, budget: CopyBudget):
 }
 
 /**
- * The rotation ordinal of beat `i` — seeded on the beat index alone, so two configs
- * with the same n plan the same moves.
+ * The rotation ordinal of beat `i` — seeded on the beat index and on `from`, so two
+ * configs with the same n and the same hook plan the same moves.
  *
  * Beats alternate pan/drift from a drifting hook, so by default only even beats pan
  * and their ordinals run 0, 1, 2, ... — exactly "the next in the rotation". A beat
  * overridden to `pan` at an odd index is a pan the rotation did not plan for, so it
  * takes the step *opposite* the two beats it sits between: it can repeat neither
  * neighbour, and neither neighbour's direction moves because of it.
+ *
+ * `from` is where the reel's first pan enters the rotation, and it is what keeps a
+ * scroll hook from being followed by a vertical pan (`SCROLLED_ROTATION_START`). It
+ * shifts every beat's ordinal by the same step, so the rotation is still a rotation —
+ * a reel that starts one step in repeats no direction across a cut for exactly the
+ * same reason one that starts at zero does not.
  */
-function rotationOrdinal(index: number): number {
-  return Math.floor(index / 2) + (index % 2) * 2
+function rotationOrdinal(index: number, from: number = 0): number {
+  return from + Math.floor(index / 2) + (index % 2) * 2
 }
+
+/**
+ * Where the pan rotation starts behind a **scroll** hook (#12's rule, read across the
+ * hook boundary).
+ *
+ * A scroll hook is a shot travelling *down the page* — that is the whole of what a
+ * scripted scroll is (`./scroll.ts`) — and `DIRECTIONS` opens on `vertical`, which is a
+ * pan travelling down the page. Between them sits a hard cut, and the two moves either
+ * side of it read as one long downward slide that stutters in the middle: the same
+ * gesture twice, which is the one thing the rotation exists to prevent. It just never
+ * saw this pair, because the hook is a *drift* and the rotation only ever compared
+ * pans to pans.
+ *
+ * So a scroll hook spends the rotation's vertical step, and the first beat takes the
+ * next one. Not a new direction and not an exemption: the hook is counted, the way the
+ * card is counted in the drift rotation.
+ *
+ * Read off the *resolved* motion rather than the config's ask, because a `scroll` whose
+ * reveals cannot re-fire is an `ambient` (#64) and an ambient hero does not travel
+ * anywhere — there is no downward move for beat 1 to repeat, so there is nothing to
+ * step past and the rotation starts where it always did.
+ */
+export const SCROLLED_ROTATION_START = 1
 
 function defaultMove(index: number): Move {
   return index % 2 === 0 ? 'pan' : 'drift'
@@ -415,6 +450,9 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   // what it is handed.
   const hookMotion = resolvedMotion(config, survey).motion
   const liveHook = hookMotion !== 'still'
+  // A scroll hook already travels down the page, so the pan rotation starts past the
+  // direction that would travel down it again across the cut.
+  const rotationStart = hookMotion === 'scroll' ? SCROLLED_ROTATION_START : 0
   const shots: Shot[] = [
     {
       kind: 'hook',
@@ -448,7 +486,9 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
     // and `check` still says what it leaves a pan to travel. The fallback is that
     // reasoning spent: the section stayed as tall as it measured, so it pans.
     const move = beat.move ?? (fit ? 'drift' : capped ? 'pan' : defaultMove(index))
-    const rotated = DIRECTIONS[rotationOrdinal(index) % DIRECTIONS.length] as Direction
+    const rotated = DIRECTIONS[
+      rotationOrdinal(index, rotationStart) % DIRECTIONS.length
+    ] as Direction
     // The fallback's pan is vertical by name, not by rotation: it is the one direction
     // a section too tall for one frame is guaranteed the travel for.
     //
