@@ -63,9 +63,23 @@ export default defineSite({
     {
       // A weekly schedule laid out in columns — Monday, Wednesday, Thursday across the
       // full width. Lateral reads as scanning the week; vertical reads as a table
-      // being scrolled. The punch is the travel: 1080 * (1.8 - 1) = 864px of it.
+      // being scrolled.
+      //
+      // Every beat in this reel stands 30% further out than it used to, so that a shot
+      // shows the page rather than a detail of it. A punch is the only thing pulling
+      // the frame in, so 1.8 / 1.3 = 1.385 — and a punch is also the only thing a
+      // lateral pan travels across, so the travel falls with it: 1080 * (1.385 - 1) =
+      // 416px where it was 864. Across 3.5s that is 4.0px a frame, twice
+      // MIN_PAN_PX_PER_FRAME, so the pan is still a pan and not a drift with a name.
+      //
+      // The height is the cost of standing back. A frame is only full while the
+      // section is at least 1920 / punch tall, which at 1.385 is 1386px against
+      // #week's own 1310 — so the window runs 80px past the table's foot to keep the
+      // frame fed. What that 80px holds is the white above #teachers, which is the
+      // page breathing and not another section arriving.
       selector: '#week',
-      punchFactor: 1.8,
+      height: 1390,
+      punchFactor: 1.385,
       direction: 'lateral',
       // #week's own heading is 'Mornings here. Afternoons yours.', which is what #62
       // would default this beat to: the school's line, in a reel that is not selling
@@ -81,9 +95,14 @@ export default defineSite({
       // family pays for them; no element wraps the pair, so the beat takes #teachers'
       // top and runs 1310px down through #costs. This is #7's escape hatch used for
       // what it is for, and the taller window is what keeps the punch at 1.5.
+      // Standing back 30% (1.5 / 1.3 = 1.154) needs 1920 / 1.154 = 1664px of section
+      // to keep the frame full, so the window grows with the punch rather than instead
+      // of it. From #teachers' top that reaches y 4907, which is inside #faith's white
+      // margin and short of anything #faith draws — the pair the window was opened for
+      // is still the whole of what the shot shows.
       selector: '#teachers',
-      height: 1310,
-      punchFactor: 1.5,
+      height: 1670,
+      punchFactor: 1.154,
       // The window spans both sections, so the heading #62 finds inside it is
       // #teachers' alone — 'Alongside Homeschool Families', one character over budget
       // and only half of what the shot shows. The label names what the pair has in
@@ -100,21 +119,38 @@ export default defineSite({
       // rotation's next direction here is lateral, and beats[0] is the only other pan
       // in the reel and already took it: this override is the first one's cost, not a
       // second finding. A vertical pan wants 2130px of section, which at 810px is 2.7.
-      // 810px, so the frame's height is what the punch buys — and then some. The
-      // rotation's next direction here is lateral, and beats[0] is the only other pan
-      // in the reel and already took it: this override is the first one's cost, not a
-      // second finding. A vertical pan wants 2130px of section, which at 810px is 2.7.
+      // 810px on its own, so this beat has always been the one the punch is holding
+      // up. Out 30% is 2.7 / 1.3 = 2.077, which needs 925px before the frame is even
+      // full and leaves a vertical pan nothing at all to travel across — travel here
+      // is `section * punch - 1920`, and at 925px that is one pixel.
+      //
+      // So the window is sized for the *move* rather than for the frame: 1053px is
+      // what keeps the 267px of travel this pan has today, which is the 2.5px a frame
+      // it has always run at. It reaches y 5243, so the last stretch of the pan brings
+      // the top of #inquiry into shot. That is the trade this beat pays for standing
+      // back, and it is a soft one — the pan is travelling downward and arriving at
+      // the form is where the reel goes next anyway.
       selector: '#faith',
-      punchFactor: 2.7,
+      height: 1053,
+      punchFactor: 2.077,
       direction: 'vertical',
     },
     {
-      // 834px, which is another beat that would have to crop to half-width to fill a
-      // frame — the form it is showing is the widest thing on the page. Run it 1200px
-      // down instead and the punch drops to 1.6.
+      // 945px, which is another beat that would have to crop to half-width to fill a
+      // frame — the form it is showing is the widest thing on the page. A taller
+      // window is what drops the punch instead, and standing back 30% (1.6 / 1.3 =
+      // 1.231) asks for 1560px of it.
+      //
+      // #inquiry is the last section on the page — it starts at y 5000 and the page
+      // ends at 6452 — so there is no 1560px below its top to take, and `check`
+      // refuses a window that runs off the foot rather than sliding it quietly. So the
+      // window is placed by hand and it opens 120px above the section, in the white
+      // under #faith: this is the one beat whose `y` is written, and standing back is
+      // why.
       selector: '#inquiry',
-      height: 1200,
-      punchFactor: 1.6,
+      y: 4880,
+      height: 1570,
+      punchFactor: 1.231,
       // The last thing a visitor touches, so this is the beat that answers what the
       // page is like to *use* rather than to look at. #62 would default to #inquiry's
       // own heading, which is the school's ask; the label names the craft under it.
