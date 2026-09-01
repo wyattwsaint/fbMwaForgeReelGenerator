@@ -3,15 +3,24 @@ import { defineSite } from 'reel'
 /**
  * Pharos Academy — the busy site, and every override earning its place. Each one
  * below traces to something the page does that the fixture did not.
+ *
+ * The copy is written for MWA Forge and not for the school. Every line names what the
+ * page *does* — an immersive homepage, content laid out to be read, a form that is a
+ * pleasure to fill — rather than what the school offers. This reel is shown to someone
+ * deciding who builds their site, and the school's own pitch is one click away on the
+ * site the card credits.
 
  */
 export default defineSite({
   url: 'https://pharosacademy.net',
   hook: {
-    // Not the site's own 'Mornings here. Afternoons yours.' — that headline is the
-    // first thing beats[0] pans across, and a hook that repeats it 3.5s early reads as
-    // a stutter rather than as a theme.
-    text: 'Classical school.\nMornings only.',
+    // Neither the school's pitch nor the site's own 'Mornings here. Afternoons yours.'.
+    // The hook names the thing the hero spends the next three seconds proving: a
+    // painting that moves under the page's own lockup is what an immersive homepage
+    // looks like, and the shot is the evidence for the line. Staying off #week's
+    // heading is the second reason and used to be the only one — beats[0] pans across
+    // that line at 3.5s, and a hook that says it first reads as a stutter.
+    text: 'Immersive homepages',
     // #hero carries a <video> whose poster is a blurred LQIP and whose own fade-in is
     // still running at t=0, so frame 0 — the thumbnail Facebook shows — has to seek
     // past both. 2.0 is also the default, and it is written out anyway: #6 made this
@@ -58,12 +67,12 @@ export default defineSite({
       selector: '#week',
       punchFactor: 1.8,
       direction: 'lateral',
-      // #week's own heading is 'Mornings here. Afternoons yours.' — the line the hook
-      // above deliberately does not use, because hearing it twice in the first 6.5s
-      // reads as a stutter. #62 would default this beat that exact line, so the label
-      // is what keeps the hook's decision from being undone by the page. It is also
-      // over budget at 32 characters, which is the smaller of the two reasons.
-      label: 'Monday, Wednesday, Thursday',
+      // #week's own heading is 'Mornings here. Afternoons yours.', which is what #62
+      // would default this beat to: the school's line, in a reel that is not selling
+      // the school, and 32 characters against a budget of 28. The label keeps both out
+      // and names what the shot shows a builder instead — a week laid out in columns
+      // that can be read at a glance, which is the argument the lateral pan is making.
+      label: 'Organized content',
     },
     {
       // #teachers is 530px on its own, #costs 416 — either alone is short enough that
@@ -77,11 +86,20 @@ export default defineSite({
       punchFactor: 1.5,
       // The window spans both sections, so the heading #62 finds inside it is
       // #teachers' alone — 'Alongside Homeschool Families', one character over budget
-      // and only half of what the shot shows. The label names the pair the window was
-      // opened for.
-      label: 'Teachers and tuition',
+      // and only half of what the shot shows. The label names what the pair has in
+      // common instead: two unlike kinds of content, faces and figures, set so that
+      // either one reads without hunting for it.
+      //
+      // One line, because a label's budget is one line (COPY_BUDGETS) — the break this
+      // line was drafted with is a hook's privilege, and at 25 characters it does not
+      // need one to fit.
+      label: 'Clear and engaging design',
     },
     {
+      // 810px, so the frame's height is what the punch buys — and then some. The
+      // rotation's next direction here is lateral, and beats[0] is the only other pan
+      // in the reel and already took it: this override is the first one's cost, not a
+      // second finding. A vertical pan wants 2130px of section, which at 810px is 2.7.
       // 810px, so the frame's height is what the punch buys — and then some. The
       // rotation's next direction here is lateral, and beats[0] is the only other pan
       // in the reel and already took it: this override is the first one's cost, not a
@@ -97,7 +115,10 @@ export default defineSite({
       selector: '#inquiry',
       height: 1200,
       punchFactor: 1.6,
-      label: 'Enrolling for Fall',
+      // The last thing a visitor touches, so this is the beat that answers what the
+      // page is like to *use* rather than to look at. #62 would default to #inquiry's
+      // own heading, which is the school's ask; the label names the craft under it.
+      label: 'Smooth, fillable forms',
     },
   ],
   cta: { credit: 'pharosacademy.net' },
