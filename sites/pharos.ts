@@ -90,10 +90,10 @@ export default defineSite({
       // common instead: two unlike kinds of content, faces and figures, set so that
       // either one reads without hunting for it.
       //
-      // One line, because a label's budget is one line (COPY_BUDGETS) — the break this
-      // line was drafted with is a hook's privilege, and at 25 characters it does not
-      // need one to fit.
-      label: 'Clear and engaging design',
+      // Two lines, which a label may have now that it is set at the hook's size: at
+      // 76px 'Clear and engaging design' draws 979px against a 950px box, and the
+      // break is where the sense breaks anyway.
+      label: 'Clear and engaging\ndesign',
     },
     {
       // 810px, so the frame's height is what the punch buys — and then some. The

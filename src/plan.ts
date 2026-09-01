@@ -153,7 +153,13 @@ export type CopyBudget = { lines: number; chars: number }
  */
 export const COPY_BUDGETS: { hook: CopyBudget; label: CopyBudget } = {
   hook: { lines: 2, chars: 42 },
-  label: { lines: 1, chars: 28 },
+  // The same budget as the hook, because a label is now set at the hook's size
+  // (`TYPE` in house.ts) and this table is a proxy for the width that size draws.
+  // A label's one line and 28 characters were the 44px scale's allowance; carried
+  // over unchanged they would refuse a line that fits and admit one that does not,
+  // which is a proxy pointing at nothing. The text slot is two hook lines tall by
+  // construction, so two is what there is room for.
+  label: { lines: 2, chars: 42 },
 }
 
 /**
