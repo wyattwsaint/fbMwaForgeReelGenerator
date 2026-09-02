@@ -243,9 +243,9 @@ export default defineSite({
       // 18px — but it is not the margin the number was written for.
       //
       // 1570 rather than the 1560 the punch needs: from y 4880 the page allows 1572
-      // before `check` refuses the window for running off the foot, so this sits at
-      // the top of a 12px band rather than the bottom of it. Slack, and the only beat
-      // here that has any — beats[1]'s height is its minimum exactly.
+      // before `check` refuses the window for running off the foot, so this sits 2px
+      // under the ceiling of a 12px band rather than on its floor. beats[1] has 13px
+      // of page under it but no height to spare — 1847 is its minimum exactly.
       //
       // The second 30% has nowhere at all to go here, and this is the beat that makes
       // ADR-0013's escape an escape rather than a caution. 1.231 / 1.3 is 0.947, under

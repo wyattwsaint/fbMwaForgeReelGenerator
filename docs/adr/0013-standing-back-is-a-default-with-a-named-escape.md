@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted (2026-09-01). Amended 2026-09-01 (resolves #116): a fourth thing stops a
+Accepted (2026-09-01). Amended 2026-09-02 (resolves #116): a fourth thing stops a
 beat, and it stops it *past* the default rather than short of it — see
-[Amendment](#amendment-2026-09-01-the-gutter-stops-a-beat-past-the-default).
+[Amendment](#amendment-2026-09-02-the-gutter-stops-a-beat-past-the-default).
 
 ## Context
 
@@ -97,7 +97,7 @@ constant, and not something a viewport width can be made to mean.
   neither wall — which is why the escape is named in the beat rather than encoded as
   a lower bound somewhere central.
 
-## Amendment (2026-09-01): the gutter stops a beat past the default
+## Amendment (2026-09-02): the gutter stops a beat past the default
 
 The Decision above names three things that stop a beat short of the ÷1.3 default and
 says all three are checked. #116 found a fourth, and it does not fit that shape: it
@@ -113,14 +113,15 @@ for, driven by a constraint this decision does not name.
 
 Its lower bound is a fifth unchecked thing: standing back costs window height, and a
 window tall enough eventually reaches the next section's first line of type and slices
-it. `#teachers` stops at 1.0323 for that reason and not for the punch floor.
+it. `#teachers`' lower bound is 1.0323 for that reason and not the punch floor; the
+number it settles on, 1.04, sits between that bound and the 1.0506 the gutter asks
+for.
 
 Neither is a candidate for `check`. A gutter is a page fact — it is whatever the
 client's layout uses — and where the next line of type begins is another; both are
 read off the settled page, and turning either into a refusal would be `check` deciding
-the
-framing rather than reporting on it, which is the line this repo's **check** entry
-draws. They are named here and argued in the beat instead.
+the framing rather than reporting on it — the line ADR-0009 draws. They are named
+here and argued in the beat instead.
 
 ## Amended decision
 

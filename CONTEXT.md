@@ -346,12 +346,13 @@ and in each beat's own comment, and sites go on writing final numbers. A beat ma
 short of it, and one that does names what stopped it — the 1.0 punch floor, the
 section height a punched frame needs, or the travel a pan is left with. A beat may
 also stand *past* it, for a reason the default does not name: pharos' `#teachers`
-does, to keep the page's **gutter** in frame. Neither direction is checked — nothing
-in the pipeline derives a punch, so both are a human's number with an argument beside
-it. So the beats
-of one reel do not all stand at the same distance; standing back is a per-beat framing
-decision like **punch-in** and **hero position**, not a house constant, and not
-something the base **capture viewport**'s width can be made to mean.
+does, to keep the page's **gutter** in frame. What stops a beat short is checked;
+neither the decision to stand back nor the reason to stand past it is — nothing in
+the pipeline derives a punch, so both are a human's number with an argument beside
+it. So the beats of one reel do not all stand at the same distance; standing back is
+a per-beat framing decision like **punch-in** and **hero position**, not a house
+constant, and not something the base **capture viewport**'s width can be made to
+mean.
 
 **Fit** — capturing a beat's section whole, by widening the **capture viewport**
 instead of punching in. A section is exactly as wide as whatever viewport it is laid
