@@ -91,6 +91,20 @@ export default defineSite({
       // shot — beats[2] pays the same one at its own cut, 523px into #inquiry. Two of
       // this reel's three cuts now repeat a line of type, which is the thing to look at
       // first if a third ÷1.3 is ever asked for (ADR-0013).
+      // The heading is clipped and no window can fix it (#116). A pan holds its zoom,
+      // so unlike beats[1] the punch is the only crop here: 1.194 takes a 1080 / 1.194
+      // = 905px column and the pan slides it, opening with that column at x 44 and
+      // closing with it at x 131 against a heading whose text starts at x 26. The
+      // render opens on a whole 'Mornings here. Afternoons yours.' and ends on 's
+      // here. Afternoons yours.', with the Monday column gone off the left edge
+      // entirely.
+      //
+      // The fix used on beats[1] is a taller window buying a shallower punch, and here
+      // the punch is not the window's to give: 1.194 is the least that leaves the
+      // lateral pan the 210px of room `panTravelNeeded` asks for, and the window has
+      // no say in that. So the clipped heading is what the pan costs — and the label
+      // below is already the line the shot is making its argument with, which is why
+      // this is a cost worth paying rather than the reel losing its copy.
       selector: '#week',
       height: 1609,
       punchFactor: 1.194,
@@ -107,27 +121,59 @@ export default defineSite({
       // the punch needed to fill a frame crops a full-width layout to under half its
       // width, which cuts headings mid-word. The subject is the teachers *and* what a
       // family pays for them; no element wraps the pair, so the beat takes #teachers'
-      // top and runs 1310px down through #costs. This is #7's escape hatch used for
-      // what it is for, and the taller window is what keeps the punch at 1.5.
-      // Standing back 30% (1.5 / 1.3 = 1.154) needs 1920 / 1.154 = 1664px of section
-      // to keep the frame full, so the window grows with the punch rather than instead
-      // of it. From #teachers' top that reaches y 4907, which is inside #faith's white
-      // margin and short of anything #faith draws — the pair the window was opened for
-      // is still the whole of what the shot shows.
+      // top and runs down through #costs. This is #7's escape hatch used for what it
+      // is for, and the taller window is what keeps the punch shallow.
       //
-      // This beat does not take the second 30%, and it is one of the two that ADR-0013
-      // was written around. 1.154 / 1.3 is 0.888, and 1.0 is 'no punch': config refuses
-      // anything under it, because a punch below 1.0 asks for page pixels the browser
-      // never rasterised. `fit` is the sanctioned way past 1.0 (ADR-0007) and it is no
-      // help here — fitViewportWidth clamps at the base width until a section is taller
-      // than one frame, so a fit under 1920px is a no-op and `check` then refuses the
-      // beat as too short for a frame. To fit *and* stand 30% back, this window would
-      // have to be 2496px: from y 3237 that reaches y 5733, through #costs, through the
-      // whole of #faith, and 733px into #inquiry. That is not the teachers and what a
-      // family pays for them, it is half the page. The beat keeps the distance it has.
+      // What sets the punch is the page's own gutter (#116). A punch crops a column
+      // 1080 / punch wide out of the middle of a frame-wide render, and this page lays
+      // its content between x 26 and x 1054 — so anything over 1080 / 1028 = 1.0506
+      // eats into the margins and takes the first characters of every heading in the
+      // shot with them. At 1.154 the column began at x 72, which is 46px past where a
+      // heading starts: 'Alongside Homeschool Families' rendered as 'longside /
+      // omeschool Families', and 'Pricing for Partner Families' lost its P.
+      //
+      // A drift crops twice, which is the thing to hold on to here. The punch is one
+      // crop and DRIFT_ZOOM is the other: a drift ramps 10% *inside* the window the
+      // punch already cropped, so the column is 1080 / punch wide at the shallow end
+      // of the ramp and 1080 / (punch * 1.1) at the deep end. Keeping the gutter for
+      // the whole shot would want a punch of 1.0506 / 1.1 = 0.955, which is under the
+      // 1.0 floor: no number in this field can hold this heading whole across a drift,
+      // and the choice is only which end of the ramp gets it.
+      //
+      // 1.04 gives it to the shallow end, and the rotation makes that the end that
+      // matters: beats[1] is the reel's first pull (`rotatedPushPull`), so the shot
+      // *starts* deep and opens the window as it goes. It opens at x 68 — still 42px
+      // into the heading — and lands its last frame, the one the cut hands over on,
+      // showing the whole 1028px column with about 5px in hand either side. At 1.154
+      // the shot never showed it whole at all.
+      //
+      // What stops the punch going lower is #inquiry, not the 1.0 floor. Standing back
+      // is paid for in window height — a frame is only full while the section is at
+      // least 1920 / punch tall — so 1.04 asks for 1847px, and from #teachers' top at
+      // y 3237 that reaches y 5084. #inquiry's section starts at y 5000 but draws
+      // nothing until y 5097, so the window still ends in white, with 13px in hand.
+      // 1.0323 is where it would reach that first line of type and slice it. The beat
+      // sits between the two walls: 1.0323 <= 1.04 <= 1.0506.
+      //
+      // ADR-0013 asked this beat for 1.154 / 1.3 = 0.888 and the 1.0 punch floor
+      // refused it — config refuses anything under 1.0, because a punch below 1.0 asks
+      // for page pixels the browser never rasterised, and `fit` is no help (ADR-0007):
+      // fitViewportWidth clamps at the base width until a section is taller than one
+      // frame, so a fit under 1920px is a no-op and `check` then refuses the beat as
+      // too short for a frame. 1.04 is not that ask met. It is a different constraint
+      // landing between the ask and where the beat was, and it happens to stand this
+      // shot 11% further out than ADR-0013 recorded; the floor is still the next thing
+      // it would hit if the gutter ever let it go on.
+      //
+      // The window has run through the whole of #faith since #114 and #119 grew it,
+      // and this comment used to say otherwise. #faith draws from y 4287 to y 4898 and
+      // the 1670px window reached y 4907: the shot has been the teachers, the pricing
+      // *and* the statement of faith for two rounds of standing back, and 1847px adds
+      // nothing to that but white. The pair is what the window is framed on, not the
+      // whole of what it shows.
       selector: '#teachers',
-      height: 1670,
-      punchFactor: 1.154,
+      height: 1847,
+      punchFactor: 1.04,
       // The window spans both sections, so the heading #62 finds inside it is
       // #teachers' alone — 'Alongside Homeschool Families', one character over budget
       // and only half of what the shot shows. The label names what the pair has in
@@ -186,6 +232,15 @@ export default defineSite({
       // is no `y` this beat could be given: measured from either end, the page runs out
       // before the window does. #inquiry keeps 1.231, and being the last section on the
       // page is the whole reason.
+      // The heading clears the crop here, which is not true of every beat in this file
+      // (#116). This beat drifts and it pushes, so the column runs from 1080 / 1.231 =
+      // 877px at the first frame down to 1080 / (1.231 * 1.1) = 798px at the last —
+      // starting at x 101 and closing at x 141. #inquiry is laid out narrower than the
+      // rest of the page, its form drawing between x 186 and x 894, so 'Your
+      // Children's Ages' is clear of the frame's left edge by 85px at the open and by
+      // 45px at the tightest. At the 1.6 this beat carried before #114 those two
+      // numbers were x 203 and x 233, and the heading lost its Y at both ends.
+      // Standing back is what fixed that, and nothing here needs doing.
       selector: '#inquiry',
       y: 4880,
       height: 1570,

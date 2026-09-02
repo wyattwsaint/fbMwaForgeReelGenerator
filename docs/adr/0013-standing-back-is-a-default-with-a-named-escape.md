@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-01).
+Accepted (2026-09-01). Amended by #116 — see the last consequence.
 
 ## Context
 
@@ -91,3 +91,16 @@ constant, and not something a viewport width can be made to mean.
   last section on a 6452px page. A longer page, or a beat that is not last, hits
   neither wall — which is why the escape is named in the beat rather than encoded as
   a lower bound somewhere central.
+- **Amended by #116: `#teachers` stands at 1.04, not 1.154.** The beat held at 1.154
+  above because ÷1.3 put it under the punch floor. Re-measuring the render afterwards
+  found that 1.154 was also cropping 46px off the start of every heading in the shot:
+  a punch crops a column `1080 / punch` wide out of the middle of the page, and this
+  page lays its content between x 26 and x 1054, so any punch over 1.0506 eats the
+  gutters. A drift crops twice — `DRIFT_ZOOM` ramps 10% inside the window the punch
+  already cropped — so no punch above the 1.0 floor holds a gutter across a whole
+  drift, and 1.04 buys the shallow end of the ramp rather than the shot. The beat
+  pulls, so that end is its last frame. This is not the ÷1.3 ask met either: 0.888 is
+  still refused by the floor, and what stops 1.04 going lower is #inquiry's first line
+  of type at y 5097 rather than the floor. `sites/pharos.ts` carries the arithmetic. `#week` and `#inquiry` are unchanged: `#week` cannot move, because its
+  punch is pinned by the lateral pan's own floor and it clips its heading across the
+  pan as a result; `#inquiry`'s heading was already clear at 1.231.
