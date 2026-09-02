@@ -6,7 +6,7 @@ import { DEFAULT_PUNCH_FACTOR, MAX_BEATS, MIN_BEATS } from './frame.ts'
 import { trackPath } from './house.ts'
 import { overflowProblems } from './measure.ts'
 import type { TypeRole } from './measure.ts'
-import { COPY_BUDGETS, DEFAULT_TRACK, copyProblem } from './plan.ts'
+import { COPY_BUDGETS, DEFAULT_TRACK, copyProblem, trailed } from './plan.ts'
 import type { CopyBudget } from './plan.ts'
 import type { SiteConfig } from './site.ts'
 
@@ -88,7 +88,9 @@ export function configProblems(config: SiteConfig, root: string): string[] {
         )
       }
       if (typeof beat?.label === 'string') {
-        problems.push(...copyProblems(`beats[${i}].label`, beat.label, COPY_BUDGETS.label, 'label'))
+        // The trailed line, because that is the one that draws: three characters the
+        // human never typed still count against the budget and the slot.
+        problems.push(...copyProblems(`beats[${i}].label`, trailed(beat.label), COPY_BUDGETS.label, 'label'))
       }
     })
   }

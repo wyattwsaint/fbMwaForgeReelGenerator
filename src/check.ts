@@ -7,6 +7,7 @@ import {
   planReel,
   resolvedMotion,
 } from './plan.ts'
+import { trailed } from './plan.ts'
 import type { Shot } from './plan.ts'
 import type { Beat, SiteConfig } from './site.ts'
 import { survey } from './survey.ts'
@@ -166,7 +167,7 @@ function judgeBeat(
   // pressure is the point — type never shrinks to fit (#9).
   if (surveyed.heading !== null) {
     const budget = COPY_BUDGETS.label
-    problems.push(...copyProblems(`beats[${index}] heading`, surveyed.heading, budget, 'label'))
+    problems.push(...copyProblems(`beats[${index}] heading`, trailed(surveyed.heading), budget, 'label'))
   }
 
   // `y`/`height` is the escape hatch for when no element wraps the subject: the

@@ -131,7 +131,14 @@ the human writing one: a beat whose config names no label takes its section's
 **heading**. Naming a label in config wins, so the editorial voice stays the
 human's, and naming it as an empty string means that shot carries no text at all.
 A section with no heading gives its beat no label, which is an unlabelled shot
-rather than a problem.
+rather than a problem. Every label draws with a **trail**.
+
+**Trail** — the `...` every beat label ends with, house style. A label is a lead-in
+to the section it sits on, not a caption closing it, and the trail says so. Added
+to the drawn line, never written in config or read off a page: a closing full stop
+is dropped first, a `?` or `!` is kept, and a line already ending in `...` is left
+alone. It is part of the line `check` measures, so three characters nobody typed
+still count against the **budget** and the **slot**.
 
 **Heading** — the first heading inside a section, read off the settled page as one
 line. A **label**'s default, not a second kind of copy: it is held to the same

@@ -139,6 +139,27 @@ export const CROSSFADE_MS = 300
 export const LABEL_LEAD_IN_MS = 200
 export const LABEL_FADE_MS = 300
 export const LABEL_TAIL_MS = 200
+
+/**
+ * What every beat label ends with, house style. A label is a beat's own line over a
+ * shot that keeps moving, and the trail says so: the line is a lead-in to the section
+ * it sits on, not a caption closing it. Applied to the drawn text, so a config never
+ * writes it and a heading never has to carry it.
+ */
+export const LABEL_TRAIL = '...'
+
+/**
+ * A label as it is drawn: the written text, trailed.
+ *
+ * A closing full stop is dropped first, because `well....` is a typo and not a
+ * trail; a `?` or `!` stays, because the trail then reads as the line trailing off
+ * after its own mark. A line already ending in the trail is left alone. Empty stays
+ * empty — an empty label is a human saying no text, not a shot that says `...`.
+ */
+export function trailed(label: string): string {
+  if (!label || label.endsWith(LABEL_TRAIL)) return label
+  return `${label.replace(/\.$/, '')}${LABEL_TRAIL}`
+}
 /** #9: the hook is drawn whole on its own first frame and fades over its final 0.5s. */
 export const HOOK_FADE_OUT_MS = 500
 
@@ -611,7 +632,9 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   beats.forEach((beat, index) => {
     // The config wins, and it wins even when it says nothing: `label: ''` is a human
     // deciding this shot carries no text, which is not the same as never having said.
-    const content = beat.label ?? surveyed[index]?.heading ?? ''
+    // Trailed as drawn: the trail is house style, so it is added here and nowhere
+    // else, and `check` measures the same trailed line this draws.
+    const content = trailed(beat.label ?? surveyed[index]?.heading ?? '')
     if (!content) return
     const shot = shots[index + 2] as Shot
     const startMs = shot.startMs + LABEL_LEAD_IN_MS

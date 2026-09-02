@@ -21,6 +21,7 @@ import {
   panTravelNeeded,
   panTravelProblems,
   planReel,
+  trailed,
   resolvedMotion,
   TITLE_MS,
 } from '../src/plan.ts'
@@ -436,9 +437,9 @@ describe('planReel', () => {
       assert.deepEqual(
         labels.map((cue) => [cue.shot, cue.content]),
         [
-          [2, 'Spotless bathrooms'],
-          [3, 'What we do'],
-          [4, 'Our work'],
+          [2, 'Spotless bathrooms...'],
+          [3, 'What we do...'],
+          [4, 'Our work...'],
         ],
       )
     })
@@ -451,7 +452,7 @@ describe('planReel', () => {
         surveyed(config(3), { beats: HEADINGS }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
-      assert.deepEqual(labels.map((cue) => cue.content), ['Spotless bathrooms', 'Enrolling', 'Our work'])
+      assert.deepEqual(labels.map((cue) => cue.content), ['Spotless bathrooms...', 'Enrolling...', 'Our work...'])
     })
 
     test('an empty label suppresses the text on that shot', () => {
@@ -460,7 +461,7 @@ describe('planReel', () => {
         surveyed(config(3), { beats: HEADINGS }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
-      assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[2, 'Spotless bathrooms'], [4, 'Our work']])
+      assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[2, 'Spotless bathrooms...'], [4, 'Our work...']])
     })
 
     test('a section with no heading leaves its beat unlabelled', () => {
@@ -509,6 +510,27 @@ describe('planReel', () => {
           }
         }
       }
+    })
+  })
+
+  describe('label trail', () => {
+    test('every label draws trailed, and a full stop gives way to the trail', () => {
+      assert.equal(trailed('Enrolling'), 'Enrolling...')
+      assert.equal(trailed('Ready when you are.'), 'Ready when you are...')
+      assert.equal(trailed('Two lines,\nsecond one.'), 'Two lines,\nsecond one...')
+    })
+
+    test('a question or a shout keeps its mark, a trail is not doubled, empty stays empty', () => {
+      assert.equal(trailed('Ready?'), 'Ready?...')
+      assert.equal(trailed('Now!'), 'Now!...')
+      assert.equal(trailed('Wait for it...'), 'Wait for it...')
+      assert.equal(trailed(''), '')
+    })
+
+    test('the trail counts against the budget the human was given', () => {
+      // 42 characters written is 45 drawn, and 45 is what `check` refuses.
+      const at = 'x'.repeat(COPY_BUDGETS.label.chars)
+      assert.match(copyProblem('beats[0].label', trailed(at), COPY_BUDGETS.label) ?? '', /is 45 characters/)
     })
   })
 
