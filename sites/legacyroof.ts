@@ -17,8 +17,11 @@ import { defineSite } from 'reel'
  * left edge, and unpunching it far enough to read (1.2, over an 1800px window)
  * only widened the wall. Dense prose is not reel material. Three beats it is.
  *
- * Labels are left to #62: each section's own heading runs 10–25 characters,
- * under #9's 28.
+ * Labels are left to #62 for two of the three: those headings draw inside the label
+ * budget, which is the hook's two lines and 42 characters since ADR-0012 set a label
+ * at the hook's size. #why's heading does not — at 76px it runs 992px across a 950px
+ * box — so that one beat writes a label, in the section's own words rather than new
+ * ones.
  */
 export default defineSite({
   url: 'https://legacyroofpa.com',
@@ -34,7 +37,11 @@ export default defineSite({
     // heading loses its first word off the left edge. The window runs on into the
     // top of #faq instead, which buys the punch down to 1.5 and puts the whole
     // line back in frame.
-    { selector: '#why', height: 1400, punchFactor: 1.5 },
+    // The heading is 'NO FLUFF. JUST THE FACTS.', which #62 defaulted this beat until
+    // ADR-0012 set a label at the hook's size: at 76px that line draws 992px across a
+    // 950px box. The label is the heading's own claim, not a rewrite of it, broken at
+    // the period the copy already has — 306px and 550px, both well clear of the box.
+    { selector: '#why', height: 1400, punchFactor: 1.5, label: 'No fluff.\nJust the facts.' },
   ],
   cta: { credit: 'legacyroofpa.com' },
 })
