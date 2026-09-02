@@ -109,7 +109,7 @@ export default defineSite({
   beats: [
     { selector: '#hero' },
     { selector: '#services', label: 'Deep clean' },
-    { selector: '#gallery', direction: 'diagonal' },
+    { selector: '#gallery.showcase', direction: 'diagonal' },
   ],
   cta: { credit: 'fixture.test' },
 })
@@ -177,6 +177,11 @@ describe('reel render', () => {
       /^check {6}ok {9}\d+\.\d+s$/m,
       /^master 1\/4 hook {7}\d+\.\d+s$/m,
       /^master 2\/4 hero {7}\d+\.\d+s$/m,
+      // A section whose name is wider than the column keeps its gutter: the timing
+      // steps right rather than running into the name (#108). `gallery.showcase` is
+      // sixteen characters against an eleven-wide column, which is the case no
+      // fixture section used to be long enough to produce.
+      /^master \d\/4 gallery\.showcase \d+\.\d+s$/m,
       /^shot {3}1\/6 drift {6}\d+\.\d+s$/m,
       /^shot {3}6\/6 drift {6}\d+\.\d+s$/m,
       /^mux {19}\d+\.\d+s$/m,

@@ -138,16 +138,34 @@ async function promote(path: string, root: string): Promise<number> {
 }
 
 /**
+ * How wide the subject column is drawn, and so where the timings land. Eleven fits
+ * every plain section name a site has yet named; the ones that do not fit are
+ * compounds (`header.hero`) and the `measure` line's list of every section one load
+ * answered for, which has no width at all — it grows with the config.
+ */
+const SUBJECT_COLUMN = 11
+
+/**
  * One finished phase, as a line: `master 1/5 hero       2.4s`.
  *
  * Fixed columns, so the timings read down the page as a column of numbers rather than
  * having to be picked out of prose — which is the whole reason to print them. The
  * counter is padded inside the name's own column, so `shot`'s counts line up under
  * `master`'s.
+ *
+ * The subject's column is a floor rather than a fixed cell (#108): a subject at least
+ * that wide is still followed by a space, so `header.hero` reads as a name and a
+ * timing rather than as `header.hero8.7s`. Such a line steps its own timing to the
+ * right and the next line steps back — the grid itself never moves, which is what
+ * lets the timings be scanned as a column at all. Sizing the column to the run
+ * instead would not survive here: phases are printed as they finish and nothing is
+ * redrawn (#18), so the widest subject is not known when the first line is written,
+ * and one long `measure` list would push every other timing across the page.
  */
 function phaseLine({ name, count, subject, ms }: Phase): string {
   const label = count ? `${name.padEnd(6)} ${count.index + 1}/${count.total}` : name
-  return `${label.padEnd(10)} ${subject.padEnd(11)}${seconds(ms)}`
+  const gutter = ' '.repeat(Math.max(1, SUBJECT_COLUMN - subject.length))
+  return `${label.padEnd(10)} ${subject}${gutter}${seconds(ms)}`
 }
 
 /**
