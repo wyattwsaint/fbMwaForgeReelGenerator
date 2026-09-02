@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { cardLayout } from '../src/card.ts'
+import { cardLayout, titleLayout } from '../src/card.ts'
 import { RECORD_START_MS } from '../src/capture.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from '../src/frame.ts'
 import { SAFE_ZONE, SCRIM, SPARK, TEXT_SLOT, TYPE } from '../src/house.ts'
@@ -13,6 +13,7 @@ import {
   FRAME_MS,
   HOOK_FADE_OUT_MS,
   HOOK_MS,
+  TITLE_MS,
   frameCount,
 } from '../src/plan.ts'
 import { SHEET_TILE, sheetSize } from '../src/review.ts'
@@ -79,17 +80,24 @@ const ACCENT = '#8b5cf6'
 const SPARK_START = SPARK[0]?.color as string
 const SPARK_END = SPARK[SPARK.length - 1]?.color as string
 
-/** #12's arithmetic for three beats: 3.0 + 3 x 3.5 + 2.5, less the 0.3 crossfade. */
-const REEL_SECONDS = 15.7
-/** Frame indices, from #12's arithmetic: hook 90, three beats of 105, then the card. */
-const CUTS = [90, 195, 300]
-const LAST_FRAME = 470
-/** The hook's last frame at full alpha: its fade starts on the next one and ends on 89. */
-const HOOK_HELD = frameCount(HOOK_MS - HOOK_FADE_OUT_MS - FRAME_MS)
+/** #12's arithmetic for three beats, and #106's title on the front of it:
+ * 1.5 + 3.0 + 3 x 3.5 + 2.5, less the 0.3 crossfade. */
+const REEL_SECONDS = 17.2
+/** The title shot's frames — the offset every filmed frame index now sits past. */
+const TITLE_FRAMES = frameCount(TITLE_MS)
+/** The reel's first site pixels: the hook shot's own frame 0. */
+const HOOK_START = TITLE_FRAMES
+/** Frame indices: the title's 45, the hook's 90, three beats of 105, then the card. */
+const CUTS = [TITLE_FRAMES, 135, 240, 345]
+/** The cut out of the hook and into beat 0 — the one several claims are read against. */
+const HOOK_CUT = CUTS[1] as number
+const LAST_FRAME = 515
+/** The hook's last frame at full alpha, in *reel* frames: its fade starts on the next. */
+const HOOK_HELD = TITLE_FRAMES + frameCount(HOOK_MS - HOOK_FADE_OUT_MS - FRAME_MS)
 /** The card's crossfade starts here — 0.3s before the last beat would have ended. */
-const CARD_IN = 396
+const CARD_IN = 441
 /** The first frame the crossfade is over and the card is alone on screen. */
-const CARD_ALONE = 405
+const CARD_ALONE = 450
 
 /** A 3-beat config: 3.0 + 3 x 3.5 + 2.5 - 0.3 crossfade. */
 function fixtureSite(url: string): string {
@@ -169,18 +177,18 @@ describe('reel render', () => {
       /^check {6}ok {9}\d+\.\d+s$/m,
       /^master 1\/4 hook {7}\d+\.\d+s$/m,
       /^master 2\/4 hero {7}\d+\.\d+s$/m,
-      /^shot {3}1\/5 drift {6}\d+\.\d+s$/m,
-      /^shot {3}5\/5 drift {6}\d+\.\d+s$/m,
+      /^shot {3}1\/6 drift {6}\d+\.\d+s$/m,
+      /^shot {3}6\/6 drift {6}\d+\.\d+s$/m,
       /^mux {19}\d+\.\d+s$/m,
       // The reel's own length, then what it cost to cut — never each other.
-      /^done {2}out[\\/]fixture-3beat\.mp4 {2}15\.7s {3}\[\d+\.\d+s total\]$/m,
+      /^done {2}out[\\/]fixture-3beat\.mp4 {2}17\.2s {3}\[\d+\.\d+s total\]$/m,
     ]) {
       assert.match(firstRun.stdout, line)
     }
-    // n + 2 shots and one master per shot that shows the site, so the counts are the
+    // n + 3 shots and one master per shot that shows the site, so the counts are the
     // timeline's rather than a spinner's idea of how far along it is.
     assert.equal(firstRun.stdout.match(/^master \d\/4 /gm)?.length, 4)
-    assert.equal(firstRun.stdout.match(/^shot {3}\d\/5 /gm)?.length, 5)
+    assert.equal(firstRun.stdout.match(/^shot {3}\d\/6 /gm)?.length, 6)
     // And nothing else: a config naming `fit` nowhere measures nothing, so it prints
     // no measurement line either (#78).
     assert.doesNotMatch(firstRun.stdout, /^measure/m)
@@ -270,14 +278,14 @@ describe('reel render', () => {
     // three hazards — which is the wash working, not the page being unsettled. It is
     // the same shot and the same master either way: the hook is one continuous move
     // over one capture, so this is the settled page frame 0 was cut from.
-    const bare = await frame(reelPath, CUTS[0]! - 1)
+    const bare = await frame(reelPath, HOOK_CUT - 1)
     assert.ok(pixelsNear(bare, VIDEO_AT_PIN) > 10_000, 'the hero video is not at its pinned time')
     assert.ok(pixelsNear(bare, LAZY_IMAGE) > 10_000, 'the lazy image never loaded')
     assert.ok(pixelsNear(bare, PARKED_ANIMATION) > 10_000, 'the infinite animation is not parked')
-    // And frame 0 — the in-feed thumbnail — carries the one hazard that sits above
-    // the scrim's release, so the thumbnail is that capture rather than a re-shoot.
-    const first = await frame(reelPath, 0)
-    assert.ok(pixelsNear(first, VIDEO_AT_PIN) > 10_000, 'the thumbnail is not the settled page')
+    // And the hook's own first frame carries the one hazard that sits above the
+    // scrim's release, so the shot opens on that capture rather than on a re-shoot.
+    const first = await frame(reelPath, HOOK_START)
+    assert.ok(pixelsNear(first, VIDEO_AT_PIN) > 10_000, 'the hook does not open on the settled page')
   })
 
   test('page chrome is baked into no beat, and into this fixture’s hook either', async () => {
@@ -290,7 +298,7 @@ describe('reel render', () => {
     // fixture's fact rather than the tool's. This fixture's hero starts below its
     // sticky nav, so this reel carries chrome nowhere — which is what the hook's
     // frames are here to say, rather than being the half that was never asserted.
-    for (const index of [0, 45, 89, 120, 230, 340]) {
+    for (const index of [HOOK_START, 90, 134, 165, 275, 385]) {
       const shot = await frame(reelPath, index)
       assert.equal(pixelsNear(shot, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
     }
@@ -302,10 +310,10 @@ describe('reel render', () => {
     // level — so the claim is the shot-relative one: the camera is still travelling as
     // fast at the cut as it was halfway through, having neither stopped nor eased.
     for (const [mid, end] of [
-      [45, 89],
-      [143, 194],
-      [248, 299],
-      [351, 395],
+      [90, 134],
+      [188, 239],
+      [293, 344],
+      [396, 440],
     ] as const) {
       const midway = meanDiff(await frame(reelPath, mid - 1), await frame(reelPath, mid))
       const landing = meanDiff(await frame(reelPath, end - 1), await frame(reelPath, end))
@@ -325,30 +333,30 @@ describe('reel render', () => {
     }
   })
 
-  test('the hook is fully drawn on frame 0 and never animates in', async () => {
-    // Frame 0 is the Facebook in-feed thumbnail, so the hook is a constraint on it
-    // rather than a by-product: it is already at full alpha, and it stays there for
-    // the whole hold. An animated-in hook would put a fraction of this on frame 0.
-    const first = pixelsNear(await frame(reelPath, 0), INK)
+  test('the hook is fully drawn on its own first frame and never animates in', async () => {
+    // The hook arrives whole on the frame it cuts in on rather than ramping up out of
+    // the title: it is already at full alpha there, and it stays there for the whole
+    // hold. An animated-in hook would put a fraction of this on that frame.
+    const first = pixelsNear(await frame(reelPath, HOOK_START), INK)
     const held = pixelsNear(await frame(reelPath, HOOK_HELD), INK)
-    assert.ok(first > 10_000, `the hook is not drawn on frame 0 (${first}px of ink)`)
+    assert.ok(first > 10_000, `the hook is not drawn on its first frame (${first}px of ink)`)
     assert.ok(
       Math.abs(first - held) < first * 0.05,
       `the hook's alpha moves during its hold: ${first} -> ${held}`,
     )
   })
 
-  test('the thumbnail reads with its copy at the bottom: ink in the slot, nothing up top', async () => {
-    // Frame 0 is the in-feed thumbnail, and #60 moved the copy on it. Every pixel of
-    // ink is inside the slot's own band, and the band the slot used to occupy — the
-    // whole frame above the wash — carries none of it and none of the wash either.
-    const first = await frame(reelPath, 0)
+  test('the hook reads with its copy at the bottom: ink in the slot, nothing up top', async () => {
+    // #60 moved the copy on the hook. Every pixel of ink is inside the slot's own
+    // band, and the band the slot used to occupy — the whole frame above the wash —
+    // carries none of it and none of the wash either.
+    const first = await frame(reelPath, HOOK_START)
     const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
-    assert.ok(inSlot > 10_000, `the hook is not in the slot on the thumbnail (${inSlot}px of ink)`)
+    assert.ok(inSlot > 10_000, `the hook is not in the slot (${inSlot}px of ink)`)
     assert.equal(
       pixelsNear(first, INK) - inSlot,
       0,
-      'the thumbnail draws ink outside the slot',
+      'the hook shot draws ink outside the slot',
     )
     assert.equal(pixelsNear(rows(first, ...ABOVE_THE_WASH), INK), 0, 'ink is still up top')
   })
@@ -356,7 +364,7 @@ describe('reel render', () => {
   test('the hook and its scrim let go together, before the cut', async () => {
     const held = await frame(reelPath, HOOK_HELD)
     // The hook's last frame — dark on it, and the cut is at 90 (#36).
-    const gone = await frame(reelPath, CUTS[0]! - 1)
+    const gone = await frame(reelPath, HOOK_CUT - 1)
     assert.ok(pixelsNear(gone, INK) === 0, 'the hook is still lit when the cut lands')
     // The wash lifts with the words rather than dimming the site for the whole reel.
     const under = meanLuma(held, ...SCRIM_BAND)
@@ -369,7 +377,7 @@ describe('reel render', () => {
     // lit on one and gone on the other, and up here that makes no difference at all:
     // the wash inverted with the copy rather than the copy sliding out from under it.
     const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...ABOVE_THE_WASH)
-    const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...ABOVE_THE_WASH)
+    const dark = meanLuma(await frame(reelPath, HOOK_CUT - 1), ...ABOVE_THE_WASH)
     assert.ok(
       Math.abs(lit - dark) < dark * 0.05,
       `something is still drawn above the wash: ${lit} vs ${dark}`,
@@ -382,7 +390,7 @@ describe('reel render', () => {
     // edge. If it still reached down here the lit frame would be ~0.9 of the ground
     // darker than the dark one; it is the same site either way.
     const lit = meanLuma(await frame(reelPath, HOOK_HELD), ...BELOW_THE_WASH)
-    const dark = meanLuma(await frame(reelPath, CUTS[0]! - 1), ...BELOW_THE_WASH)
+    const dark = meanLuma(await frame(reelPath, HOOK_CUT - 1), ...BELOW_THE_WASH)
     assert.ok(
       Math.abs(lit - dark) < dark * 0.05,
       `the wash still reaches the frame’s foot: ${lit} vs ${dark}`,
@@ -395,11 +403,11 @@ describe('reel render', () => {
   test('a label lives and dies inside its own shot', async () => {
     // #services carries the reel's written label. It is dark at both ends of its shot
     // and lit in the middle, so no cut ever has text on either side of it.
-    for (const index of [195, 200, 294, 299]) {
+    for (const index of [240, 245, 339, 344]) {
       const at = pixelsNear(await frame(reelPath, index), INK)
       assert.equal(at, 0, `the label is lit at frame ${index}, next to a cut`)
     }
-    const lit = pixelsNear(await frame(reelPath, 240), INK)
+    const lit = pixelsNear(await frame(reelPath, 285), INK)
     assert.ok(lit > 1000, `the label never appears (${lit}px of ink)`)
   })
 
@@ -407,19 +415,19 @@ describe('reel render', () => {
     // #hero's beat says nothing about copy, so it draws "Fixture hero" off the page
     // (#62) — and the label the page wrote keeps the cue a written one gets: dark at
     // both ends of the shot, lit in the middle, never across a cut.
-    for (const index of [CUTS[0]!, CUTS[0]! + 5, 189, 194]) {
+    for (const index of [HOOK_CUT, HOOK_CUT + 5, 234, 239]) {
       const at = pixelsNear(await frame(reelPath, index), INK)
       assert.equal(at, 0, `the defaulted label is lit at frame ${index}, next to a cut`)
     }
-    const lit = pixelsNear(await frame(reelPath, 150), INK)
+    const lit = pixelsNear(await frame(reelPath, 195), INK)
     assert.ok(lit > 1000, `the heading is never drawn (${lit}px of ink)`)
   })
 
   test('there is no scrim where there is no text', async () => {
     // Same shot, same section, same camera: the only difference between these two
     // frames is whether the label is up. A permanent wash would flatten the gap.
-    const withLabel = meanLuma(await frame(reelPath, 240), ...SCRIM_BAND)
-    const without = meanLuma(await frame(reelPath, 299), ...SCRIM_BAND)
+    const withLabel = meanLuma(await frame(reelPath, 285), ...SCRIM_BAND)
+    const without = meanLuma(await frame(reelPath, 344), ...SCRIM_BAND)
     assert.ok(
       withLabel < without * 0.7,
       `the scrim does not ride with its label: ${withLabel} vs ${without}`,
@@ -428,7 +436,7 @@ describe('reel render', () => {
     // and no heading, so nothing defaults it a label either (#62). Read where the
     // label of the shot before it was up, and where its own would have been — both
     // clear, and neither the other, so the wash is not merely late or early.
-    for (const index of [320, 350]) {
+    for (const index of [365, 395]) {
       const unlabelled = meanLuma(await frame(reelPath, index), ...SCRIM_BAND)
       assert.ok(
         unlabelled > without * 0.7,
@@ -437,8 +445,56 @@ describe('reel render', () => {
     }
   })
 
+  test('the reel opens on the title: the mark, one line, and no site in it at all', async () => {
+    // #106, in the shipped mp4. Frame 0 is the Facebook in-feed thumbnail, and what a
+    // viewer sees on it is MWA Forge's own mark rather than the client's page — so
+    // none of the fixture's four hazards can reach it, and the mark and its line have
+    // to be fully drawn on it rather than animating in.
+    const first = await frame(reelPath, 0)
+    for (const [name, colour] of [
+      ['the hero video', VIDEO_AT_PIN],
+      ['a lazy image', LAZY_IMAGE],
+      ['the parked animation', PARKED_ANIMATION],
+      ['page chrome', PAGE_CHROME],
+    ] as const) {
+      assert.equal(pixelsNear(first, colour), 0, `${name} reaches the title`)
+    }
+    // `MWA` and the line, in house ink. `FORGE` wears the spark and is counted next.
+    assert.ok(pixelsNear(first, INK) > 10_000, 'the title carries no mark or line')
+    assert.ok(pixelsNear(first, SPARK_START) > 0, 'the spark never reaches the title')
+    assert.ok(pixelsNear(first, SPARK_END) > 0, 'the spark never reaches the title')
+    // And nothing the card carries under its own mark: the accent rule is the card's,
+    // and the title has no ink of any kind below where its one line sits. Read under
+    // the line rather than across the frame — `ACCENT` is the spark's middle stop, so
+    // the lockup itself carries those pixels legitimately.
+    const under = rows(first, titleLayout().line.y + TYPE.label.lineHeight, FRAME_HEIGHT)
+    assert.equal(pixelsNear(under, ACCENT), 0, 'the accent rule reaches the title')
+    assert.equal(pixelsNear(under, INK), 0, 'the title carries the card’s stack under its line')
+  })
+
+  test('the title holds its line at full alpha and never animates it in', async () => {
+    // The same claim the hook's line answers, one shot earlier: the title is drawn on
+    // frame 0 and stays there, so the thumbnail is the shot rather than a fraction of
+    // it. Read a couple of frames off the drift's ends.
+    const first = pixelsNear(await frame(reelPath, 0), INK)
+    const last = pixelsNear(await frame(reelPath, TITLE_FRAMES - 1), INK)
+    assert.ok(Math.abs(first - last) < first * 0.1, `the title's alpha moves: ${first} -> ${last}`)
+  })
+
+  test('the title drifts for its whole shot, and cuts hard into the hook', async () => {
+    // Every shot moves (#12), the drawn ones included — and the cut out of the title
+    // is a cut, not a dissolve: the reel's one crossfade is the card's.
+    const midway = meanDiff(await frame(reelPath, 20), await frame(reelPath, 22))
+    const landing = meanDiff(
+      await frame(reelPath, TITLE_FRAMES - 3),
+      await frame(reelPath, TITLE_FRAMES - 1),
+    )
+    assert.ok(landing > 0, 'the title is a still')
+    assert.ok(landing > midway / 2, `the title lands: ${midway} -> ${landing}`)
+  })
+
   test('the card is MWA Forge’s: house pixels, the mark, and no site in it at all', async () => {
-    const card = await frame(reelPath, 440)
+    const card = await frame(reelPath, 485)
     for (const [name, colour] of [
       ['the hero video', VIDEO_AT_PIN],
       ['a lazy image', LAZY_IMAGE],
@@ -462,7 +518,7 @@ describe('reel render', () => {
     // single filtergraph pass; this is the other half — that both ends of the ramp
     // survive an encode, and that the ramp is cut to the word rather than washed over
     // the card. Read on the same frame as the test above, deep into the card's hold.
-    const card = await frame(reelPath, 440)
+    const card = await frame(reelPath, 485)
     const layout = cardLayout()
     // Everything under the lockup's own box: the tagline, the headline, the rule and
     // the credit, all of which are house ink or house accent and none of them the ramp.
@@ -540,7 +596,7 @@ describe('reel render', () => {
     // Two frames apart rather than one: the card's fastest pixel travels under half a
     // pixel a frame, so a single frame gap is small enough that the encoder's own
     // rounding is a fair share of it and the reading jitters.
-    const midway = meanDiff(await frame(reelPath, 438), await frame(reelPath, 440))
+    const midway = meanDiff(await frame(reelPath, 483), await frame(reelPath, 485))
     const landing = meanDiff(await frame(reelPath, LAST_FRAME - 2), await frame(reelPath, LAST_FRAME))
     assert.ok(landing > 0, 'the card is a still')
     assert.ok(landing > midway / 2, `the card lands: ${midway.toFixed(3)} -> ${landing.toFixed(3)}`)
@@ -557,7 +613,7 @@ describe('reel render', () => {
   })
 
   test('emits a contact sheet with one tile per cut point', async () => {
-    // n + 2 tiles: frame 0, then the frame each cut lands on, in one row.
+    // n + 3 tiles: frame 0, then the frame each cut lands on, in one row.
     const path = join(ws.root, 'out', 'fixture-sheet.jpg')
     assert.ok(existsSync(path), 'no sheet at out/fixture-sheet.jpg')
     assert.deepEqual(await size(path), sheetSize(CUTS.length + 2))
@@ -649,7 +705,7 @@ export default defineSite({
       const out = join(dying.root, 'out')
       assert.ok(existsSync(join(out, 'masters', 'hook.jpg')), 'the masters were cleaned up')
       assert.ok(
-        existsSync(join(out, 'masters', 'shot-000000-hook.mp4')),
+        existsSync(join(out, 'masters', 'shot-000000-title.mp4')),
         'the shots were cleaned up',
       )
       // And promotion takes an explicit `.mp4` path that this run never produced, so
@@ -787,8 +843,8 @@ export default defineSite({
     // active on the control than on the subject. Two frames sampled inside the hook still
     // differ where the same two inside the beat do not, and the only thing that can
     // account for that is the page's own clock.
-    const moving = await bandTravel(0)
-    const frozen = await bandTravel(CUTS[0] as number)
+    const moving = await bandTravel(HOOK_START)
+    const frozen = await bandTravel(HOOK_CUT)
     // The control is not perfectly still — its deeper drift drags the video's own bottom
     // edge through the band — which is the point: even against that, the live hook moves
     // an order of magnitude further.
@@ -805,25 +861,25 @@ export default defineSite({
     // scrolled to the hero and the fixture's sticky nav comes with it. That is
     // `CONTEXT.md`'s "chrome is in the hook or in nothing at all", asserted from the side
     // that had no way to happen before #63 — the still reel above asserts the other.
-    const first = await frame(livePath, 0)
+    const first = await frame(livePath, HOOK_START)
     assert.ok(
       pixelsNear(rows(first, 0, 120), PAGE_CHROME) > 50_000,
       'the recording is not the viewport scrolled to the hero',
     )
     // And still nowhere else: every beat is still clipped rather than scrolled to.
-    for (const index of [130, 235, 340]) {
+    for (const index of [175, 280, 385]) {
       const beat = await frame(livePath, index)
       assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
     }
   })
 
-  test('draws its line fully on frame 0, and never animates it in', async () => {
-    // Frame 0 is the in-feed thumbnail whichever way the pixels underneath it were got:
-    // the line is at full alpha on it, in the slot, and stays there for the hold.
-    const first = await frame(livePath, 0)
+  test('draws its line fully on its first frame, and never animates it in', async () => {
+    // The hook's own first frame carries the line whichever way the pixels underneath
+    // it were got: full alpha, in the slot, and there for the whole hold.
+    const first = await frame(livePath, HOOK_START)
     const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
-    assert.ok(inSlot > 5_000, `the hook is not drawn on frame 0 (${inSlot}px of ink)`)
-    assert.equal(pixelsNear(first, INK) - inSlot, 0, 'the thumbnail draws ink outside the slot')
+    assert.ok(inSlot > 5_000, `the hook is not drawn on its first frame (${inSlot}px of ink)`)
+    assert.equal(pixelsNear(first, INK) - inSlot, 0, 'the hook draws ink outside the slot')
 
     const held = pixelsNear(await frame(livePath, HOOK_HELD), INK)
     assert.ok(
@@ -831,12 +887,12 @@ export default defineSite({
       `the hook’s alpha moves during its hold: ${inSlot} -> ${held}`,
     )
     // And it lets go before the cut, like a still hook's does (#24).
-    const cut = CUTS[0] as number
+    const cut = HOOK_CUT
     assert.equal(pixelsNear(await frame(livePath, cut - 1), INK), 0, 'the hook outlives its shot')
   })
 
   test('still cuts hard into a beat that is still a frozen master', async () => {
-    const cut = CUTS[0] as number
+    const cut = HOOK_CUT
     const within = meanDiff(await frame(livePath, cut - 2), await frame(livePath, cut - 1))
     const across = meanDiff(await frame(livePath, cut - 1), await frame(livePath, cut))
     assert.ok(across > within * 10, `the hook does not cut hard (${within} -> ${across})`)
@@ -889,14 +945,14 @@ export default defineSite({
       /^note {2}beats\[2\] '#tall' is 4400px tall; fit pulls out to at most 3840px/m,
     )
     // A note never becomes a refusal: the reel is cut, and it is the length #12 says.
-    assert.match(cappedRun.stdout, /^done {2}out[\\/]capped-3beat\.mp4 {2}15\.7s/m)
+    assert.match(cappedRun.stdout, /^done {2}out[\\/]capped-3beat\.mp4 {2}17\.2s/m)
     assert.ok(existsSync(cappedPath), 'no mp4 at out/capped-3beat.mp4')
   })
 
   test('the beat is a vertical pan, still travelling at its own cut', async () => {
     // Beat 2's shot, read the way every other shot is (#12): a camera that has eased
     // or landed shows a last pair of frames quieter than a middle pair.
-    const [mid, end] = [351, 395]
+    const [mid, end] = [396, 440]
     const midway = meanDiff(await frame(cappedPath, mid - 1), await frame(cappedPath, mid))
     const landing = meanDiff(await frame(cappedPath, end - 1), await frame(cappedPath, end))
     assert.ok(landing > 0, 'the fallback beat is a still')
@@ -1004,15 +1060,15 @@ export default defineSite({
     // wrong reason is worth knowing: the scrim ran to the foot of the frame and ate
     // the rows the reveal would have shown in. It stops above them now (#60, as
     // amended), so the claim is read where the claim is.
-    const first = await frame(walkedPath, 0)
+    const first = await frame(walkedPath, HOOK_START)
     assert.equal(
       pixelsNear(rows(first, ...REVEAL_BAND), REVEAL),
       0,
-      'the reveal is already in the band on the thumbnail',
+      'the reveal is already in the band on the hook’s first frame',
     )
 
     // And by the last frame of the hook the walk has carried it up into the band.
-    const last = await frame(walkedPath, (CUTS[0] as number) - 1)
+    const last = await frame(walkedPath, HOOK_CUT - 1)
     const revealed = pixelsNear(rows(last, ...REVEAL_BAND), REVEAL)
     const band = (REVEAL_BAND[1] - REVEAL_BAND[0]) * FRAME_WIDTH
     assert.ok(
@@ -1032,8 +1088,8 @@ export default defineSite({
         .slice(1)
         .reduce((total, bytes, i) => total + meanDiff(bytes, frames[i] as Buffer), 0)
     }
-    const moving = await travel(0)
-    const frozen = await travel(CUTS[0] as number)
+    const moving = await travel(HOOK_START)
+    const frozen = await travel(HOOK_CUT)
     // A lower bar than the ambient hook's, and for the reason that makes the argument
     // one-way: the control is a *deeper* camera over the same section, and a 10% drift
     // over the fixture's textured hero is not a small number to beat.
@@ -1048,13 +1104,13 @@ export default defineSite({
     // hook is scrolled *to* its hero and holds there, so its chrome is baked in for the
     // whole shot. A walk starts at the document's top — where the sticky nav is what a
     // frame 0 sees — and leaves it behind, because the fixture's nav is not fixed.
-    const first = await frame(walkedPath, 0)
+    const first = await frame(walkedPath, HOOK_START)
     assert.ok(
       pixelsNear(rows(first, 0, 100), PAGE_CHROME) > 50_000,
       'the walk did not start at the top of the document',
     )
     // And still nowhere in a beat: every beat is still clipped rather than scrolled to.
-    for (const index of [130, 235, 340]) {
+    for (const index of [175, 280, 385]) {
       const beat = await frame(walkedPath, index)
       assert.equal(pixelsNear(beat, PAGE_CHROME), 0, `page chrome is baked into frame ${index}`)
     }
@@ -1081,11 +1137,11 @@ export default defineSite({
     // one held frame rather than a stretch of them, and the recorder pads the tail past
     // the last paint. The marker is what closed that gap, so this fails loudly if it is
     // ever traded back for a stopwatch.
-    const first = await frame(walkedPath, 0)
-    assert.equal(pixelsNear(first, REVEAL), 0, 'the thumbnail is already into the walk')
+    const first = await frame(walkedPath, HOOK_START)
+    assert.equal(pixelsNear(first, REVEAL), 0, 'the hook is already into the walk')
     assert.ok(
       walkedTo(first) > 1500,
-      `frame 0 is not the page at its top: the throb is at row ${walkedTo(first)}`,
+      `the hook does not open on the page at its top: the throb is at row ${walkedTo(first)}`,
     )
   })
 
@@ -1100,7 +1156,7 @@ export default defineSite({
     // grid, so the cut can be up to one frame early or late, and one frame of the
     // house pace is SCROLL_PACE / FPS ≈ 17px of walk. That, plus a few pixels for
     // where an encoded edge is judged to begin, is the whole budget.
-    const before = await frame(walkedPath, 0)
+    const before = await frame(walkedPath, HOOK_START)
     const master = join(walked.root, 'out', 'masters', 'hook.mp4')
     const wasCaptured = (await stat(master)).mtimeMs
 
@@ -1110,8 +1166,8 @@ export default defineSite({
     // the page again rather than re-cutting the first render's recording.
     assert.notEqual((await stat(master)).mtimeMs, wasCaptured)
 
-    const second = await frame(walkedPath, 0)
-    assert.equal(pixelsNear(second, REVEAL), 0, 'the second render’s thumbnail is into the walk')
+    const second = await frame(walkedPath, HOOK_START)
+    assert.equal(pixelsNear(second, REVEAL), 0, 'the second render’s hook is into the walk')
     const drift = Math.abs(walkedTo(second) - walkedTo(before))
     assert.ok(
       drift <= WALK_TOLERANCE,
@@ -1120,16 +1176,16 @@ export default defineSite({
     )
   })
 
-  test('draws its line fully on frame 0, and still cuts hard into a frozen beat', async () => {
+  test('draws its line fully on its first frame, and still cuts hard into a frozen beat', async () => {
     // Everything ADR-0006 fixed for an ambient hook holds for a walked one: frame 0 is
     // the thumbnail whichever way the pixels were got, and the cut is still a cut.
     // Counted in the slot only, and never across the frame as the still and ambient
     // hooks are: a walk starts at the top of the document, so the fixture's own `<h1>`
     // is on this thumbnail at full size, and it is set in the same ink. The claim being
     // made is about the overlay's alpha, so it is read where the overlay is.
-    const first = await frame(walkedPath, 0)
+    const first = await frame(walkedPath, HOOK_START)
     const inSlot = pixelsNear(rows(first, TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
-    assert.ok(inSlot > 5_000, `the hook is not drawn on frame 0 (${inSlot}px of ink)`)
+    assert.ok(inSlot > 5_000, `the hook is not drawn on its first frame (${inSlot}px of ink)`)
     const held = pixelsNear(rows(await frame(walkedPath, HOOK_HELD), TEXT_SLOT.top, TEXT_SLOT.bottom), INK)
     assert.ok(
       Math.abs(inSlot - held) < inSlot * 0.05,
@@ -1140,7 +1196,7 @@ export default defineSite({
     // above: by the last frame the walk has pulled the fixture's own `#services`
     // heading up into the bottom of the shot, and that ink is the page's, not the
     // overlay's. The slot is where the overlay would be if it had outlived its cue.
-    const cut = CUTS[0] as number
+    const cut = HOOK_CUT
     const last = rows(await frame(walkedPath, cut - 1), TEXT_SLOT.top, TEXT_SLOT.bottom)
     assert.equal(pixelsNear(last, INK), 0, 'the hook outlives its shot')
     const within = meanDiff(await frame(walkedPath, cut - 2), await frame(walkedPath, cut - 1))

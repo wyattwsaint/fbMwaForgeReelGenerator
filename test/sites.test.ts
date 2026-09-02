@@ -34,16 +34,16 @@ async function site(slug: string): Promise<SiteConfig> {
 }
 
 describe('sites/', () => {
-  test('brobst plans the 15.7s three-beat reel', async () => {
-    assert.equal(planReel(await site('brobst')).durationMs, 15700)
+  test('brobst plans the 17.2s three-beat reel', async () => {
+    assert.equal(planReel(await site('brobst')).durationMs, 17200)
   })
 
-  test('pharos plans the 19.2s four-beat reel', async () => {
-    assert.equal(planReel(await site('pharos')).durationMs, 19200)
+  test('pharos plans the 20.7s four-beat reel', async () => {
+    assert.equal(planReel(await site('pharos')).durationMs, 20700)
   })
 
-  test('mwaforge plans the 19.2s four-beat reel', async () => {
-    assert.equal(planReel(await site('mwaforge')).durationMs, 19200)
+  test('mwaforge plans the 20.7s four-beat reel', async () => {
+    assert.equal(planReel(await site('mwaforge')).durationMs, 20700)
   })
 
   test('no config says anything wrong about itself', async () => {
@@ -82,7 +82,7 @@ describe('sites/', () => {
   })
 
   test("pharos pans laterally across the week, with the punch to travel", async () => {
-    const shot = planReel(await site('pharos')).shots[1]
+    const shot = planReel(await site('pharos')).shots[2]
     assert.equal(shot?.direction, 'lateral')
     // Lateral travel comes from the punch alone, so it is knowable without the page.
     assert.ok(
@@ -158,7 +158,7 @@ describe('sites/', () => {
     // Fit and punch are the two ends of one axis, so a fit beat naming a punch is a
     // config error — and the plan drifts it at 1.0 whatever the rotation would have said.
     assert.equal(work.punchFactor, undefined)
-    const shot = planReel(config).shots[2]
+    const shot = planReel(config).shots[3]
     assert.equal(shot?.fit, true)
     assert.equal(shot.move, 'drift')
   })
@@ -173,7 +173,7 @@ describe('sites/', () => {
     const shots = planReel(config).shots
     let panned = 0
     for (const [index, beat] of config.beats.entries()) {
-      const shot = shots[index + 1]
+      const shot = shots[index + 2]
       if (shot?.move !== 'pan') continue
       panned += 1
       // Both axes, because the rotation picks the direction and the window has to

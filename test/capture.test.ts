@@ -110,7 +110,7 @@ describe('capturePlan', () => {
     test('a fit beat loads its own viewport, rasterised back down to frame width', () => {
       const site = config([beat({ fit: true }), beat(), beat()])
       const timeline = planReel(site)
-      const fit = timeline.shots[1] as Shot
+      const fit = timeline.shots[2] as Shot
       const groups = capturePlan(site, timeline, new Map([[fit, fitViewportWidth(2880)]]))
       const group = groups.find((candidate) => candidate.shots.includes(fit)) as Group
       assert.deepEqual(group.viewport, { width: 1620, height: FRAME_HEIGHT })
@@ -123,7 +123,7 @@ describe('capturePlan', () => {
     test('a fit beat and a non-fit beat on one url are two loads', () => {
       const site = config([beat({ fit: true }), beat(), beat()])
       const timeline = planReel(site)
-      const groups = capturePlan(site, timeline, new Map([[timeline.shots[1] as Shot, 1620]]))
+      const groups = capturePlan(site, timeline, new Map([[timeline.shots[2] as Shot, 1620]]))
       assert.equal(groups.length, 2)
       assert.deepEqual(shotNames(groups[0]!), ['hook', 'beat-1', 'beat-2'])
       assert.equal(groups[0]!.viewport.width, FRAME_WIDTH)
@@ -133,7 +133,7 @@ describe('capturePlan', () => {
     test('two fit beats that landed on one width share one load; two widths do not', () => {
       const site = config([beat({ fit: true }), beat({ fit: true }), beat({ fit: true })])
       const timeline = planReel(site)
-      const [first, second, third] = timeline.shots.slice(1, 4) as [Shot, Shot, Shot]
+      const [first, second, third] = timeline.shots.slice(2, 5) as [Shot, Shot, Shot]
       const same = capturePlan(
         site,
         timeline,
@@ -204,7 +204,7 @@ describe('capturePlan', () => {
 
 describe('trimRecording', () => {
   /** The ambient hook as the plan draws it — the one shot that is ever recorded. */
-  const shot = planReel(ambient()).shots[0] as Shot
+  const shot = planReel(ambient()).shots[1] as Shot
   const size = masterSize(shot, FRAME_HEIGHT)
   /** ffmpeg's own `blue`, which is what the shot's own stretch is drawn in below. */
   const BLUE = '#0000ff'

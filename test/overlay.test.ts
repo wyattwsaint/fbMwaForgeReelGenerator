@@ -44,12 +44,14 @@ describe('which cues are drawn', () => {
   const timeline = planReel(labelled(3))
 
   test('the hook belongs to the hook shot and a label to its own beat', () => {
+    // Shot 0 is the title, which draws its own line and carries no cue at all.
+    assert.deepEqual(drawnOn(timeline, 0), [])
     assert.deepEqual(
-      drawnOn(timeline, 0).map((cue) => cue.role),
+      drawnOn(timeline, 1).map((cue) => cue.role),
       ['hook'],
     )
     assert.deepEqual(
-      drawnOn(timeline, 2).map((cue) => cue.content),
+      drawnOn(timeline, 3).map((cue) => cue.content),
       ['Beat 1'],
     )
   })
@@ -63,8 +65,8 @@ describe('which cues are drawn', () => {
 
   test('a beat with no label draws nothing at all', () => {
     const plain = planReel({ ...labelled(3), beats: [{ selector: '#a' }, { selector: '#b' }, { selector: '#c' }] })
-    assert.deepEqual(drawnOn(plain, 1), [])
-    assert.deepEqual(graphOf(plain, 1), '')
+    assert.deepEqual(drawnOn(plain, 2), [])
+    assert.deepEqual(graphOf(plain, 2), '')
   })
 })
 
@@ -72,7 +74,7 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
   test('the hook is drawn on frame 0 and fades out over its final 0.5s', () => {
     const timeline = planReel(labelled(3))
     const cue = timeline.text[0] as TextCue
-    const shot = timeline.shots[0] as Shot
+    const shot = timeline.shots[1] as Shot
     const envelope = envelopeOf(cue, shot)
     assert.deepEqual(envelope, {
       startFrame: 0,
@@ -91,7 +93,7 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
   test('a label starts 0.2s after its cut and is dark 0.2s before the next', () => {
     const timeline = planReel(labelled(3))
     const cue = timeline.text[1] as TextCue
-    const envelope = envelopeOf(cue, timeline.shots[1] as Shot)
+    const envelope = envelopeOf(cue, timeline.shots[2] as Shot)
     assert.deepEqual(envelope, {
       startFrame: 6,
       fadeInFrames: 9,
@@ -129,8 +131,8 @@ describe('envelopes are the plan\u2019s, not re-derived', () => {
 
 describe('what gets drawn', () => {
   const timeline = planReel(labelled(3))
-  const hook = graphOf(timeline, 0)
-  const label = graphOf(timeline, 2)
+  const hook = graphOf(timeline, 1)
+  const label = graphOf(timeline, 3)
 
   test('the scrim is a constant house-ground wash, never sampled from the page', () => {
     // House ground as the source colour and as the three channels the gradient is
@@ -212,7 +214,7 @@ describe('copy survives the filtergraph', () => {
 
   test('a hook with an apostrophe reaches the frame as one drawtext', () => {
     const timeline = planReel({ ...labelled(3), hook: { text: "It's spotless." } })
-    const graph = graphOf(timeline, 0)
+    const graph = graphOf(timeline, 1)
     assert.equal((graph.match(/drawtext=/g) ?? []).length, 1)
     assert.match(graph, /text=It\\\\\\'s spotless\./)
   })
@@ -230,7 +232,7 @@ describe('copy survives the filtergraph', () => {
  */
 describe('the hook is dark on its last frame, on the decoded pixels', () => {
   const timeline = planReel(labelled(3))
-  const shot = timeline.shots[0] as Shot
+  const shot = timeline.shots[1] as Shot
   const last = frameCount(shot.durationMs) - 1
 
   let ws: Workspace
@@ -251,7 +253,7 @@ describe('the hook is dark on its last frame, on the decoded pixels', () => {
       '-frames:v', '1',
       master,
     ])
-    rendered = await renderShot({ shot, path: master, size }, shot, ws.root, drawnOn(timeline, 0))
+    rendered = await renderShot({ shot, path: master, size }, shot, ws.root, drawnOn(timeline, 1))
   })
 
   after(() => ws.dispose())
