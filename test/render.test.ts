@@ -173,18 +173,21 @@ describe('reel render', () => {
   test('reports one checkpointed line per phase, with timings', () => {
     // Plain appended lines, never a redrawing bar: the reason to look is almost always
     // "which beat is slow", and the reason to scroll back is that something failed.
+    //
+    // Every run of spaces here is counted exactly, and they are counted against a
+    // subject column sized to this run's longest name — `gallery.showcase`, sixteen
+    // characters, one space of gap (#108). Restore the column to a literal of any
+    // width and these counts are wrong together.
     for (const line of [
-      /^check {6}ok {9}\d+\.\d+s$/m,
-      /^master 1\/4 hook {7}\d+\.\d+s$/m,
-      /^master 2\/4 hero {7}\d+\.\d+s$/m,
-      // A section whose name is wider than the column keeps its gutter: the timing
-      // steps right rather than running into the name (#108). `gallery.showcase` is
-      // sixteen characters against an eleven-wide column, which is the case no
-      // fixture section used to be long enough to produce.
-      /^master \d\/4 gallery\.showcase \d+\.\d+s$/m,
-      /^shot {3}1\/6 drift {6}\d+\.\d+s$/m,
-      /^shot {3}6\/6 drift {6}\d+\.\d+s$/m,
-      /^mux {19}\d+\.\d+s$/m,
+      /^check {6}ok {15}\d+\.\d+s$/m,
+      /^master 1\/4 hook {13}\d+\.\d+s$/m,
+      /^master 2\/4 hero {13}\d+\.\d+s$/m,
+      // The name that used to run into its own timing: it is the widest in the run, so
+      // it is the name the column is cut to, and it keeps its one space like the rest.
+      /^master 4\/4 gallery\.showcase \d+\.\d+s$/m,
+      /^shot {3}1\/6 drift {12}\d+\.\d+s$/m,
+      /^shot {3}6\/6 drift {12}\d+\.\d+s$/m,
+      /^mux {25}\d+\.\d+s$/m,
       // The reel's own length, then what it cost to cut — never each other.
       /^done {2}out[\\/]fixture-3beat\.mp4 {2}17\.2s {3}\[\d+\.\d+s total\]$/m,
     ]) {
@@ -199,6 +202,25 @@ describe('reel render', () => {
     assert.doesNotMatch(firstRun.stdout, /^measure/m)
   })
 
+  test('every timing in a report starts at the same column, however long the names are', () => {
+    // The claim the grid is actually read for (#18, #108): a name too long for its
+    // column is a timing that is not in the column, and one line out of the column is
+    // the line you have to stop and read. `gallery.showcase` is sixteen characters —
+    // longer than every name this fixture used to have, and longer than the fixed
+    // eleven the column used to be — so this run is one the old formatting could not
+    // print straight.
+    const phases = firstRun.stdout
+      .split(/\r?\n/)
+      .filter((line) => /^(check|measure|master|shot|mux) /.test(line))
+    assert.ok(phases.length >= 8, firstRun.stdout)
+    const columns = new Set(phases.map((line) => /\d+\.\d+s$/.exec(line)?.index))
+    assert.equal(columns.size, 1, `the timings are in ${columns.size} columns:\n${phases.join('\n')}`)
+    // Sized to this run and nothing else: the label column, the longest subject in the
+    // run, and one space. A column cut to any other run's names lands elsewhere — see
+    // the fit run below, whose widest name is `services` and whose timings sit at 20.
+    assert.equal([...columns][0], 'master 1/4 '.length + 'gallery.showcase'.length + 1)
+  })
+
   test("a fit beat's measurement load is a phase line of its own", () =>
     withWorkspace(async (fitWs) => {
       // #services is 2400px, so the beat is fit — which costs a page load and settle
@@ -207,8 +229,12 @@ describe('reel render', () => {
       await fitWs.site('fitted', fittedSite(fixture.url))
       const run = await reel(['render', 'fitted'], fitWs.root)
       assert.equal(run.code, 0, run.output)
-      // Named for the section it was opened to read, in the same columns as the rest.
-      assert.match(run.stdout, /^measure {4}services {3}\d+\.\d+s$/m)
+      // Named for the section it was opened to read, in the same columns as the rest —
+      // this run's columns, which are not the run above's: `services` is the longest
+      // name here, so every timing in this report starts at 20 rather than at 28.
+      assert.match(run.stdout, /^measure {4}services \d+\.\d+s$/m)
+      assert.match(run.stdout, /^master 1\/4 hook {5}\d+\.\d+s$/m)
+      assert.match(run.stdout, /^check {6}ok {7}\d+\.\d+s$/m)
       assert.equal(run.stdout.match(/^measure /gm)?.length, 1)
     }))
 
@@ -833,9 +859,9 @@ export default defineSite({
     // #18: the reason to read this output is "which shot is slow", and a hook that dwells
     // on the page for RECORD_START_MS before recording 3.0s of it is the slowest thing in
     // the pass. It is counted and timed with the rest.
-    assert.match(liveRun.stdout, /^master 1\/4 hook {7}\d+\.\d+s$/m)
+    assert.match(liveRun.stdout, /^master 1\/4 hook {5}\d+\.\d+s$/m)
     assert.equal(liveRun.stdout.match(/^master \d\/4 /gm)?.length, 4)
-    const seconds = Number(/^master 1\/4 hook {7}(\d+\.\d+)s$/m.exec(liveRun.stdout)?.[1])
+    const seconds = Number(/^master 1\/4 hook {5}(\d+\.\d+)s$/m.exec(liveRun.stdout)?.[1])
     assert.ok(
       seconds > (RECORD_START_MS + HOOK_MS) / 1000,
       `the hook was not dwelt on and recorded (${seconds}s)`,

@@ -4,7 +4,7 @@ import { check } from './check.ts'
 import { loadSite } from './config.ts'
 import { keep } from './keep.ts'
 import { render } from './render.ts'
-import type { Phase, Render } from './render.ts'
+import type { Render, Report } from './render.ts'
 import { sectionLines, sections } from './sections.ts'
 import type { Section } from './sections.ts'
 
@@ -45,7 +45,7 @@ export async function main(argv: string[], root = process.cwd()): Promise<number
       problems = checked.problems
       notes = checked.notes
     } else {
-      cut = await render(config, root, slug, (phase) => console.log(phaseLine(phase)))
+      cut = await render(config, root, slug, phaseReport((line) => console.log(line)))
       problems = cut.problems
       notes = cut.notes
     }
@@ -138,34 +138,51 @@ async function promote(path: string, root: string): Promise<number> {
 }
 
 /**
- * How wide the subject column is drawn, and so where the timings land. Eleven fits
- * every plain section name a site has yet named; the ones that do not fit are
- * compounds (`header.hero`) and the `measure` line's list of every section one load
- * answered for, which has no width at all — it grows with the config.
+ * The name's own column, and the counter padded inside it — so `shot`'s counts line
+ * up under `master`'s rather than each name pushing its own count along.
  */
-const SUBJECT_COLUMN = 11
+const NAME_COLUMN = 6
+const LABEL_COLUMN = 10
 
 /**
- * One finished phase, as a line: `master 1/5 hero       2.4s`.
- *
- * Fixed columns, so the timings read down the page as a column of numbers rather than
- * having to be picked out of prose — which is the whole reason to print them. The
- * counter is padded inside the name's own column, so `shot`'s counts line up under
- * `master`'s.
- *
- * The subject's column is a floor rather than a fixed cell (#108): a subject at least
- * that wide is still followed by a space, so `header.hero` reads as a name and a
- * timing rather than as `header.hero8.7s`. Such a line steps its own timing to the
- * right and the next line steps back — the grid itself never moves, which is what
- * lets the timings be scanned as a column at all. Sizing the column to the run
- * instead would not survive here: phases are printed as they finish and nothing is
- * redrawn (#18), so the widest subject is not known when the first line is written,
- * and one long `measure` list would push every other timing across the page.
+ * The space between the widest subject of a run and its timing. One, because the
+ * gap's job is only to be a gap: the timings are found by being in a column, not by
+ * being far from the names.
  */
-function phaseLine({ name, count, subject, ms }: Phase): string {
-  const label = count ? `${name.padEnd(6)} ${count.index + 1}/${count.total}` : name
-  const gutter = ' '.repeat(Math.max(1, SUBJECT_COLUMN - subject.length))
-  return `${label.padEnd(10)} ${subject}${gutter}${seconds(ms)}`
+const SUBJECT_GAP = 1
+
+/**
+ * The phase report, as lines — one formatter per run, because the grid it draws is
+ * this run's (#108).
+ *
+ * The subject column is sized to the longest subject the run is going to print, which
+ * the pipeline hands over the moment it has planned the reel and before the first line
+ * is written. So no name can overrun its column however long it is — `header.hero`,
+ * or a `measure` line naming every fit section one load answered for — and every
+ * timing in one report starts at the same column, which is the whole reason the
+ * timings are printed as a column (#18).
+ *
+ * The price is that the column does not land in the same place in two reports of two
+ * different sites. That is the right price: a report is read down its own page, and a
+ * fixed width wide enough for today's longest name is only a cliff waiting for a site
+ * whose sections are named a little longer.
+ *
+ * A refusal never reaches the plan — it prints its `check failed` line and its
+ * problems — so the column falls back to that one line's own subject, which is the
+ * only thing there is to line it up with.
+ */
+function phaseReport(write: (line: string) => void): Report {
+  let column = 0
+  return {
+    plan(subjects) {
+      column = Math.max(...subjects.map((subject) => subject.length))
+    },
+    phase({ name, count, subject, ms }) {
+      const label = count ? `${name.padEnd(NAME_COLUMN)} ${count.index + 1}/${count.total}` : name
+      const padded = subject.padEnd(Math.max(column, subject.length) + SUBJECT_GAP)
+      write(`${label.padEnd(LABEL_COLUMN)} ${padded}${seconds(ms)}`)
+    },
+  }
 }
 
 /**

@@ -14,12 +14,12 @@
 
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { captureMasters, mastersDir } from './capture.ts'
+import { captureMasters, fitLoads, mastersDir } from './capture.ts'
 import { judge } from './check.ts'
 import { assemble, renderShot } from './compose.ts'
 import { trackPath } from './house.ts'
 import { planReel } from './plan.ts'
-import type { Shot } from './plan.ts'
+import type { Shot, Timeline } from './plan.ts'
 import { reviewStills } from './review.ts'
 import type { SiteConfig } from './site.ts'
 import { survey } from './survey.ts'
@@ -39,7 +39,23 @@ export type Phase = {
   subject: string
   ms: number
 }
-export type Report = (phase: Phase) => void
+/**
+ * Where the pipeline says what it just did — and, once, what it is going to say.
+ *
+ * `plan` is handed every subject this run will print, the moment the reel is planned
+ * and before any line of the grid is written. A report that lays its subjects out in
+ * a column has to size that column before the first line, and the honest width is the
+ * widest name *this* run will carry (#108) — which is a property of the plan, not of
+ * the lines already emitted. Still data, not lines: how wide is the CLI's arithmetic,
+ * this is only the pipeline saying which names are coming.
+ */
+export type Report = {
+  plan(subjects: readonly string[]): void
+  phase(phase: Phase): void
+}
+
+/** A report that goes nowhere — the default, for a render nobody is watching. */
+const SILENT: Report = { plan: () => {}, phase: () => {} }
 
 export type Render = {
   path: string
@@ -75,7 +91,7 @@ export async function render(
   config: SiteConfig,
   root: string,
   slug: string,
-  report: Report = () => {},
+  report: Report = SILENT,
 ): Promise<Render> {
   const dir = outDir(root)
   await rm(dir, { recursive: true, force: true })
@@ -89,12 +105,13 @@ export async function render(
   const checkedAt = Date.now()
   const surveyed = await survey(config)
   const { problems, notes } = judge(config, root, surveyed)
-  report({
-    name: 'check',
-    subject: problems.length === 0 ? 'ok' : 'failed',
-    ms: Date.now() - checkedAt,
-  })
-  if (problems.length > 0) return { path: '', stills: [], durationMs: 0, notes, problems }
+  const checkMs = Date.now() - checkedAt
+  if (problems.length > 0) {
+    // A refusal prints this line and then its problems, and there is no plan behind
+    // it to size a column from — nor anything to line this one up with.
+    report.phase({ name: 'check', subject: 'failed', ms: checkMs })
+    return { path: '', stills: [], durationMs: 0, notes, problems }
+  }
 
   // The survey taken off the settled pages above: the heading a beat that named no
   // `label` draws (#62), the height that says whether a `fit` beat can fit legibly
@@ -102,6 +119,15 @@ export async function render(
   // degradations (#64, #88). Planned once, here, so capture and compose read one
   // timeline.
   const timeline = planReel(config, surveyed)
+
+  // The plan first, then the line the check already earned. `planReel` is arithmetic
+  // over a survey that is already in hand — no load, no settle, nothing that can fail
+  // slowly — so the check line is still the first line printed and still carries the
+  // check's own cost. It is printed a few milliseconds later than it was so that it
+  // can be printed in the same column as everything under it (#108): a line whose
+  // width was chosen before the run knew its own names is a line that does not line up.
+  report.plan(plannedSubjects(timeline))
+  report.phase({ name: 'check', subject: 'ok', ms: checkMs })
 
   // Masters are grouped by page and device scale rather than taken in reel order, so
   // the count runs in the order they are finished — which is the order they cost.
@@ -111,7 +137,7 @@ export async function render(
   // masters (#78): it is a full page settle that produced no pixels, and how many
   // there are is a property of the config's fit beats, not of the reel's shots.
   const masters = await captureMasters(config, timeline, dir, (event) =>
-    report(
+    report.phase(
       event.kind === 'master'
         ? {
             name: 'master',
@@ -151,6 +177,26 @@ export async function render(
   return { path, stills, durationMs: timeline.durationMs, notes, problems: [] }
 }
 
+/**
+ * Every subject this run will print, in no particular order — the check's own, one
+ * per measurement load, one per master, one per shot, and the mux's nothing.
+ *
+ * It is the same arithmetic as the report itself does, from the same plan, which is
+ * why the two cannot disagree: a subject that appears here and not on a line only
+ * widens the column, and a line whose subject never appeared here is the bug this
+ * exists to make impossible.
+ */
+function plannedSubjects(timeline: Timeline): string[] {
+  const withSource = timeline.shots.filter((shot) => shot.source)
+  return [
+    'ok',
+    ...[...fitLoads(timeline).values()].map((shots) => shots.map(subjectOf).join(', ')),
+    ...withSource.map(subjectOf),
+    ...timeline.shots.map((shot) => shot.move),
+    '', // `mux` is about the whole reel, so it names nothing.
+  ]
+}
+
 /** What a phase is *about*: the section a master frames, or the move a shot is. */
 function subjectOf(shot: Shot): string {
   const selector = shot.source?.selector
@@ -164,6 +210,6 @@ async function timed<T>(
 ): Promise<T> {
   const started = Date.now()
   const result = await work()
-  report({ ...phase, ms: Date.now() - started })
+  report.phase({ ...phase, ms: Date.now() - started })
   return result
 }

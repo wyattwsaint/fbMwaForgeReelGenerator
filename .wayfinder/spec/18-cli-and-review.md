@@ -59,6 +59,10 @@ mux                   3.2s
 done  out/brobst-2026-08-26.mp4  15.7s   [42.6s total]
 ```
 
+The name column is sized to the longest name the run will print, taken from the plan
+before the first line goes out (#108), so no section name can run into its own timing
+and the column is self-consistent within one report rather than fixed across sites.
+
 The phases are countable and few (n+2), so a line each is a real progress signal *and*
 survives being scrolled back through after a failure — which a redrawing progress bar
 does not. Timings per line because the reason to look is almost always "which beat is

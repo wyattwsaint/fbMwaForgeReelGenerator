@@ -121,7 +121,9 @@ Progress is one checkpointed line per phase, with what that phase cost — plain
 appended lines rather than a redrawing bar, so the output still reads correctly when
 it is scrolled back through after a failure. A config with a `fit` beat prints a
 `measure` line ahead of the masters as well — one per page a fit beat lives on, for
-the load that learns how wide that page has to be captured.
+the load that learns how wide that page has to be captured. The name column is cut to
+the longest name that run will print, so the timings are a column whatever a site
+calls its sections — which does mean two sites' reports put that column in two places.
 
 ```
 $ reel render brobst

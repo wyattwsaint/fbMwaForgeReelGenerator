@@ -205,13 +205,17 @@ export type FitWidths = ReadonlyMap<Shot, number>
  * smaller than the floor, where re-capping it here would be a shot the plan framed as
  * one frame and capture shot as something else.
  */
-async function measureFitWidths(
-  browser: Browser,
-  config: SiteConfig,
-  timeline: Timeline,
-  onCapture: OnCapture,
-): Promise<FitWidths> {
-  const widths = new Map<Shot, number>()
+/**
+ * The measurement loads a timeline implies: one per URL that carries a fit beat, in
+ * the order the reel names them, each carrying every fit shot that load answers for.
+ *
+ * Exported because the report has to know what it is going to print before it prints
+ * the first line (#108): a `measure` line names all of its load's sections, so how
+ * wide that line is cannot be worked out from a shot at a time. Two functions
+ * grouping the same shots by hand is how a column comes to be sized for a line that
+ * was never printed — so the pass and the report read the same grouping, this one.
+ */
+export function fitLoads(timeline: Timeline): Map<string, Shot[]> {
   const byUrl = new Map<string, Shot[]>()
   for (const shot of timeline.shots) {
     if (!shot.fit || !shot.source) continue
@@ -219,8 +223,18 @@ async function measureFitWidths(
     if (group) group.push(shot)
     else byUrl.set(shot.source.url, [shot])
   }
+  return byUrl
+}
 
-  for (const [url, shots] of byUrl) {
+async function measureFitWidths(
+  browser: Browser,
+  config: SiteConfig,
+  timeline: Timeline,
+  onCapture: OnCapture,
+): Promise<FitWidths> {
+  const widths = new Map<Shot, number>()
+
+  for (const [url, shots] of fitLoads(timeline)) {
     // The clock starts before the load, like a capture group's: the load and the
     // settle are all but the whole of what a measurement costs.
     const since = Date.now()
