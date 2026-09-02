@@ -51,13 +51,24 @@ thing in `out/`, so `keep`'s argument is unambiguous.
 **Progress: one checkpointed line per phase, with timings.**
 
 ```
-check      ok         1.7s
-master 1/5 hero       2.4s
-shot   1/5 drift      9.1s
-...
-mux                   3.2s
-done  out/brobst-2026-08-26.mp4  15.7s   [42.6s total]
+check      ok       3.1s
+master 1/4 hook     2.0s
+master 2/4 services 2.0s
+master 3/4 about    2.0s
+master 4/4 reviews  1.9s
+shot   1/6 drift    1.7s
+shot   2/6 drift    0.9s
+shot   3/6 pan      0.7s
+shot   4/6 drift    1.0s
+shot   5/6 pan      1.2s
+shot   6/6 drift    2.2s
+mux                 4.4s
+done  out/brobst-3beat.mp4  17.2s   [24.6s total]
 ```
+
+The subject column is sized to the longest subject the run will print, taken from the
+plan before the first line goes out (#108), so no section name can run into its timing
+and the column is self-consistent within one report rather than fixed across sites.
 
 The phases are countable and few (n+2), so a line each is a real progress signal *and*
 survives being scrolled back through after a failure — which a redrawing progress bar

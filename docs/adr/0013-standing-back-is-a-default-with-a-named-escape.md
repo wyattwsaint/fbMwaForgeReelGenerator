@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (2026-09-01).
+Accepted (2026-09-01). Amended 2026-09-02 (resolves #116): a fourth thing stops a
+beat, and it stops it *past* the default rather than short of it — see
+[Amendment](#amendment-2026-09-02-the-gutter-stops-a-beat-past-the-default).
 
 ## Context
 
@@ -52,7 +54,9 @@ because a blanket division would have driven `#teachers` and `#inquiry` under th
 floor with no human in the loop, on sites nobody re-measured.
 
 **A beat may stop short of the default, and a beat that does must name what stopped
-it.** There are three things that stop one, and all three are already checked:
+it.** ~~There are three things that stop one, and all three are already checked:~~
+Three things stop a beat *short* of the default and all three are checked; a fourth
+stops it *past* the default and is checked by nothing (see the Amendment):
 
 - the 1.0 punch floor (`config.ts`),
 - the section height one punched frame needs (`check.ts`), which rises as the punch
@@ -71,8 +75,9 @@ constant, and not something a viewport width can be made to mean.
   twice (2.7 → 1.598) because it has the deepest punch in the reel to spend. `#week`
   clamps at 1.194, the lateral pan's own floor, standing 14% further out rather than
   30% — it is the reel's only lateral pan, and 1.065 would leave it 0.67px a frame.
-  `#teachers` and `#inquiry` hold at 1.154 and 1.231 and each says which of the two
-  refusals it hit.
+  ~~`#teachers` and `#inquiry` hold at 1.154 and 1.231 and each says which of the two
+  refusals it hit.~~ `#inquiry` holds at 1.231; `#teachers` stands at 1.04 as of the
+  Amendment below.
 - **A reel is no longer uniformly framed, and should not be read as if it were.**
   Beats now stand at whatever distance their section and their move allow. That is
   the honest state of a page whose sections are not all the same height.
@@ -91,3 +96,59 @@ constant, and not something a viewport width can be made to mean.
   last section on a 6452px page. A longer page, or a beat that is not last, hits
   neither wall — which is why the escape is named in the beat rather than encoded as
   a lower bound somewhere central.
+
+## Amendment (2026-09-02): the gutter stops a beat past the default
+
+The Decision above names three things that stop a beat short of the ÷1.3 default and
+says all three are checked. #116 found a fourth, and it does not fit that shape: it
+stops a beat *past* the default, and nothing checks it.
+
+A punch crops a column `1080 / punch` wide out of the **middle** of a frame-wide
+render, so the first thing it spends is the client page's own left and right margins —
+its **gutter** (`CONTEXT.md`). Past the punch that leaves the gutter exactly covered,
+the next thing cropped is the start of every line in the shot. pharos' `#teachers` was
+there at 1.154, losing 2–4 characters off two of the page's headings for the shot's
+whole duration, and it is out at 1.04 — a *deeper* stand-back than this decision asked
+for, driven by a constraint this decision does not name.
+
+Its lower bound is a fifth unchecked thing: standing back costs window height, and a
+window tall enough eventually reaches the next section's first line of type and slices
+it. `#teachers`' lower bound is 1.0323 for that reason and not the punch floor; the
+number it settles on, 1.04, sits between that bound and the 1.0506 the gutter asks
+for.
+
+Neither is a candidate for `check`. A gutter is a page fact — it is whatever the
+client's layout uses — and where the next line of type begins is another; both are
+read off the settled page, and turning either into a refusal would be `check` deciding
+the framing rather than reporting on it — the line ADR-0009 draws. They are named
+here and argued in the beat instead.
+
+## Amended decision
+
+**A beat may stand past the default as well as short of it, and either way it names
+what put it where it is.** The default is still `punch ÷ 1.3` and still lives here
+rather than in `frame.ts` or `plan.ts`. What changes is that the distance a beat ends
+up at is not bounded above by the default: a page fact the pipeline does not check —
+today, the gutter — may ask for more, and a beat that takes more says so in its own
+comment with the measurement beside it.
+
+Everything else stands. The 1.0 floor is real, `fit` is still the only sanctioned way
+past it, and the base viewport is still 1080 × 1920.
+
+## Amended consequences
+
+- **`#teachers` stands at 1.04, not 1.154, and its window is 1847px.** The arithmetic
+  and the per-frame measurements live in `sites/pharos.ts`, which is where a reader
+  goes to change the number.
+- **The ÷1.3 ask is still refused.** 1.154 ÷ 1.3 = 0.888 is under the floor, and 1.04
+  is not that ask met — it is a different constraint landing between the ask and where
+  the beat was.
+- **A drift cannot hold a gutter for a whole shot.** `DRIFT_ZOOM` ramps 10% inside the
+  window the punch already cropped, so holding the gutter across the ramp would want a
+  punch of 0.955. A config-only fix therefore buys one end of the ramp, not the shot;
+  `#teachers` buys the shallow end, which its pull makes the last frame.
+- **That fix rides on the push/pull rotation.** `#teachers` pins `pushPull` rather than
+  inheriting it, because a rotation that quietly turned the pull into a push would move
+  the whole-heading frame to frame 0 with nothing failing.
+- **`#week` is not covered by any of this.** Its heading clips because a lateral pan
+  travels off it, not because the punch crops into it; #122 has it.
