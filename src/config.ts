@@ -39,8 +39,9 @@ export function configProblems(config: SiteConfig, root: string): string[] {
     problems.push('hook.text is required')
   } else {
     // #9: copy over budget fails loudly, like a missing selector. Type never shrinks
-    // to fit, so the only fix is shorter copy.
-    problems.push(...copyProblems('hook.text', config.hook.text, COPY_BUDGETS.hook, 'hook'))
+    // to fit, so the only fix is shorter copy. Measured trailed, like a label: the
+    // three characters the human never typed still count against the budget.
+    problems.push(...copyProblems('hook.text', trailed(config.hook.text), COPY_BUDGETS.hook, 'hook'))
   }
   // A fraction of the hero's own width, so the two edges are the two ends of it. Out of
   // range is not clamped: 1.4 is a human meaning something this cannot do, and a crop

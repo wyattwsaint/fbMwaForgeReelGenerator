@@ -141,24 +141,24 @@ export const LABEL_FADE_MS = 300
 export const LABEL_TAIL_MS = 200
 
 /**
- * What every beat label ends with, house style. A label is a beat's own line over a
- * shot that keeps moving, and the trail says so: the line is a lead-in to the section
- * it sits on, not a caption closing it. Applied to the drawn text, so a config never
- * writes it and a heading never has to carry it.
+ * What every drawn line ends with, house style — the hook's and every beat label's
+ * alike. The line is a lead-in to the shot it sits on, not a caption closing it, and
+ * the trail says so. Applied to the drawn text, so a config never writes it and a
+ * heading never has to carry it.
  */
-export const LABEL_TRAIL = '...'
+export const COPY_TRAIL = '...'
 
 /**
- * A label as it is drawn: the written text, trailed.
+ * A line as it is drawn: the written text, trailed.
  *
  * A closing full stop is dropped first, because `well....` is a typo and not a
  * trail; a `?` or `!` stays, because the trail then reads as the line trailing off
  * after its own mark. A line already ending in the trail is left alone. Empty stays
  * empty — an empty label is a human saying no text, not a shot that says `...`.
  */
-export function trailed(label: string): string {
-  if (!label || label.endsWith(LABEL_TRAIL)) return label
-  return `${label.replace(/\.$/, '')}${LABEL_TRAIL}`
+export function trailed(copy: string): string {
+  if (!copy || copy.endsWith(COPY_TRAIL)) return copy
+  return `${copy.replace(/\.$/, '')}${COPY_TRAIL}`
 }
 /** #9: the hook is drawn whole on its own first frame and fades over its final 0.5s. */
 export const HOOK_FADE_OUT_MS = 500
@@ -613,7 +613,9 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
       // `card.ts` rather than a cue — like the end card's tagline, and for the same
       // reason (#9 §5).
       shot: 1,
-      content: config.hook?.text ?? '',
+      // Trailed as drawn, the same as a label: house style is the hook's too, and the
+      // three characters are added here rather than typed into a config (#9).
+      content: trailed(config.hook?.text ?? ''),
       role: 'hook',
       // Reel time, like every other cue: the hook shot no longer begins the reel, so
       // its line is lit where the hook is rather than at zero.

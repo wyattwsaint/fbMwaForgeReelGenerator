@@ -133,8 +133,9 @@ human's, and naming it as an empty string means that shot carries no text at all
 A section with no heading gives its beat no label, which is an unlabelled shot
 rather than a problem. Every label draws with a **trail**.
 
-**Trail** — the `...` every beat label ends with, house style. A label is a lead-in
-to the section it sits on, not a caption closing it, and the trail says so. Added
+**Trail** — the `...` every drawn line ends with, the hook's and every beat label's
+alike, house style. The line is a lead-in to the shot it sits on, not a caption
+closing it, and the trail says so. Added
 to the drawn line, never written in config or read off a page: a closing full stop
 is dropped first, a `?` or `!` is kept, and a line already ending in `...` is left
 alone. It is part of the line `check` measures, so three characters nobody typed

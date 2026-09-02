@@ -221,7 +221,7 @@ describe('judge', () => {
     // What the template is handed, not just what it says: `copyProblem` is asserted
     // over a field name a test passes it, so nothing else proves that the name reaching
     // it is `hook.text` rather than `hook` — or `beats[1].label` rather than `label`.
-    const long = { ...config(3), hook: { text: 'x'.repeat(43) } }
+    const long = { ...config(3), hook: { text: 'x'.repeat(40) } }
     assert.deepEqual(reportOf(long, 3).problems, ['hook.text is 43 characters; the budget is 42'])
 
     // Counted as drawn — 43 written and the three-character trail — so the number

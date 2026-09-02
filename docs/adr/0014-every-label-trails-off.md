@@ -3,7 +3,8 @@
 ## Status
 
 Accepted (2026-09-02). Adds to ADR-0012's reading of what a label is; changes no
-size, budget or slot.
+size, budget or slot. Amended 2026-09-02: the hook trails off too — see
+[Amendment](#amendment-2026-09-02-the-hook-trails-off-too).
 
 ## Context
 
@@ -31,3 +32,18 @@ part of the line `check` measures, so it counts against the budget and the slot.
 - Three characters nobody typed count against the 42: a label written at the budget
   now fails `check`. Every shipped site still fits.
 - The hook line is untouched: it is the reel's claim, and a claim does not trail off.
+  Superseded by the amendment below.
+
+## Amendment (2026-09-02): the hook trails off too
+
+The original decision drew the line at the hook: a claim does not trail off. On
+screen the two lines are the same line — ADR-0012 gave the hook and the label one
+voice and one size — and a hook set clean above a reel of trailing labels reads as
+two houses rather than one. The hook is a lead-in as much as any label is: it opens
+onto the shots under it and does not close over them.
+
+So `trailed` applies to the hook's drawn line as well, by exactly the same rule:
+applied at plan time and nowhere else, a closing full stop dropped, `?` and `!` kept,
+`...` never doubled, empty left empty. It is part of the line `check` measures, so
+the three characters count against the hook's budget and slot the way they count
+against a label's. Every shipped site still fits.
