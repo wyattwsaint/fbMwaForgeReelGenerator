@@ -77,7 +77,8 @@ describe('verdict', () => {
     const { problems } = report(site, {
       beats: sections({ 1: { heading: 'Enrolling for Fall, apply now before the doors shut' } }),
     })
-    assert.deepEqual(problems, ['beats[1] heading is 51 characters; the budget is 42'])
+    // 51 written, 54 as drawn: the trail every label ends with is counted too.
+    assert.deepEqual(problems, ['beats[1] heading is 54 characters; the budget is 42'])
   })
 
   test('a heading inside the count still fails when it draws too wide', () => {
@@ -88,7 +89,7 @@ describe('verdict', () => {
       beats: sections({ 1: { heading: 'WWWWWWWWWWWWWWWWWWWWWWWWWWWW' } }),
     })
     assert.deepEqual(problems, [
-      'beats[1] heading draws 1911px wide at 76px; the safe box is 950px',
+      'beats[1] heading draws 1979px wide at 76px; the safe box is 950px',
     ])
   })
 
@@ -223,9 +224,11 @@ describe('judge', () => {
     const long = { ...config(3), hook: { text: 'x'.repeat(43) } }
     assert.deepEqual(reportOf(long, 3).problems, ['hook.text is 43 characters; the budget is 42'])
 
+    // Counted as drawn — 43 written and the three-character trail — so the number
+    // the report names is the one the slot would be asked to hold.
     const labelled = config(3, [{}, { label: 'y'.repeat(43) }])
     assert.deepEqual(reportOf(labelled, 3).problems, [
-      'beats[1].label is 43 characters; the budget is 42',
+      'beats[1].label is 46 characters; the budget is 42',
     ])
   })
 })

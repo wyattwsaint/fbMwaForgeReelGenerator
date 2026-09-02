@@ -91,7 +91,7 @@
     },
     {
       "shot": 3,
-      "content": "Enrolling for Fall",
+      "content": "Enrolling for Fall...",
       "role": "label",
       "startMs": 8200,
       "fadeInMs": 300,

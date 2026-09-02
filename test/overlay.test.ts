@@ -52,7 +52,7 @@ describe('which cues are drawn', () => {
     )
     assert.deepEqual(
       drawnOn(timeline, 3).map((cue) => cue.content),
-      ['Beat 1'],
+      ['Beat 1...'],
     )
   })
 
