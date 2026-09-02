@@ -330,12 +330,25 @@ covers a whole number of them a frame. A punched pan therefore travels slightly
 less far than its room allows, and the bigger the master the less it gives up
 (#51).
 
+**Gutter** — the client page's own left and right margins: the band between the
+frame's edge and where the page starts setting type. It is the first thing a
+**punch-in** spends, because a punch crops a column out of the *middle* of a
+frame-wide render — so past the punch that leaves the gutter exactly covered, the
+next thing cropped is the start of every line in the shot. A page fact and never a
+house one: it is whatever the client's layout uses, read off the settled page like a
+section's height. A **drift** crops twice, its zoom inside the punch's window, so
+a drift holds the gutter only at the shallow end of its ramp.
+
 **Standing back** — framing a beat further out than the punch it would otherwise
 take, so a shot shows the page rather than a detail of it. Stated as a divisor on the
 punch a beat has today, and a *default* rather than a constant: it lives in ADR-0013
 and in each beat's own comment, and sites go on writing final numbers. A beat may stop
 short of it, and one that does names what stopped it — the 1.0 punch floor, the
-section height a punched frame needs, or the travel a pan is left with. So the beats
+section height a punched frame needs, or the travel a pan is left with. A beat may
+also stand *past* it, for a reason the default does not name: pharos' `#teachers`
+does, to keep the page's **gutter** in frame. Neither direction is checked — nothing
+in the pipeline derives a punch, so both are a human's number with an argument beside
+it. So the beats
 of one reel do not all stand at the same distance; standing back is a per-beat framing
 decision like **punch-in** and **hero position**, not a house constant, and not
 something the base **capture viewport**'s width can be made to mean.

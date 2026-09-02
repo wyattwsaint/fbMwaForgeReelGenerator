@@ -91,20 +91,16 @@ export default defineSite({
       // shot — beats[2] pays the same one at its own cut, 523px into #inquiry. Two of
       // this reel's three cuts now repeat a line of type, which is the thing to look at
       // first if a third ÷1.3 is ever asked for (ADR-0013).
-      // The heading is clipped and no window can fix it (#116). A pan holds its zoom,
-      // so unlike beats[1] the punch is the only crop here: 1.194 takes a 1080 / 1.194
-      // = 905px column and the pan slides it, opening with that column at x 44 and
-      // closing with it at x 131 against a heading whose text starts at x 26. The
-      // render opens on a whole 'Mornings here. Afternoons yours.' and ends on 's
-      // here. Afternoons yours.', with the Monday column gone off the left edge
-      // entirely.
       //
-      // The fix used on beats[1] is a taller window buying a shallower punch, and here
-      // the punch is not the window's to give: 1.194 is the least that leaves the
-      // lateral pan the 210px of room `panTravelNeeded` asks for, and the window has
-      // no say in that. So the clipped heading is what the pan costs — and the label
-      // below is already the line the shot is making its argument with, which is why
-      // this is a cost worth paying rather than the reel losing its copy.
+      // This beat's heading clips as the shot runs, and #122 is where that is settled
+      // rather than here. The measurement, so it is not taken twice: a pan holds its
+      // zoom, so 1.194 is the only crop, and it slides a 1080 / 1.194 = 905px column
+      // from x 44 to x 131 across a heading whose text starts at x 26 — the render
+      // opens on a whole 'Mornings here. Afternoons yours.' and ends on 's here.
+      // Afternoons yours.' with the Monday column gone off the left edge. beats[1]'s
+      // fix, a taller window buying a shallower punch, cannot reach it: the punch here
+      // is the pan's, not the window's. #122 also carries the travel this pan actually
+      // gets, which is not the 210px `check` cleared it on.
       selector: '#week',
       height: 1609,
       punchFactor: 1.194,
@@ -124,28 +120,48 @@ export default defineSite({
       // top and runs down through #costs. This is #7's escape hatch used for what it
       // is for, and the taller window is what keeps the punch shallow.
       //
-      // What sets the punch is the page's own gutter (#116). A punch crops a column
-      // 1080 / punch wide out of the middle of a frame-wide render, and this page lays
-      // its content between x 26 and x 1054 — so anything over 1080 / 1028 = 1.0506
-      // eats into the margins and takes the first characters of every heading in the
-      // shot with them. At 1.154 the column began at x 72, which is 46px past where a
-      // heading starts: 'Alongside Homeschool Families' rendered as 'longside /
-      // omeschool Families', and 'Pricing for Partner Families' lost its P.
+      // What sets the punch is the page's own **gutter** (#116). A punch crops a
+      // column 1080 / punch wide out of the *middle* of a frame-wide render, and this
+      // page sets its type between x 26 and x 1054 — so past 1080 / 1028 = 1.0506 the
+      // gutters are gone and the next thing cropped is the start of every line in the
+      // shot. This beat had two headings in that state: 'Alongside Homeschool
+      // Families' and 'Pricing for Partner Families', both losing 2-4 characters.
       //
-      // A drift crops twice, which is the thing to hold on to here. The punch is one
-      // crop and DRIFT_ZOOM is the other: a drift ramps 10% *inside* the window the
-      // punch already cropped, so the column is 1080 / punch wide at the shallow end
-      // of the ramp and 1080 / (punch * 1.1) at the deep end. Keeping the gutter for
-      // the whole shot would want a punch of 1.0506 / 1.1 = 0.955, which is under the
-      // 1.0 floor: no number in this field can hold this heading whole across a drift,
-      // and the choice is only which end of the ramp gets it.
+      // A drift crops twice, which is the thing to hold on to here, and it is why this
+      // beat cannot be wholly fixed from this file. The punch is one crop and
+      // DRIFT_ZOOM is the other — a drift ramps 10% *inside* the window the punch
+      // already cropped — so the column is 1080 / punch wide at the shallow end of the
+      // ramp and 1080 / (punch * 1.1) at the deep end. Holding the gutter for every
+      // frame would want a punch of 1.0506 / 1.1 = 0.955, and `config.ts` refuses
+      // anything under 1.0 because a punch below 1.0 asks for page pixels the browser
+      // never rasterised (ADR-0007). `fit` is the sanctioned way past 1.0 and is no
+      // help: fitViewportWidth clamps at the base width until a section is taller than
+      // one frame, so a fit under 1920px is a no-op and `check` then refuses the beat
+      // as too short for a frame. No value in these two fields holds both headings
+      // whole across the shot. What is left to choose is which end of the ramp gets
+      // them.
       //
-      // 1.04 gives it to the shallow end, and the rotation makes that the end that
-      // matters: beats[1] is the reel's first pull (`rotatedPushPull`), so the shot
-      // *starts* deep and opens the window as it goes. It opens at x 68 — still 42px
-      // into the heading — and lands its last frame, the one the cut hands over on,
-      // showing the whole 1028px column with about 5px in hand either side. At 1.154
-      // the shot never showed it whole at all.
+      // So, exactly, at 1.04 — measured off a render, not derived:
+      //
+      //   first frame   column 944px, left edge x 68   42px into the heading
+      //   middle        column 989px, left edge x 45   19px in
+      //   last frame    column 1038px, left edge x 21  whole, ~5px clear
+      //
+      // The headings are whole for the closing tenth of the shot — the ramp passes
+      // 1.0506 at zoom 1.0102 — and clipped before it. At 1.154 they were never whole:
+      // that shot opened at x 114 and closed at x 72, 88px and 46px in. The worst
+      // frame improves by half and the beat now lands its cut on the page's own words
+      // set whole, which is the frame the reel hands over on.
+      //
+      // Which depends on this beat *pulling*, and that is worth saying out loud
+      // because nothing checks it. `rotatedPushPull(1)` is a pull, so the shot starts
+      // deep and opens as it runs; a push would put the whole frame at frame 0 and the
+      // clipped one at the cut. Two beats inserted above this one would move it to
+      // index 3, which still drifts but pushes, and the reel would regress with no
+      // `check` failure and no failing test. `pushPull` is a per-beat override, so it
+      // is written here rather than left to the rotation to agree with by luck. (One
+      // beat inserted above makes this a pan instead, and that case is loud: a pan at
+      // 1.04 has 43px of room against the 210 `panTravelNeeded` asks for.)
       //
       // What stops the punch going lower is #inquiry, not the 1.0 floor. Standing back
       // is paid for in window height — a frame is only full while the section is at
@@ -155,15 +171,10 @@ export default defineSite({
       // 1.0323 is where it would reach that first line of type and slice it. The beat
       // sits between the two walls: 1.0323 <= 1.04 <= 1.0506.
       //
-      // ADR-0013 asked this beat for 1.154 / 1.3 = 0.888 and the 1.0 punch floor
-      // refused it — config refuses anything under 1.0, because a punch below 1.0 asks
-      // for page pixels the browser never rasterised, and `fit` is no help (ADR-0007):
-      // fitViewportWidth clamps at the base width until a section is taller than one
-      // frame, so a fit under 1920px is a no-op and `check` then refuses the beat as
-      // too short for a frame. 1.04 is not that ask met. It is a different constraint
-      // landing between the ask and where the beat was, and it happens to stand this
-      // shot 11% further out than ADR-0013 recorded; the floor is still the next thing
-      // it would hit if the gutter ever let it go on.
+      // 1847 is `punchedFrameHeight(1.04)` exactly and has no slack at all: a pixel
+      // less and `check` refuses the beat as too short for its own punch. The window
+      // is at its minimum because the punch is what was being bought, and the 13px
+      // above is #inquiry's, not the window's to spend.
       //
       // The window has run through the whole of #faith since #114 and #119 grew it,
       // and this comment used to say otherwise. #faith draws from y 4287 to y 4898 and
@@ -174,6 +185,7 @@ export default defineSite({
       selector: '#teachers',
       height: 1847,
       punchFactor: 1.04,
+      pushPull: 'pull',
       // The window spans both sections, so the heading #62 finds inside it is
       // #teachers' alone — 'Alongside Homeschool Families', one character over budget
       // and only half of what the shot shows. The label names what the pair has in
@@ -221,9 +233,19 @@ export default defineSite({
       // #inquiry is the last section on the page — it starts at y 5000 and the page
       // ends at 6452 — so there is no 1560px below its top to take, and `check`
       // refuses a window that runs off the foot rather than sliding it quietly. So the
-      // window is placed by hand and it opens 120px above the section, in the white
-      // under #faith: this is the one beat whose `y` is written, and standing back is
-      // why.
+      // window is placed by hand and opens 120px above the section: this is the one
+      // beat whose `y` is written, and standing back is why.
+      //
+      // It does not open in white, which this comment used to say (#116). #faith draws
+      // down to y 4898, so y 4880 is 18px inside its foot and the shot's first frames
+      // carry a navy strip of it along the top edge. That is a strip of the section
+      // above rather than a line of its type, which is why it has never been worth the
+      // 18px — but it is not the margin the number was written for.
+      //
+      // 1570 rather than the 1560 the punch needs: from y 4880 the page allows 1572
+      // before `check` refuses the window for running off the foot, so this sits at
+      // the top of a 12px band rather than the bottom of it. Slack, and the only beat
+      // here that has any — beats[1]'s height is its minimum exactly.
       //
       // The second 30% has nowhere at all to go here, and this is the beat that makes
       // ADR-0013's escape an escape rather than a caution. 1.231 / 1.3 is 0.947, under
@@ -232,15 +254,15 @@ export default defineSite({
       // is no `y` this beat could be given: measured from either end, the page runs out
       // before the window does. #inquiry keeps 1.231, and being the last section on the
       // page is the whole reason.
-      // The heading clears the crop here, which is not true of every beat in this file
-      // (#116). This beat drifts and it pushes, so the column runs from 1080 / 1.231 =
-      // 877px at the first frame down to 1080 / (1.231 * 1.1) = 798px at the last —
-      // starting at x 101 and closing at x 141. #inquiry is laid out narrower than the
-      // rest of the page, its form drawing between x 186 and x 894, so 'Your
-      // Children's Ages' is clear of the frame's left edge by 85px at the open and by
-      // 45px at the tightest. At the 1.6 this beat carried before #114 those two
-      // numbers were x 203 and x 233, and the heading lost its Y at both ends.
-      // Standing back is what fixed that, and nothing here needs doing.
+      //
+      // The heading clears the crop, measured on the same render as beats[1]'s (#116)
+      // so that it is not measured again. This beat drifts and it pushes, so its
+      // column runs from 1080 / 1.231 = 877px at the first frame to 1080 / (1.231 *
+      // 1.1) = 798px at the last, starting at x 101 and closing at x 141; #inquiry is
+      // laid out narrower than the rest of the page, drawing between x 186 and x 894.
+      // So 'Your Children's Ages' is clear of the left edge by 85px at the open and
+      // 45px at the tightest. At the 1.6 this beat carried before #114 those numbers
+      // were x 203 and x 233 and it lost its Y at both ends.
       selector: '#inquiry',
       y: 4880,
       height: 1570,
