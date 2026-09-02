@@ -31,8 +31,9 @@ export type { HookMotion, LiveMotion, Move, PushPull } from './site.ts'
 export type { Rect, Survey, SurveyedBeat, SurveyedPage } from './survey.ts'
 
 export type Shot = {
-  kind: 'hook' | 'beat' | 'cta'
-  /** Position within its own kind: the hook and the card are 0, beats are 0..n-1. */
+  kind: 'title' | 'hook' | 'beat' | 'cta'
+  /** Position within its own kind: the title, the hook and the card are 0, beats are
+   * 0..n-1. */
   index: number
   startMs: number
   durationMs: number
@@ -56,7 +57,8 @@ export type Shot = {
    * that turns one image into a stream has nothing to do.
    */
   motion?: LiveMotion
-  /** Absent on the card — it is the one shot with no site pixels in it. */
+  /** Absent on the title shot and on the card — the two shots with no site pixels
+   * in them. */
   source?: { url: string; selector?: string; y?: number; height?: number }
 }
 
@@ -90,9 +92,9 @@ export type TextCue = {
 export type Timeline = {
   durationMs: number
   fps: number
-  /** n + 2: the hook, the beats, the card. */
+  /** n + 3: the title, the hook, the beats, the card. */
   shots: Shot[]
-  /** ms; n + 1 entries. The last is the crossfade start, not a hard cut. */
+  /** ms; n + 2 entries. The last is the crossfade start, not a hard cut. */
   cutPoints: number[]
   text: TextCue[]
   audio: { file: string; offsetMs: number; fadeOutMs: number }
@@ -112,6 +114,20 @@ export function frameCount(durationMs: number): number {
   return Math.round((durationMs * FPS) / 1000)
 }
 
+/**
+ * The title shot's length (#106) — the reel's own opening frame, and the only shot
+ * before the hook.
+ *
+ * Short on purpose. It is a mark and one line, both drawn at full alpha on frame 0,
+ * and there is nothing on it to read twice: a viewer has the whole of it in well
+ * under a second, and every frame past that is a frame the client's site is not on
+ * screen. 1.5s is long enough to register as a title rather than a flash, and it
+ * spends half of what a beat costs.
+ *
+ * Not overridable, like the other three: what a reel is made of is the house's.
+ */
+export const TITLE_MS = 1500
+
 /** #12, as corrected by its own addendum. Not overridable — a finding, not a preference. */
 export const HOOK_MS = 3000
 export const BEAT_MS = 3500
@@ -123,7 +139,7 @@ export const CROSSFADE_MS = 300
 export const LABEL_LEAD_IN_MS = 200
 export const LABEL_FADE_MS = 300
 export const LABEL_TAIL_MS = 200
-/** #9: the hook is drawn on frame 0 and fades over the hook's final 0.5s. */
+/** #9: the hook is drawn whole on its own first frame and fades over its final 0.5s. */
 export const HOOK_FADE_OUT_MS = 500
 
 /** One frame, in milliseconds — the step an envelope spends to land inside its shot. */
@@ -455,15 +471,32 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   const rotationStart = hookMotion === 'scroll' ? SCROLLED_ROTATION_START : 0
   const shots: Shot[] = [
     {
-      kind: 'hook',
+      // The reel opens on MWA Forge's own mark rather than on the client's page: the
+      // reel is MWA Forge's marketing and the site is its evidence, so the name goes
+      // where the viewer is deciding whether to keep watching.
+      kind: 'title',
       index: 0,
       startMs: 0,
+      durationMs: TITLE_MS,
+      move: 'drift',
+      // And it pulls, which is what leaves the hook its push: two pushes back to back
+      // across the reel's first cut is the one repeated gesture #52 refuses. The card
+      // is why it can — the title is drawn, not filmed, so its most upscaled frame
+      // costs it no sharpness, and frame 0 is drawn art at 103% rather than site
+      // pixels a viewer would see soften.
+      pushPull: 'pull',
+      punchFactor: DEFAULT_PUNCH_FACTOR,
+    },
+    {
+      kind: 'hook',
+      index: 0,
+      startMs: TITLE_MS,
       durationMs: HOOK_MS,
       // The hook drifts, which is why beat 1 pans.
       move: 'drift',
-      // And it pushes, out of the rotation: frame 0 is the thumbnail (#5), and a pull
-      // starts at the zoom, so a pulling hook spends its softest frame where every
-      // in-feed viewer looks. A push spends it on the last frame, where nobody does.
+      // And it pushes, out of the rotation: a pull starts at the zoom, so a pulling
+      // hook spends its softest frame on the cut the viewer meets the site on. A push
+      // spends it on the last frame, under a cut that is already taking the eye.
       pushPull: 'push',
       punchFactor: DEFAULT_PUNCH_FACTOR,
       ...(liveHook ? { motion: hookMotion } : {}),
@@ -512,7 +545,7 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
     shots.push({
       kind: 'beat',
       index,
-      startMs: HOOK_MS + BEAT_MS * index,
+      startMs: TITLE_MS + HOOK_MS + BEAT_MS * index,
       durationMs: BEAT_MS,
       move,
       ...(direction ? { direction } : {}),
@@ -528,7 +561,7 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
     })
   })
 
-  const ctaStartMs = HOOK_MS + BEAT_MS * n - CROSSFADE_MS
+  const ctaStartMs = TITLE_MS + HOOK_MS + BEAT_MS * n - CROSSFADE_MS
   shots.push({
     kind: 'cta',
     index: 0,
@@ -546,15 +579,24 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   })
 
   // One per hard cut, then the crossfade start — which is where the card arrives,
-  // not where the last beat ends.
-  const cutPoints = [...Array.from({ length: n }, (_, i) => HOOK_MS + BEAT_MS * i), ctaStartMs]
+  // not where the last beat ends. The first is the title's own cut into the hook.
+  const cutPoints = [
+    TITLE_MS,
+    ...Array.from({ length: n }, (_, i) => TITLE_MS + HOOK_MS + BEAT_MS * i),
+    ctaStartMs,
+  ]
 
   const text: TextCue[] = [
     {
-      shot: 0,
+      // Shot 1: the title is shot 0, and its one line is a house constant drawn by
+      // `card.ts` rather than a cue — like the end card's tagline, and for the same
+      // reason (#9 §5).
+      shot: 1,
       content: config.hook?.text ?? '',
       role: 'hook',
-      startMs: 0,
+      // Reel time, like every other cue: the hook shot no longer begins the reel, so
+      // its line is lit where the hook is rather than at zero.
+      startMs: TITLE_MS,
       fadeInMs: 0,
       // A frame short of the hook's own length, because a ramp reaches zero *at* the
       // frame it ends on and the hook ends on the shot's last frame — spend the whole
@@ -571,14 +613,14 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
     // deciding this shot carries no text, which is not the same as never having said.
     const content = beat.label ?? surveyed[index]?.heading ?? ''
     if (!content) return
-    const shot = shots[index + 1] as Shot
+    const shot = shots[index + 2] as Shot
     const startMs = shot.startMs + LABEL_LEAD_IN_MS
     // Measured against the moment the reel moves on, not the beat's own end: for the
     // last beat that moment is the crossfade, and a label still lit under a card
     // arriving is the same dropped-frame read a label across a hard cut gives.
-    const doneMs = (cutPoints[index + 1] as number) - LABEL_TAIL_MS
+    const doneMs = (cutPoints[index + 2] as number) - LABEL_TAIL_MS
     text.push({
-      shot: index + 1,
+      shot: index + 2,
       content,
       role: 'label',
       startMs,
@@ -599,7 +641,7 @@ export function planReel(config: SiteConfig, survey?: Survey): Timeline {
   })
 
   return {
-    durationMs: HOOK_MS + BEAT_MS * n + CTA_MS - CROSSFADE_MS,
+    durationMs: TITLE_MS + HOOK_MS + BEAT_MS * n + CTA_MS - CROSSFADE_MS,
     fps: FPS,
     shots,
     cutPoints,

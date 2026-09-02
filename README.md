@@ -130,7 +130,7 @@ master 1/4 hook       4.1s
 master 2/4 hero       0.9s
 ...
 mux                   3.2s
-done  out\brobst-3beat.mp4  15.7s   [41.2s total]
+done  out\brobst-3beat.mp4  17.2s   [41.2s total]
 ```
 
 `render` **wipes `out/` at start**, before anything else: one render at a time, one
@@ -145,11 +145,11 @@ gitignored, and promotion takes an explicit `.mp4` path a failed run never produ
 
 ### Judging a cut
 
-A 15.7s 9:16 mp4 is awkward to judge on a desktop, and the two things that actually go
+A 17.2s 9:16 mp4 is awkward to judge on a desktop, and the two things that actually go
 wrong are both stills. So `render` also writes, beside the reel:
 
-- `out/<slug>-frame0.jpg` — frame 0, which is the thumbnail Facebook shows in-feed,
-  hook text and all.
+- `out/<slug>-frame0.jpg` — frame 0, which is the thumbnail Facebook shows in-feed:
+  the title card, mark and line and all.
 - `out/<slug>-sheet.jpg` — a contact sheet: one tile per shot, in reel order, which is
   frame 0 and then the frame each cut lands on.
 
@@ -210,7 +210,7 @@ export default defineSite({
 
 Everything else — which beat pans and which drifts, which way each pan travels, where
 the cuts land, the bed under it — is derived from that. `beats.length` is the reel's
-length: three beats is 15.7s, five is 22.7s. There are no duration knobs and no flags.
+length: three beats is 17.2s, five is 24.2s. There are no duration knobs and no flags.
 
 Everything else in the schema is an **override**, and each one is there because a real
 page broke a default — [`sites/README.md`](sites/README.md) is the field-by-field

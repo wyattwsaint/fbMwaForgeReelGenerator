@@ -22,6 +22,7 @@ import {
   panTravelProblems,
   planReel,
   resolvedMotion,
+  TITLE_MS,
 } from '../src/plan.ts'
 import type { Shot, Timeline } from '../src/plan.ts'
 import { MIN_FIT_SCALE } from '../src/house.ts'
@@ -75,23 +76,24 @@ function cueLit(cue: Timeline['text'][number], atMs: number): boolean {
 }
 
 describe('planReel', () => {
-  test('a reel is 15.7 / 19.2 / 22.7s for n = 3, 4, 5', () => {
-    assert.equal(planReel(config(3)).durationMs, 15700)
-    assert.equal(planReel(config(4)).durationMs, 19200)
-    assert.equal(planReel(config(5)).durationMs, 22700)
+  test('a reel is 17.2 / 20.7 / 24.2s for n = 3, 4, 5', () => {
+    // 1.5s of title on the front of each, and all three still inside #1's 15-30s.
+    assert.equal(planReel(config(3)).durationMs, 17200)
+    assert.equal(planReel(config(4)).durationMs, 20700)
+    assert.equal(planReel(config(5)).durationMs, 24200)
   })
 
-  test('the shots are hook + n beats + card, back to back with the card overlapping', () => {
+  test('the shots are title + hook + n beats + card, back to back with the card overlapping', () => {
     for (const n of [3, 4, 5]) {
       const timeline = planReel(config(n))
-      assert.equal(timeline.shots.length, n + 2)
+      assert.equal(timeline.shots.length, n + 3)
       assert.deepEqual(
         timeline.shots.map((shot) => shot.kind),
-        ['hook', ...Array.from({ length: n }, () => 'beat'), 'cta'],
+        ['title', 'hook', ...Array.from({ length: n }, () => 'beat'), 'cta'],
       )
       assert.deepEqual(
         timeline.shots.map((shot) => shot.durationMs),
-        [3000, ...Array.from({ length: n }, () => 3500), 2500],
+        [1500, 3000, ...Array.from({ length: n }, () => 3500), 2500],
       )
       // Every shot but the card starts where the last one ended; the card starts
       // 0.3s early, which is the crossfade, and it is why the total is 0.3s short.
@@ -106,10 +108,10 @@ describe('planReel', () => {
     }
   })
 
-  test('cut points are n+1, one per hard cut, and the last is the crossfade start', () => {
+  test('cut points are n+2, one per hard cut, and the last is the crossfade start', () => {
     for (const n of [3, 4, 5]) {
       const timeline = planReel(config(n))
-      assert.equal(timeline.cutPoints.length, n + 1)
+      assert.equal(timeline.cutPoints.length, n + 2)
       // Each hard cut falls on a beat boundary.
       timeline.cutPoints.slice(0, -1).forEach((cut, i) => {
         const shot = timeline.shots[i + 1]!
@@ -123,11 +125,13 @@ describe('planReel', () => {
     for (const n of [3, 4, 5]) {
       const moves = planReel(config(n)).shots.map((shot) => shot.move)
       assert.equal(moves[0], 'drift')
-      assert.equal(moves[1], 'pan')
-      // Across the hard cuts only: the card arrives on a crossfade, and it drifts
-      // whatever the last beat did.
-      moves.slice(0, -2).forEach((move, i) => {
-        assert.notEqual(move, moves[i + 1], `shots ${i} and ${i + 1} both ${move}`)
+      assert.equal(moves[1], 'drift')
+      assert.equal(moves[2], 'pan')
+      // Across the hard cuts between *filmed* shots only. #6's alternation is about
+      // site pixels: the title and the card are drawn, both drift, and neither is a
+      // move a viewer reads against the shot beside it.
+      moves.slice(1, -2).forEach((move, i) => {
+        assert.notEqual(move, moves[i + 2], `shots ${i + 1} and ${i + 2} both ${move}`)
       })
     }
   })
@@ -145,13 +149,18 @@ describe('planReel', () => {
   })
 
   test('drifts alternate push and pull, and the hook always pushes', () => {
+    // The title opens on a pull, which is what leaves the hook its push across the
+    // first cut. It can afford one: it is drawn rather than filmed (#52, #106).
+    for (const n of [3, 4, 5]) {
+      const [title, hook] = planReel(config(n)).shots
+      assert.equal(title!.pushPull, 'pull', `n=${n} opens on a push`)
+      assert.equal(hook!.pushPull, 'push', `n=${n} hooks on a pull`)
+    }
     // #52: every zoom used to be a push, so a reel read as one repeated gesture.
     for (const n of [3, 4, 5]) {
       const drifts = planReel(config(n))
         .shots.filter((shot) => shot.move === 'drift')
         .map((shot) => shot.pushPull)
-      // Frame 0 is the thumbnail, and a pull's first frame is its most upscaled one.
-      assert.equal(drifts[0], 'push', `n=${n} opens on a pull`)
       drifts.forEach((drift, i) => {
         if (i > 0) assert.notEqual(drift, drifts[i - 1], `n=${n} repeats ${drift}`)
       })
@@ -161,7 +170,7 @@ describe('planReel', () => {
       planReel(config(4))
         .shots.filter((shot) => shot.move === 'drift')
         .map((shot) => shot.pushPull),
-      ['push', 'pull', 'push', 'pull'],
+      ['pull', 'push', 'pull', 'push', 'pull'],
     )
   })
 
@@ -171,7 +180,7 @@ describe('planReel', () => {
     // whole of ADR-0006's "nothing existing moves" is that the plan says so.
     test('defaults to still, which the plan states by saying nothing', () => {
       for (const n of [3, 4, 5]) {
-        const hook = planReel(config(n)).shots[0] as Shot
+        const hook = planReel(config(n)).shots[1] as Shot
         assert.equal(hook.motion, undefined)
         assert.equal(isLive(hook), false)
         assert.equal(hook.punchFactor, 1)
@@ -184,8 +193,8 @@ describe('planReel', () => {
     })
 
     test('an ambient hook is live, and is the still hook in every other respect', () => {
-      const live = planReel(withHook({ motion: 'ambient' })).shots[0] as Shot
-      const still = planReel(config(3)).shots[0] as Shot
+      const live = planReel(withHook({ motion: 'ambient' })).shots[1] as Shot
+      const still = planReel(config(3)).shots[1] as Shot
       assert.equal(live.motion, 'ambient')
       assert.equal(isLive(live), true)
       // The motion is the *only* difference: a recording is one frame of pixels, so a
@@ -196,18 +205,18 @@ describe('planReel', () => {
     test('a live hook still drifts, still pushes, and still takes its turn', () => {
       const live = planReel(withHook({ motion: 'ambient' }))
       const still = planReel(config(3))
-      const hook = live.shots[0] as Shot
+      const hook = live.shots[1] as Shot
       assert.equal(hook.move, 'drift')
       // Frame 0 is the thumbnail whichever way the pixels were got (#5).
       assert.equal(hook.pushPull, 'push')
       // And the rotation is untouched: the hook is exempt from it, not outside it, so
       // every beat and the card plan exactly as they did.
-      assert.deepEqual(live.shots.slice(1), still.shots.slice(1))
+      assert.deepEqual(live.shots.slice(2), still.shots.slice(2))
     })
 
     test("beats are never live — the motion is the hook's alone", () => {
       for (const motion of ['ambient', 'scroll'] as const) {
-        for (const shot of planReel(withHook({ motion })).shots.slice(1)) {
+        for (const shot of planReel(withHook({ motion })).shots.slice(2)) {
           assert.equal(shot.motion, undefined, `${motion}: ${shot.kind} ${shot.index} is live`)
         }
       }
@@ -221,14 +230,14 @@ describe('planReel', () => {
       // pace and distance appear nowhere in it, because they are house constants.
       const walked = planReel(withHook({ motion: 'scroll' }))
       const dwelt = planReel(withHook({ motion: 'ambient' }))
-      const hook = walked.shots[0] as Shot
+      const hook = walked.shots[1] as Shot
       assert.equal(hook.motion, 'scroll')
       assert.equal(isLive(hook), true)
-      assert.deepEqual({ ...hook, motion: undefined }, { ...(dwelt.shots[0] as Shot), motion: undefined })
+      assert.deepEqual({ ...hook, motion: undefined }, { ...(dwelt.shots[1] as Shot), motion: undefined })
       // The beats are where the two do differ, and only in the rotation's phase: a
       // scroll travels down the page, so the pans start past the direction that would
       // travel down it again. The test below is that rule; this is where it shows up.
-      assert.notDeepEqual(walked.shots.slice(1), dwelt.shots.slice(1))
+      assert.notDeepEqual(walked.shots.slice(2), dwelt.shots.slice(2))
     })
 
     test('a scroll hook is not followed by a vertical pan', () => {
@@ -270,7 +279,7 @@ describe('planReel', () => {
       // as an unmeasured height is uncapped.
       const asked = withHook({ motion: 'scroll' })
       const reveals = surveyed(asked, { scrollRefires: false, motionReading: MOTION_FLOOR })
-      assert.equal((planReel(asked, reveals).shots[0] as Shot).motion, 'ambient')
+      assert.equal((planReel(asked, reveals).shots[1] as Shot).motion, 'ambient')
       // And a hook probed dead is the still hook whole — not a live shot with the word
       // taken off it. A still hook is synthesised from one frozen master, so it drifts
       // the full 10% rather than breathing 3% over a recording, and every downstream
@@ -371,16 +380,16 @@ describe('planReel', () => {
   })
 
   describe('text cues', () => {
-    test('the hook is fully drawn on frame 0 and fades over the hook\'s final 0.5s', () => {
+    test('the hook is lit on its own first frame and fades over the hook\'s final 0.5s', () => {
       const timeline = planReel(config(3))
       const hook = timeline.text.find((cue) => cue.role === 'hook')!
       assert.deepEqual(
         { ...hook },
         {
-          shot: 0,
+          shot: 1,
           content: 'Spotless, every time.',
           role: 'hook',
-          startMs: 0,
+          startMs: 1500,
           fadeInMs: 0,
           // 3.0s less the 0.5s fade less one frame: the ramp reaches zero at the
           // frame it ends on, and that frame has to be one the shot has (#36).
@@ -388,12 +397,13 @@ describe('planReel', () => {
           fadeOutMs: 500,
         },
       )
-      // Frame 0 carries the whole line — the thumbnail is not an animation.
-      assert.equal(hook.startMs, 0)
+      // The hook's own first frame carries the whole line: the title holds frame 0
+      // now, and the hook still arrives whole rather than ramping up after its cut.
+      assert.equal(hook.startMs, TITLE_MS)
       assert.equal(hook.fadeInMs, 0)
       // And it is dark *on* the hook's last frame, not on the next shot's first: 7%
       // of the wash over a hard cut is the dropped-frame read #24 refuses (#36).
-      const shot = timeline.shots[0] as Shot
+      const shot = timeline.shots[1] as Shot
       assert.equal(darkFrame(envelopeOf(hook, shot)), frameCount(shot.durationMs) - 1)
     })
 
@@ -404,8 +414,8 @@ describe('planReel', () => {
         }),
       )
       const label = timeline.text.find((cue) => cue.role === 'label')!
-      const shot = timeline.shots[2]!
-      assert.equal(label.shot, 2)
+      const shot = timeline.shots[3]!
+      assert.equal(label.shot, 3)
       assert.equal(label.startMs, shot.startMs + 200)
       assert.equal(label.fadeInMs, 300)
       assert.equal(label.fadeOutMs, 300)
@@ -426,9 +436,9 @@ describe('planReel', () => {
       assert.deepEqual(
         labels.map((cue) => [cue.shot, cue.content]),
         [
-          [1, 'Spotless bathrooms'],
-          [2, 'What we do'],
-          [3, 'Our work'],
+          [2, 'Spotless bathrooms'],
+          [3, 'What we do'],
+          [4, 'Our work'],
         ],
       )
     })
@@ -450,20 +460,20 @@ describe('planReel', () => {
         surveyed(config(3), { beats: HEADINGS }),
       )
       const labels = timeline.text.filter((cue) => cue.role === 'label')
-      assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[1, 'Spotless bathrooms'], [3, 'Our work']])
+      assert.deepEqual(labels.map((cue) => [cue.shot, cue.content]), [[2, 'Spotless bathrooms'], [4, 'Our work']])
     })
 
     test('a section with no heading leaves its beat unlabelled', () => {
       const beats = [{ heading: 'Spotless bathrooms' }, {}, { heading: 'Our work' }]
       const timeline = planReel(config(3), surveyed(config(3), { beats }))
       const labels = timeline.text.filter((cue) => cue.role === 'label')
-      assert.deepEqual(labels.map((cue) => cue.shot), [1, 3])
+      assert.deepEqual(labels.map((cue) => cue.shot), [2, 4])
     })
 
     test('a defaulted label keeps the cue shape a written one has', () => {
       const timeline = planReel(config(3), surveyed(config(3), { beats: [{}, { heading: 'What we do' }, {}] }))
       const label = timeline.text.find((cue) => cue.role === 'label')!
-      const shot = timeline.shots[2]!
+      const shot = timeline.shots[3]!
       assert.equal(label.startMs, shot.startMs + 200)
       assert.equal(label.fadeInMs, 300)
       assert.equal(label.fadeOutMs, 300)

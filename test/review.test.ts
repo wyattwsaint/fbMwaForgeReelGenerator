@@ -14,20 +14,20 @@ function site(beats: number): SiteConfig {
 }
 
 describe('the contact sheet', () => {
-  test('has one tile per shot — n + 2 of them', () => {
+  test('has one tile per shot — n + 3 of them', () => {
     for (const n of [3, 4, 5]) {
       const timeline = planReel(site(n))
-      assert.equal(tileFrames(timeline).length, n + 2)
+      assert.equal(tileFrames(timeline).length, n + 3)
       assert.equal(tileFrames(timeline).length, timeline.shots.length)
     }
   })
 
   test('takes every tile but the card’s from a cut point', () => {
     // A tile per cut point and a tile per shot are the same frames plus frame 0,
-    // because every shot but the hook begins on one.
+    // because every shot but the title begins on one.
     const timeline = planReel(site(3))
     const frames = tileFrames(timeline)
-    assert.deepEqual(frames.slice(0, -1), [0, 90, 195, 300])
+    assert.deepEqual(frames.slice(0, -1), [0, 45, 135, 240, 345])
     assert.deepEqual(
       timeline.cutPoints.slice(0, -1).map((ms) => Math.round((ms * timeline.fps) / 1000)),
       frames.slice(1, -1),
@@ -40,7 +40,7 @@ describe('the contact sheet', () => {
     const timeline = planReel(site(3))
     const frames = tileFrames(timeline)
     const cardIn = timeline.cutPoints.at(-1) as number
-    assert.equal(frames.at(-1), 405)
+    assert.equal(frames.at(-1), 450)
     assert.ok((frames.at(-1) as number) > Math.round((cardIn * timeline.fps) / 1000))
   })
 })

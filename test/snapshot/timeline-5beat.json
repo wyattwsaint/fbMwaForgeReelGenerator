@@ -1,11 +1,20 @@
 {
-  "durationMs": 22700,
+  "durationMs": 24200,
   "fps": 30,
   "shots": [
     {
-      "kind": "hook",
+      "kind": "title",
       "index": 0,
       "startMs": 0,
+      "durationMs": 1500,
+      "move": "drift",
+      "pushPull": "pull",
+      "punchFactor": 1
+    },
+    {
+      "kind": "hook",
+      "index": 0,
+      "startMs": 1500,
       "durationMs": 3000,
       "move": "drift",
       "pushPull": "push",
@@ -17,7 +26,7 @@
     {
       "kind": "beat",
       "index": 0,
-      "startMs": 3000,
+      "startMs": 4500,
       "durationMs": 3500,
       "move": "pan",
       "direction": "vertical",
@@ -30,7 +39,7 @@
     {
       "kind": "beat",
       "index": 1,
-      "startMs": 6500,
+      "startMs": 8000,
       "durationMs": 3500,
       "move": "drift",
       "pushPull": "pull",
@@ -43,7 +52,7 @@
     {
       "kind": "beat",
       "index": 2,
-      "startMs": 10000,
+      "startMs": 11500,
       "durationMs": 3500,
       "move": "pan",
       "direction": "lateral",
@@ -56,7 +65,7 @@
     {
       "kind": "beat",
       "index": 3,
-      "startMs": 13500,
+      "startMs": 15000,
       "durationMs": 3500,
       "move": "drift",
       "pushPull": "push",
@@ -69,7 +78,7 @@
     {
       "kind": "beat",
       "index": 4,
-      "startMs": 17000,
+      "startMs": 18500,
       "durationMs": 3500,
       "move": "pan",
       "direction": "diagonal",
@@ -82,7 +91,7 @@
     {
       "kind": "cta",
       "index": 0,
-      "startMs": 20200,
+      "startMs": 21700,
       "durationMs": 2500,
       "move": "drift",
       "pushPull": "pull",
@@ -90,37 +99,38 @@
     }
   ],
   "cutPoints": [
-    3000,
-    6500,
-    10000,
-    13500,
-    17000,
-    20200
+    1500,
+    4500,
+    8000,
+    11500,
+    15000,
+    18500,
+    21700
   ],
   "text": [
     {
-      "shot": 0,
+      "shot": 1,
       "content": "Spotless, every time.",
       "role": "hook",
-      "startMs": 0,
+      "startMs": 1500,
       "fadeInMs": 0,
       "holdMs": 2467,
       "fadeOutMs": 500
     },
     {
-      "shot": 2,
+      "shot": 3,
       "content": "Enrolling for Fall",
       "role": "label",
-      "startMs": 6700,
+      "startMs": 8200,
       "fadeInMs": 300,
       "holdMs": 2500,
       "fadeOutMs": 300
     },
     {
-      "shot": 6,
+      "shot": 7,
       "content": "example.test",
       "role": "cta",
-      "startMs": 20200,
+      "startMs": 21700,
       "fadeInMs": 0,
       "holdMs": 2500,
       "fadeOutMs": 0

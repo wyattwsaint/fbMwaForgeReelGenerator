@@ -6,12 +6,20 @@ implementation detail. See `docs/agents/domain.md`.
 ## Reel structure
 
 **Reel** — the deliverable: a 9:16, 15–30s `.mp4`. Composed as
-`hook → beat × n → cta`, where `n` is 3–5.
+`title → hook → beat × n → cta`, where `n` is 3–5.
 
-**Hook** — the opening 3.0s. The client site's own hero section, drifting from
-frame 0, with an overlay line drawn on frame 0. A hook is a single shot: it is
-never cut. It is the one shot that may be a **live shot** rather than synthesised
-from a **master**.
+**Title** — the opening 1.5s. A **card**: MWA Forge's **lockup** on house ground,
+with one line of house copy under it, and no site pixels in it at all. It is where
+the name goes because it is where the viewer is deciding whether to keep watching,
+and it holds **frame 0**. Short on purpose — it is a mark and one line, and every
+frame past reading them is a frame the client's site is not on screen. Its line
+opens the sentence the **tagline** finishes, so a viewer who watches the whole reel
+hears one sentence with the proof in the middle of it.
+
+**Hook** — the 3.0s after the title. The client site's own hero section, drifting,
+with an overlay line fully drawn on the shot's first frame. A hook is a single shot:
+it is never cut. It is the one shot that may be a **live shot** rather than
+synthesised from a **master**, and the reel's first site pixels.
 
 **Beat** — one section of the client's site (hero, services, gallery, pricing),
 named by a CSS selector in the site's config. 3.5s, **one shot**. The middle of
@@ -49,6 +57,8 @@ pan and drift alternate, so no move repeats across a cut. The hook drifts, so
 beat 1 pans. Each pan then takes the next direction in the rotation, and each drift
 the next of push and pull — both seeded on the beat index alone, so overriding one
 beat never moves another's. The card is in the drift rotation and the hook is not.
+The **title** is outside both: it drifts because nothing in a reel rests, and it
+pulls, which is what leaves the hook its push across the reel's first cut.
 A **scroll** hook is the one thing outside the pan rotation that spends a step of
 it: a scripted scroll travels down the page and so does a vertical pan, so behind a
 scroll hook the rotation starts one step in and beat 1 is lateral. Read off the
@@ -102,8 +112,11 @@ largest type on the card because it is the one line asking the viewer to act.
 card's other gaps. The words are the lockup's own signing, not a second line
 stacked under it: set equidistant, the tagline starts to read as a headline.
 
-**Card** — a rendered frame containing no site pixels. Currently the CTA is the
-only card, and it is drawn in the house style — a card is never the client's.
+**Card** — a rendered frame containing no site pixels, drawn in the house style; a
+card is never the client's. There are two, and they are the same object seen twice:
+the **title** opens the reel with the lockup and one line, and the CTA closes it
+with the same lockup in the same place, its **signature**, the headline, the accent
+rule and the **credit**.
 
 ## On-screen text
 
@@ -396,7 +409,7 @@ judged without squinting at a tall sliver of video: **frame 0**, and a **contact
 sheet**. Scratch, like the render they describe — never promoted, since the reel itself
 is the record and both are recoverable from it.
 
-**Contact sheet** — one tile per shot, in reel order: n+2 of them, which is frame 0 and
+**Contact sheet** — one tile per shot, in reel order: n+3 of them, which is frame 0 and
 then the frame each cut point lands on, every shot but the hook beginning on one. The
 card is the exception, because its cut point is where its crossfade *starts* — a tile
 taken there shows neither the beat being left nor the card, so the card's tile is the
@@ -453,10 +466,13 @@ two renders of one config differ in the hook's pixels while still agreeing about
 composition.
 
 **Frame 0** is the thumbnail Facebook shows in-feed. It is a constraint, not a
-by-product: hook text is fully drawn on it and may not animate in, and the hook
-always pushes rather than pulling — a pull starts at the zoom, so its first frame is
-its most upscaled one, and that is the frame the whole feed is shown. A push spends
-that softest frame last, where nobody is looking.
+by-product: the **title** holds it, and its mark and line are fully drawn on it and
+may not animate in. The title is the one drift that may pull, because it is drawn
+rather than filmed and its most upscaled frame costs it no sharpness. Every filmed
+shot still pushes rather than pulling — a pull starts at the zoom, so its first
+frame is its most upscaled one, and a shot that cuts in on its softest frame is a
+shot that reads soft. The hook's own line is likewise fully drawn on the frame it
+cuts in on, and never animates in.
 
 ## Config
 

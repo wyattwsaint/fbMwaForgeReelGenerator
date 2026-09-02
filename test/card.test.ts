@@ -6,10 +6,13 @@ import {
   HEADLINE,
   MARK_WIDTH,
   TAGLINE,
+  TITLE_LINE,
   cardChains,
   cardCredit,
   cardLayout,
   creditProblems,
+  titleChains,
+  titleLayout,
 } from '../src/card.ts'
 import { escapeValue, stream } from '../src/filtergraph.ts'
 import { ACCENT, FONT_FILE, INK, SAFE_ZONE, SPARK, TYPE } from '../src/house.ts'
@@ -48,6 +51,24 @@ function graph(credit = 'fixture.test', shot: Shot = CARD_SHOT): string {
 
 /** The `MWA` half's box, which is what the rasteriser is asked for. */
 const MWA_WIDTH = Math.round(lockupGeometry(MARK_WIDTH).mwa.width)
+
+/** The title shot's graph, built the way `compose` builds it. */
+function titleGraph(): string {
+  return titleChains(
+    cardCamera(REEL.shots[0] as Shot),
+    stream('ground'),
+    stream('mark'),
+    stream('ramp'),
+    stream('out'),
+  ).join(';')
+}
+
+/** The one `drawtext` that draws the title's line, cut out of its graph whole. */
+function titleStage(chains: string): string {
+  const at = chains.indexOf(`text=${escapeValue(TITLE_LINE)}`)
+  assert.ok(at > 0, 'the graph never draws the title line')
+  return chains.slice(chains.lastIndexOf('drawtext', at), chains.indexOf(',', at))
+}
 
 /** The one `drawtext` that draws the tagline, cut out of a graph whole. */
 function taglineStage(chains: string): string {
@@ -258,6 +279,78 @@ describe('the card is laid out in the boosted safe box', () => {
     // And the headline stays the biggest thing on the card — the tagline says what is
     // sold, the headline is where to buy it.
     assert.ok(TYPE.tagline.size < TYPE.headline.size)
+  })
+})
+
+describe('the title shot is the same mark, saying the reel\u2019s first line', () => {
+  const layout = titleLayout()
+  const card = cardLayout()
+
+  test('the lockup lands where the card\u2019s does, and only the stack under it differs', () => {
+    // The reel opens and closes on one object: a mark that moved between the two
+    // would read as two different marks rather than as the same one, twice.
+    assert.equal(layout.lockup.x, card.lockup.x)
+    assert.equal(layout.lockup.width, card.lockup.width)
+    assert.equal(layout.lockup.height, card.lockup.height)
+  })
+
+  test('its content is centred on y 760, inside the box Meta leaves alone', () => {
+    const top = layout.lockup.y
+    const bottom = layout.line.y + TYPE.label.lineHeight
+    assert.ok(Math.abs((top + bottom) / 2 - CARD_CENTRE_Y) <= 1, `centred on ${(top + bottom) / 2}`)
+    assert.ok(top >= SAFE_ZONE.top)
+    assert.ok(bottom <= SAFE_ZONE.bottom)
+  })
+
+  test('the line sits under the mark, at the size every beat\u2019s line is set in', () => {
+    assert.ok(layout.lockup.y + layout.lockup.height < layout.line.y)
+    const stage = titleStage(titleGraph())
+    assert.ok(stage.includes(`fontsize=${TYPE.label.size}`), stage)
+    // The house face, centred on the frame, in house ink, and with no alpha
+    // expression: the title has no envelope, exactly as the card's lines have none.
+    assert.ok(stage.startsWith(`drawtext=fontfile=${escapeValue(FONT_FILE)}`), stage)
+    assert.ok(stage.includes('x=(w-text_w)/2'), stage)
+    assert.ok(stage.includes(`fontcolor=${INK.replace('#', '0x')}`), stage)
+    assert.ok(!stage.includes('alpha='), stage)
+  })
+
+  test('the line fits the card at the size it is set in', () => {
+    // A constant, like the tagline: the line nobody can shorten has to fit before it
+    // ships, and type never shrinks to fit.
+    assert.ok(lineWidth(TITLE_LINE, TYPE.label.size) <= card.width)
+  })
+
+  test('it opens the sentence the card finishes', () => {
+    // #106: one sentence with the proof in the middle of it. Not the same line twice,
+    // and not two unrelated claims either.
+    assert.notEqual(TITLE_LINE, TAGLINE)
+    assert.ok(TITLE_LINE.startsWith('Websites that'), TITLE_LINE)
+    assert.ok(TAGLINE.startsWith('Websites that'), TAGLINE)
+    assert.ok(TITLE_LINE.endsWith('...'), TITLE_LINE)
+  })
+
+  test('it draws the mark and nothing the card carries under it', () => {
+    const chains = titleGraph()
+    assert.match(chains, /overlay=x=\d+:y=\d+/)
+    assert.ok(!chains.includes(`text=${escapeValue(HEADLINE)}`), 'the title carries the headline')
+    assert.ok(!chains.includes(`text=${escapeValue(TAGLINE)}`), 'the title carries the tagline')
+    assert.ok(!chains.includes('drawbox='), 'the title carries the accent rule')
+    // One line of type on it, and it is this one. Six `drawtext`s: the lockup sets
+    // `FORGE` a glyph at a time (ADR-0010), and the sixth is the line.
+    assert.equal((chains.match(/drawtext=/g) ?? []).length, 6)
+    assert.deepEqual(
+      [...chains.matchAll(/:text=([^:]+)/g)].map((match) => match[1]),
+      [...'FORGE', escapeValue(TITLE_LINE)],
+    )
+  })
+
+  test('it drifts for its whole shot, like every other shot in the reel', () => {
+    const shot = REEL.shots[0] as Shot
+    assert.equal(shot.kind, 'title')
+    const camera = cardCamera(shot)
+    assert.equal(camera.frames, frameCount(shot.durationMs))
+    assert.notEqual(camera.zoom.from, camera.zoom.to)
+    assert.ok(titleGraph().includes('zoompan'), 'the title is a still')
   })
 })
 

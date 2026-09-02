@@ -33,9 +33,11 @@ export function drawnOverlays(cues: TextCue[]): TextCue[] {
  * The cue's alpha at frame `n`, as an ffmpeg expression.
  *
  * The hook's fade-in is zero frames long, which is not a degenerate case but the
- * point: frame 0 is the Facebook in-feed thumbnail (#5), so the hook is fully drawn
- * on it and the branch that would ramp is simply absent. Constant 1 at n=0 is also
- * what keeps frame 0 bit-identical run to run.
+ * point: nothing is lit across a cut (#24), so a hook that ramped up out of the title
+ * would spend its first frames arriving instead of being read. It is fully drawn on
+ * its shot's own frame 0 and the branch that would ramp is simply absent. Constant 1
+ * at n=0 is also what keeps a shot's first frame bit-identical run to run — which is
+ * the reel's frame 0 for the title, the shot that holds the thumbnail (#5).
  */
 export function alphaExpr(envelope: Envelope): string {
   const { start, lit, held, dark } = envelopeFrames(envelope)

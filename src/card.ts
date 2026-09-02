@@ -42,6 +42,19 @@ export const HEADLINE = 'mwaforge.com'
 export const TAGLINE = 'Websites that book jobs'
 
 /**
+ * The title shot's one line (#106) — the reel's opening claim, left unfinished.
+ *
+ * The same sentence the card closes on, opened rather than answered: the title says
+ * what MWA Forge makes and stops, the reel spends its beats showing the site, and the
+ * card finishes the thought in words. A viewer who watches to the end hears one
+ * sentence with the proof in the middle of it.
+ *
+ * A house constant, like `TAGLINE` and for the same reason: it is the same line on
+ * every reel, for every client, so no config reaches it.
+ */
+export const TITLE_LINE = 'Websites that are...'
+
+/**
  * The lockup, in frame pixels — the one number the rest of its geometry is solved
  * from (`lockupGeometry`).
  *
@@ -161,6 +174,74 @@ export function creditProblems(credit: string): string[] {
  */
 export function cardCredit(cues: TextCue[]): string {
   return cues.find((cue) => cue.role === 'cta')?.content ?? ''
+}
+
+export type TitleLayout = {
+  lockup: { x: number; y: number; width: number; height: number; geometry: LockupGeometry }
+  line: { y: number }
+}
+
+/**
+ * Where the title shot's two elements sit, in frame pixels.
+ *
+ * The same stack rule as the card's, and the same centre: the two drawn shots are the
+ * same object seen twice — the mark, and one line of the house's own voice under it —
+ * so the lockup lands in the same place at both ends of the reel and the line under it
+ * does not move either. What differs is only what the line says and how much is
+ * stacked below it.
+ *
+ * The line is set at the *label* size, not the tagline's: it is the reel's own
+ * narration, in the voice every beat's line is in, and a viewer meets it here first.
+ */
+export function titleLayout(): TitleLayout {
+  const geometry = lockupGeometry(MARK_WIDTH)
+  const markHeight = Math.ceil(geometry.height)
+  const stack = markHeight + SIGNATURE_GAP + TYPE.label.lineHeight
+  const top = Math.round(CARD_CENTRE_Y - stack / 2)
+  return {
+    lockup: {
+      x: Math.round((FRAME_WIDTH - MARK_WIDTH) / 2),
+      y: top,
+      width: MARK_WIDTH,
+      height: markHeight,
+      geometry,
+    },
+    line: { y: top + markHeight + SIGNATURE_GAP },
+  }
+}
+
+/**
+ * The title shot, from the same ground and the same two rasters the card is built
+ * from.
+ *
+ * It takes the card's inputs unchanged — the lockup is laid out at `MARK_WIDTH` on
+ * both shots, so `MWA`'s pixels and the spark ramp are the same two files, written
+ * once and read by both. That is the reason the two shots share a mark width rather
+ * than each choosing one: a second width would be a second pair of rasters and a
+ * second lockup to keep in step with the exported asset.
+ */
+export function titleChains(
+  camera: Camera,
+  ground: StreamLabel,
+  mark: StreamLabel,
+  ramp: StreamLabel,
+  output: StreamLabel,
+): string[] {
+  const layout = titleLayout()
+  const locked = stream('lockup')
+  const drawn = stream('drawn')
+  return [
+    ...lockupChains(layout.lockup.geometry, layout.lockup, ground, mark, ramp, locked),
+    `${pad(locked)}${drawText({
+      content: TITLE_LINE,
+      fontFile: FONT_FILE,
+      size: TYPE.label.size,
+      colour: ffmpegColor(INK),
+      x: '(w-text_w)/2',
+      y: layout.line.y,
+    })}${pad(drawn)}`,
+    `${pad(drawn)}${driftFilter(camera)}${pad(output)}`,
+  ]
 }
 
 /** A single frame of pixels on disk, with the shape argv will have to declare. */

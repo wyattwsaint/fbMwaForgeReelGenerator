@@ -1,8 +1,8 @@
 /**
  * Review stills (#18, #27) — the two jpgs emitted beside every scratch render.
  *
- * A 15.7s 9:16 mp4 is awkward to judge on a desktop, and the two things that actually
- * go wrong are both stills: frame 0, which is the thumbnail Facebook shows in-feed,
+ * A 17.2s 9:16 mp4 is awkward to judge on a desktop, and the two things that actually
+ * go wrong are both stills: frame 0, the title card Facebook shows in-feed,
  * and the cuts, which are only ever looked at one frame at a time. So the reel is
  * re-read for those frames rather than a second render being asked to produce them —
  * a still derived from anything but the mp4 is a still that can disagree with it.
@@ -44,10 +44,10 @@ export function sheetSize(tiles: number): [number, number] {
 }
 
 /**
- * The frame each contact-sheet tile is taken from — one per shot, so n+2 of them.
+ * The frame each contact-sheet tile is taken from — one per shot, so n+3 of them.
  *
- * A tile per *cut point* and a tile per *shot* are the same n+1 frames plus frame 0,
- * because every shot but the hook begins on one. The card is the exception: its cut
+ * A tile per *cut point* and a tile per *shot* are the same n+2 frames plus frame 0,
+ * because every shot but the title begins on one. The card is the exception: its cut
  * point is where its crossfade *starts*, and a tile of a card a tenth of the way in
  * shows neither the beat it is leaving nor the card itself, so it is taken from the
  * first frame the card is alone on screen.

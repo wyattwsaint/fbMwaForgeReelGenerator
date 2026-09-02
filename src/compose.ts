@@ -11,7 +11,7 @@
 import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { cameraFor, cardCamera, moveRamp } from './camera.ts'
-import { cardChains, rawFrameInput, writeCardSources } from './card.ts'
+import { cardChains, rawFrameInput, titleChains, writeCardSources } from './card.ts'
 import type { Camera, Ramp } from './camera.ts'
 import { FRAME_HEIGHT, FRAME_WIDTH } from './frame.ts'
 import { ffmpegColor, pad, rampFraction, stream, zoomStage } from './filtergraph.ts'
@@ -87,7 +87,9 @@ export async function renderShot(
   dir: string,
   cues: TextCue[] = [],
 ): Promise<string> {
-  if (shot.kind === 'cta') return renderCard(shot, dir, cues)
+  // The two drawn shots. Both are the lockup on house ground and neither has a
+  // master, so both go the same way — what differs is which chains draw them.
+  if (shot.kind === 'cta' || shot.kind === 'title') return renderDrawn(shot, dir, cues)
   const output = shotPath(shot, dir)
   const frames = frameCount(shot.durationMs)
 
@@ -105,28 +107,27 @@ export async function renderShot(
 }
 
 /**
- * The card (#9 §5, #25) — the one shot with no site pixels and no master.
+ * A drawn shot (#9 §5, #25, #106) — the title and the card, the two shots with no
+ * site pixels and no master.
  *
- * It is built rather than filmed: house ground, MWA Forge's lockup, its tagline and
- * headline, the accent rule and the client's credit, all of it drifting. The client's
- * domain reaches it as `cta.credit` and nothing else does, which is the difference
- * between a credit and a card.
+ * Both are built rather than filmed: house ground, MWA Forge's lockup, and type. The
+ * title stops there; the card goes on to its headline, its accent rule and the
+ * client's credit, which reaches it as `cta.credit` and nothing else does.
  *
  * Three inputs, in the order the graph names them: the ground, `MWA`'s pixels, and the
- * spark the `FORGE` type is cut out of.
+ * spark the `FORGE` type is cut out of. The same three for both shots — the lockup is
+ * laid out at one width, so one pair of rasters serves the reel's two ends.
  */
-async function renderCard(shot: Shot, dir: string, cues: TextCue[]): Promise<string> {
+async function renderDrawn(shot: Shot, dir: string, cues: TextCue[]): Promise<string> {
   const output = shotPath(shot, dir)
   const camera = cardCamera(shot)
   const { mark, ramp } = await writeCardSources(dir)
   const card = stream('card')
-  const graph = cardChains(
-    cues,
-    camera,
-    stream('0:v'),
-    stream('1:v'),
-    stream('2:v'),
-    card,
+  const ground = stream('0:v')
+  const graph = (
+    shot.kind === 'title'
+      ? titleChains(camera, ground, stream('1:v'), stream('2:v'), card)
+      : cardChains(cues, camera, ground, stream('1:v'), stream('2:v'), card)
   ).join(';')
 
   await ffmpeg([

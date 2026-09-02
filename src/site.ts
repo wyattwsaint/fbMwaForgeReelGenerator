@@ -107,7 +107,7 @@ export type SiteConfig = {
   hook: {
     /** Default: the hero, first section of <main>. */
     selector?: string
-    /** Drawn fully on frame 0, never animates in. */
+    /** Drawn fully on the hook's own first frame, never animates in. */
     text: string
     /** Default `still` — whether the hook is synthesised from a master or recorded. */
     motion?: HookMotion
