@@ -121,18 +121,25 @@ Progress is one checkpointed line per phase, with what that phase cost — plain
 appended lines rather than a redrawing bar, so the output still reads correctly when
 it is scrolled back through after a failure. A config with a `fit` beat prints a
 `measure` line ahead of the masters as well — one per page a fit beat lives on, for
-the load that learns how wide that page has to be captured. The name column is cut to
-the longest name that run will print, so the timings are a column whatever a site
-calls its sections — which does mean two sites' reports put that column in two places.
+the load that learns how wide that page has to be captured. The subject column is cut
+to the longest subject that run will print, so the timings are a column whatever a
+site calls its sections — which does mean two sites' reports put it in two places.
 
 ```
 $ reel render brobst
-check      ok         6.0s
-master 1/4 hook       4.1s
-master 2/4 hero       0.9s
-...
-mux                   3.2s
-done  out\brobst-3beat.mp4  17.2s   [41.2s total]
+check      ok       3.1s
+master 1/4 hook     2.0s
+master 2/4 services 2.0s
+master 3/4 about    2.0s
+master 4/4 reviews  1.9s
+shot   1/6 drift    1.7s
+shot   2/6 drift    0.9s
+shot   3/6 pan      0.7s
+shot   4/6 drift    1.0s
+shot   5/6 pan      1.2s
+shot   6/6 drift    2.2s
+mux                 4.4s
+done  out\brobst-3beat.mp4  17.2s   [24.6s total]
 ```
 
 `render` **wipes `out/` at start**, before anything else: one render at a time, one
