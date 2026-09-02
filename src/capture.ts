@@ -319,7 +319,9 @@ export function capturePlan(
 ): CaptureGroup[] {
   const groups = new Map<string, CaptureGroup>()
   for (const shot of timeline.shots) {
-    if (!shot.source) continue // The card is the one shot with no site pixels in it.
+    // The drawn shots — the title and the card — are the ones with no site pixels in
+    // them, and so the ones with nothing to capture.
+    if (!shot.source) continue
     const url = shot.source.url
     const viewport = { width: fitWidths.get(shot) ?? FRAME_WIDTH, height: FRAME_HEIGHT }
     const scale = masterScale(shot, viewport.width)

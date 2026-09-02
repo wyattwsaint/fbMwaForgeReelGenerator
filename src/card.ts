@@ -185,10 +185,13 @@ export type TitleLayout = {
  * Where the title shot's two elements sit, in frame pixels.
  *
  * The same stack rule as the card's, and the same centre: the two drawn shots are the
- * same object seen twice — the mark, and one line of the house's own voice under it —
- * so the lockup lands in the same place at both ends of the reel and the line under it
- * does not move either. What differs is only what the line says and how much is
- * stacked below it.
+ * same object seen twice — the mark, and one line of the house's own voice under it.
+ * The mark is drawn at the same width and the same x at both ends of the reel, and
+ * both stacks are centred on `CARD_CENTRE_Y`. It is the *centre* that is held, not the
+ * mark: the title stacks only one line below its lockup where the card stacks four
+ * elements, so the shorter stack sits its lockup lower in the frame. Centring the
+ * lockup instead would push the title's single line off the reel's optical centre,
+ * which is the thing the eye actually reads as moved.
  *
  * The line is set at the *label* size, not the tagline's: it is the reel's own
  * narration, in the voice every beat's line is in, and a viewer meets it here first.

@@ -115,8 +115,10 @@ stacked under it: set equidistant, the tagline starts to read as a headline.
 **Card** — a rendered frame containing no site pixels, drawn in the house style; a
 card is never the client's. There are two, and they are the same object seen twice:
 the **title** opens the reel with the lockup and one line, and the CTA closes it
-with the same lockup in the same place, its **signature**, the headline, the accent
-rule and the **credit**.
+with the same lockup — same width, same x, both stacks centred on the same line —
+above its **signature**, the headline, the accent rule and the **credit**. The two
+stacks are not the same height, so the mark does not land at the same y: what is
+held constant is the centre, not the mark.
 
 ## On-screen text
 
@@ -410,7 +412,7 @@ sheet**. Scratch, like the render they describe — never promoted, since the re
 is the record and both are recoverable from it.
 
 **Contact sheet** — one tile per shot, in reel order: n+3 of them, which is frame 0 and
-then the frame each cut point lands on, every shot but the hook beginning on one. The
+then the frame each cut point lands on, every shot but the title beginning on one. The
 card is the exception, because its cut point is where its crossfade *starts* — a tile
 taken there shows neither the beat being left nor the card, so the card's tile is the
 first frame it is alone on screen.
@@ -468,10 +470,10 @@ composition.
 **Frame 0** is the thumbnail Facebook shows in-feed. It is a constraint, not a
 by-product: the **title** holds it, and its mark and line are fully drawn on it and
 may not animate in. The title is the one drift that may pull, because it is drawn
-rather than filmed and its most upscaled frame costs it no sharpness. Every filmed
-shot still pushes rather than pulling — a pull starts at the zoom, so its first
-frame is its most upscaled one, and a shot that cuts in on its softest frame is a
-shot that reads soft. The hook's own line is likewise fully drawn on the frame it
+rather than filmed and its most upscaled frame costs it no sharpness. The hook,
+which is filmed, still pushes — a pull starts at the zoom, so its first frame is its
+most upscaled one, and the cut the viewer meets the site on is not a cut to spend on
+a soft frame. Later beats may pull: by then the site has already been seen sharp. The hook's own line is likewise fully drawn on the frame it
 cuts in on, and never animates in.
 
 ## Config

@@ -286,12 +286,16 @@ describe('the title shot is the same mark, saying the reel\u2019s first line', (
   const layout = titleLayout()
   const card = cardLayout()
 
-  test('the lockup lands where the card\u2019s does, and only the stack under it differs', () => {
-    // The reel opens and closes on one object: a mark that moved between the two
-    // would read as two different marks rather than as the same one, twice.
+  test('the lockup is drawn at the card\u2019s size and the card\u2019s x', () => {
+    // The reel opens and closes on one object: a mark that changed size or slid
+    // sideways between the two would read as two different marks rather than as the
+    // same one, twice. Its y is deliberately not pinned to the card's: both stacks
+    // are centred on CARD_CENTRE_Y, and the title's is the shorter stack, so its mark
+    // sits lower. The centre is what is held constant — the test below is that one.
     assert.equal(layout.lockup.x, card.lockup.x)
     assert.equal(layout.lockup.width, card.lockup.width)
     assert.equal(layout.lockup.height, card.lockup.height)
+    assert.ok(layout.lockup.y > card.lockup.y, `title mark at ${layout.lockup.y}`)
   })
 
   test('its content is centred on y 760, inside the box Meta leaves alone', () => {
