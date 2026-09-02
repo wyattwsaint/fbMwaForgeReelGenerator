@@ -388,7 +388,7 @@ describe('planReel', () => {
         { ...hook },
         {
           shot: 1,
-          content: 'Spotless, every time.',
+          content: 'Spotless, every time...',
           role: 'hook',
           startMs: 1500,
           fadeInMs: 0,
