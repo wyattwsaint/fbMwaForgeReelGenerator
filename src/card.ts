@@ -52,7 +52,7 @@ export const TAGLINE = 'Websites that book jobs'
  * A house constant, like `TAGLINE` and for the same reason: it is the same line on
  * every reel, for every client, so no config reaches it.
  */
-export const TITLE_LINE = 'Websites that are...'
+export const TITLE_LINE = 'Websites that have...'
 
 /**
  * The lockup, in frame pixels — the one number the rest of its geometry is solved
