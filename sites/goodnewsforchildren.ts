@@ -35,11 +35,17 @@ export default defineSite({
     // Not the page's own verse: the hook is drawn over the hero already saying it.
     // This line is what the reel is arguing, said once at the top.
     text: 'Sites that open\nlike a film.',
-    // `.meadow > video` is a looping meadow, playing on its own clock rather than on
-    // the scroll — a still here is one frozen frame of grass, which is the shot the
-    // whole hero exists to not be. `check` measures it in the 9:16 frame before
-    // anything is recorded (ADR-0008) and degrades this to `still` if it reads dead.
-    motion: 'ambient',
+    // The hero is the scroll: `#heroTrack` keys the `.stage` card to the viewport, and
+    // over the first 1500px it opens from a phone-shaped card in the page's cream to a
+    // full-bleed meadow. That 1500px is what a `scroll` hook walks in its 3.0s, so the
+    // shot *is* the opening — the build's one gesture, on camera.
+    //
+    // Not `ambient`: the meadow loop under the card is a 1280x720 cover-cropped into
+    // 9:16, and a third of a gently swaying meadow reads 3-5 to the probe against a 5.0
+    // floor — it degraded to `still`, and a still is one frozen frame of grass. Moving
+    // `heroPosition` to 0.8 lifts it to ~7, which is live but only just; the scroll is
+    // motion the crop cannot throw away.
+    motion: 'scroll',
   },
   beats: [
     {
@@ -51,13 +57,12 @@ export default defineSite({
       // had, divided by 1.3, so a shot shows the page rather than a detail of it.
       // 1.9 / 1.3 = 1.462.
       //
-      // The window is sized for the move rather than for the frame. A full frame needs
-      // 1314px at this punch, but beat 1 is the reel's vertical pan (#6's rotation) and
-      // a vertical pan travels across `height * punch - 1920`: the 210px it needs wants
-      // 1457px of window. 1460 leaves 215px, and reaches y 5684 — 16px short of the
-      // closing section, so the pan still ends inside the pair the window was opened
-      // for. That is this beat's whole vertical margin spent: a further pull-out here
-      // is a drift, whatever the config calls it.
+      // The window was sized for a vertical pan — the 210px it travels wants 1457px at
+      // this punch, and 1460 reaches y 5684, 16px short of the closing section. Behind
+      // a `scroll` hook the rotation starts one step on and this beat pans laterally
+      // instead (`plan.ts`, SCROLLED_ROTATION_START), which travels the punch's width
+      // and asks nothing of the height; the window stays, since 1314 is still what a
+      // full frame costs and the pair it was opened for is still the subject.
       selector: 'main',
       y: 4224,
       height: 1460,
@@ -89,14 +94,20 @@ export default defineSite({
       // 1314px and only 1061px of page exists below 5700, so the window cannot grow
       // downward: `check` refuses a window off the foot rather than sliding it quietly.
       // It grows *upward* instead — 6761 - 1314 = 5447, the last frame this page has.
-      // This is the reel's lateral pan and a lateral pan centres itself in its window
+      // This is a lateral pan and a lateral pan centres itself in its window
       // (`camera.ts`), so the 253px it opens early is not a slide off the top; it is the
       // closing section arriving with the invite's foot still above it, which is what
       // standing back looks like on a page whose last section is short.
+      //
+      // Named, because the scroll hook spends the rotation's vertical step (`plan.ts`,
+      // SCROLLED_ROTATION_START): beat 1 took lateral and this beat's turn is diagonal,
+      // which wants 210px of vertical travel this window has 1px of. Reversed rather
+      // than a repeat of beat 1's, and it is the rotation's own next step.
       selector: 'main',
       y: 5447,
       height: 1314,
       punchFactor: 1.462,
+      direction: 'lateral-reversed',
       label: 'We create websites\nin days, not months.',
     },
   ],
